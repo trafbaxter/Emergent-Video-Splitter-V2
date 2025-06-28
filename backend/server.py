@@ -456,6 +456,9 @@ async def stream_video(job_id: str):
         media_type='video/mp4',
         filename=job['filename']
     )
+
+@api_router.delete("/cleanup/{job_id}")
+async def cleanup_job(job_id: str):
     """Clean up job files"""
     try:
         # Remove upload file
