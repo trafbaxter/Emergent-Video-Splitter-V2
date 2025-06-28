@@ -272,7 +272,7 @@ function App() {
                 <div className="bg-black/30 rounded-lg p-4 space-y-2">
                   <p><strong>Duration:</strong> {formatTime(videoInfo.duration)}</p>
                   <p><strong>Format:</strong> {videoInfo.format}</p>
-                  <p><strong>Size:</strong> {(videoInfo.size / 1024 / 1024).toFixed(1)} MB</p>
+                  <p><strong>Size:</strong> {formatFileSize(videoInfo.size)}</p>
                   <p><strong>Video Streams:</strong> {videoInfo.video_streams.length}</p>
                   <p><strong>Audio Streams:</strong> {videoInfo.audio_streams.length}</p>
                   <p><strong>Subtitle Streams:</strong> {videoInfo.subtitle_streams.length}</p>
