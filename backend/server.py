@@ -330,6 +330,11 @@ async def process_video_job(job_id: str, file_path: str, config: SplitConfig):
         )
 
 # API Endpoints
+# Add your routes to the router instead of directly to app
+@api_router.get("/")
+async def root():
+    return {"message": "Hello World"}
+
 @api_router.post("/upload-video")
 async def upload_video(file: UploadFile = File(...)):
     """Upload video file with support for large files"""
