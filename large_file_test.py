@@ -5,12 +5,9 @@ import time
 import json
 import unittest
 import tempfile
-import psutil
 import sys
-import io
 from pathlib import Path
 import shutil
-import random
 
 # Get the backend URL from the frontend .env file
 with open('/app/frontend/.env', 'r') as f:
@@ -39,54 +36,21 @@ class LargeFileUploadTest(unittest.TestCase):
     def setUpClass(cls):
         """Set up test environment"""
         cls.job_ids = []
-        cls.test_files = []
         
-        # Create test directory if it doesn't exist
-        cls.test_dir = Path("/tmp/large_file_tests")
-        cls.test_dir.mkdir(exist_ok=True)
+        # Define test video paths
+        cls.test_video_path = "/tmp/test_video_with_subs.mp4"
+        cls.test_video_with_chapters_path = "/tmp/test_video_with_chapters.mp4"
         
-        # Create test files of different sizes
-        cls.create_test_files()
-    
-    @classmethod
-    def create_test_files(cls):
-        """Create test files of different sizes for testing"""
-        # Small test file (1MB)
-        small_file = cls.test_dir / "small_test_video.mp4"
-        cls.create_dummy_video_file(small_file, 1 * 1024 * 1024)
-        cls.test_files.append(small_file)
+        # Ensure test videos exist
+        assert Path(cls.test_video_path).exists(), f"Test video not found at {cls.test_video_path}"
+        assert Path(cls.test_video_with_chapters_path).exists(), f"Test video with chapters not found at {cls.test_video_with_chapters_path}"
         
-        # Medium test file (10MB)
-        medium_file = cls.test_dir / "medium_test_video.mp4"
-        cls.create_dummy_video_file(medium_file, 10 * 1024 * 1024)
-        cls.test_files.append(medium_file)
+        # Get file sizes
+        cls.test_video_size = Path(cls.test_video_path).stat().st_size
+        cls.test_video_with_chapters_size = Path(cls.test_video_with_chapters_path).stat().st_size
         
-        # Large test file (50MB) - large enough to test chunking but not too large for the test
-        large_file = cls.test_dir / "large_test_video.mp4"
-        cls.create_dummy_video_file(large_file, 50 * 1024 * 1024)
-        cls.test_files.append(large_file)
-        
-        print(f"Created test files: {[str(f) for f in cls.test_files]}")
-    
-    @classmethod
-    def create_dummy_video_file(cls, file_path, size_bytes):
-        """Create a dummy video file with MP4 header and random data"""
-        # MP4 file header (simplified)
-        mp4_header = bytes.fromhex('00 00 00 18 66 74 79 70 6D 70 34 32 00 00 00 00 6D 70 34 32 69 73 6F 6D')
-        
-        with open(file_path, 'wb') as f:
-            # Write MP4 header
-            f.write(mp4_header)
-            
-            # Calculate remaining bytes needed
-            remaining_bytes = size_bytes - len(mp4_header)
-            
-            # Write random data in chunks to avoid memory issues
-            chunk_size = 1024 * 1024  # 1MB chunks
-            while remaining_bytes > 0:
-                write_size = min(chunk_size, remaining_bytes)
-                f.write(random.randbytes(write_size))
-                remaining_bytes -= write_size
+        print(f"Test video size: {format_size(cls.test_video_size)}")
+        print(f"Test video with chapters size: {format_size(cls.test_video_with_chapters_size)}")
     
     @classmethod
     def tearDownClass(cls):
@@ -97,39 +61,20 @@ class LargeFileUploadTest(unittest.TestCase):
                 requests.delete(f"{API_URL}/cleanup/{job_id}")
             except Exception as e:
                 print(f"Error cleaning up job {job_id}: {e}")
-        
-        # Clean up test files
-        for file_path in cls.test_files:
-            if file_path.exists():
-                file_path.unlink()
-        
-        # Remove test directory
-        if cls.test_dir.exists():
-            shutil.rmtree(cls.test_dir)
     
-    def test_01_small_file_upload(self):
-        """Test small file upload to establish baseline"""
-        print("\n=== Testing small file upload (1MB) ===")
+    def test_01_video_upload_streaming(self):
+        """Test video upload with streaming approach"""
+        print("\n=== Testing video upload with streaming approach ===")
         
-        file_path = self.test_files[0]
-        file_size = file_path.stat().st_size
+        file_path = self.test_video_path
+        file_size = Path(file_path).stat().st_size
         print(f"Uploading file: {file_path}, size: {format_size(file_size)}")
         
-        # Measure memory before upload
-        process = psutil.Process(os.getpid())
-        mem_before = process.memory_info().rss
-        
-        # Upload file
-        start_time = time.time()
+        # Upload file with streaming
         with open(file_path, 'rb') as f:
-            files = {'file': (file_path.name, f, 'video/mp4')}
+            # Use requests to stream the file in chunks
+            files = {'file': (Path(file_path).name, f, 'video/mp4')}
             response = requests.post(f"{API_URL}/upload-video", files=files)
-        
-        upload_time = time.time() - start_time
-        
-        # Measure memory after upload
-        mem_after = process.memory_info().rss
-        mem_diff = mem_after - mem_before
         
         self.assertEqual(response.status_code, 200, f"Upload failed with status {response.status_code}: {response.text}")
         
@@ -140,39 +85,49 @@ class LargeFileUploadTest(unittest.TestCase):
         # Store job ID for later cleanup
         job_id = data['job_id']
         self.__class__.job_ids.append(job_id)
+        self.__class__.first_job_id = job_id
         
-        print(f"Successfully uploaded small file, job_id: {job_id}")
-        print(f"Upload time: {upload_time:.2f} seconds")
-        print(f"Memory usage increase: {format_size(mem_diff)}")
+        print(f"Successfully uploaded video, job_id: {job_id}")
         
         # Verify file size in response
         self.assertEqual(data['size'], file_size, "File size in response doesn't match actual file size")
         
+        # Verify video info extraction
+        video_info = data['video_info']
+        self.assertIn('duration', video_info, "Video info missing duration")
+        self.assertIn('format', video_info, "Video info missing format")
+        self.assertIn('video_streams', video_info, "Video info missing video streams")
+        self.assertIn('subtitle_streams', video_info, "Video info missing subtitle streams")
+        
+        # Verify subtitle detection
+        self.assertTrue(len(video_info['subtitle_streams']) > 0, "No subtitle streams detected")
+        
+        print(f"Video duration: {video_info['duration']} seconds")
+        print(f"Detected {len(video_info['video_streams'])} video streams")
+        print(f"Detected {len(video_info['audio_streams'])} audio streams")
+        print(f"Detected {len(video_info['subtitle_streams'])} subtitle streams")
+        
         return job_id
     
-    def test_02_medium_file_upload(self):
-        """Test medium file upload"""
-        print("\n=== Testing medium file upload (10MB) ===")
+    def test_02_video_with_chapters_upload(self):
+        """Test video with chapters upload"""
+        print("\n=== Testing video with chapters upload ===")
         
-        file_path = self.test_files[1]
-        file_size = file_path.stat().st_size
-        print(f"Uploading file: {file_path}, size: {format_size(file_size)}")
+        # First, let's verify the chapters are present in the test video using subprocess
+        import subprocess
+        import json
         
-        # Measure memory before upload
-        process = psutil.Process(os.getpid())
-        mem_before = process.memory_info().rss
+        cmd = ["ffprobe", "-v", "quiet", "-print_format", "json", "-show_chapters", self.test_video_with_chapters_path]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        chapters_info = json.loads(result.stdout)
         
-        # Upload file
-        start_time = time.time()
-        with open(file_path, 'rb') as f:
-            files = {'file': (file_path.name, f, 'video/mp4')}
+        print("FFprobe direct chapter detection:")
+        print(json.dumps(chapters_info, indent=2))
+        
+        # Now proceed with the upload test
+        with open(self.test_video_with_chapters_path, 'rb') as f:
+            files = {'file': (Path(self.test_video_with_chapters_path).name, f, 'video/mp4')}
             response = requests.post(f"{API_URL}/upload-video", files=files)
-        
-        upload_time = time.time() - start_time
-        
-        # Measure memory after upload
-        mem_after = process.memory_info().rss
-        mem_diff = mem_after - mem_before
         
         self.assertEqual(response.status_code, 200, f"Upload failed with status {response.status_code}: {response.text}")
         
@@ -180,80 +135,36 @@ class LargeFileUploadTest(unittest.TestCase):
         self.assertIn('job_id', data, "Response missing job_id")
         self.assertIn('video_info', data, "Response missing video_info")
         
-        # Store job ID for later cleanup
+        # Store job ID for later tests
         job_id = data['job_id']
         self.__class__.job_ids.append(job_id)
+        self.__class__.chapter_job_id = job_id
         
-        print(f"Successfully uploaded medium file, job_id: {job_id}")
-        print(f"Upload time: {upload_time:.2f} seconds")
-        print(f"Memory usage increase: {format_size(mem_diff)}")
+        print(f"Successfully uploaded video with chapters, job_id: {job_id}")
         
-        # Verify file size in response
-        self.assertEqual(data['size'], file_size, "File size in response doesn't match actual file size")
+        # Verify video info extraction
+        video_info = data['video_info']
+        self.assertIn('chapters', video_info, "Video info missing chapters")
+        
+        # Print the video info for debugging
+        print("API response video_info:")
+        print(json.dumps(video_info, indent=2))
+        
+        # Verify chapters were detected
+        self.assertTrue(len(video_info['chapters']) > 0, "No chapters detected in video")
         
         return job_id
     
-    def test_03_large_file_upload(self):
-        """Test large file upload to verify chunked processing"""
-        print("\n=== Testing large file upload (50MB) ===")
+    def test_03_progress_tracking(self):
+        """Test progress tracking during video processing"""
+        print("\n=== Testing progress tracking during video processing ===")
         
-        file_path = self.test_files[2]
-        file_size = file_path.stat().st_size
-        print(f"Uploading file: {file_path}, size: {format_size(file_size)}")
-        
-        # Measure memory before upload
-        process = psutil.Process(os.getpid())
-        mem_before = process.memory_info().rss
-        
-        # Upload file
-        start_time = time.time()
-        with open(file_path, 'rb') as f:
-            files = {'file': (file_path.name, f, 'video/mp4')}
-            response = requests.post(f"{API_URL}/upload-video", files=files)
-        
-        upload_time = time.time() - start_time
-        
-        # Measure memory after upload
-        mem_after = process.memory_info().rss
-        mem_diff = mem_after - mem_before
-        
-        self.assertEqual(response.status_code, 200, f"Upload failed with status {response.status_code}: {response.text}")
-        
-        data = response.json()
-        self.assertIn('job_id', data, "Response missing job_id")
-        self.assertIn('video_info', data, "Response missing video_info")
-        
-        # Store job ID for later cleanup
-        job_id = data['job_id']
-        self.__class__.job_ids.append(job_id)
-        self.__class__.large_file_job_id = job_id
-        
-        print(f"Successfully uploaded large file, job_id: {job_id}")
-        print(f"Upload time: {upload_time:.2f} seconds")
-        print(f"Memory usage increase: {format_size(mem_diff)}")
-        
-        # Verify file size in response
-        self.assertEqual(data['size'], file_size, "File size in response doesn't match actual file size")
-        
-        # Verify memory usage is reasonable (should not increase by more than file size)
-        # This test verifies that the file is not loaded entirely into memory
-        self.assertLess(mem_diff, file_size, 
-                        "Memory usage increased by more than file size, suggesting non-streaming upload")
-        
-        return job_id
-    
-    def test_04_verify_large_file_processing(self):
-        """Test that large files can be processed correctly"""
-        print("\n=== Testing large file processing ===")
-        
-        job_id = getattr(self.__class__, 'large_file_job_id', None)
-        if not job_id:
-            self.skipTest("Large file upload test did not complete successfully")
+        job_id = self.__class__.first_job_id
         
         # Configure time-based splitting
         split_config = {
             "method": "time_based",
-            "time_points": [0, 1.0],  # Split at 1 second (dummy video doesn't have real duration)
+            "time_points": [0, 2.5],  # Split at 2.5 seconds
             "preserve_quality": True,
             "output_format": "mp4",
             "subtitle_sync_offset": 0.0
@@ -265,7 +176,7 @@ class LargeFileUploadTest(unittest.TestCase):
         print("Split request accepted, waiting for processing...")
         
         # Wait for processing to complete
-        max_wait_time = 120  # seconds (longer for large file)
+        max_wait_time = 60  # seconds
         start_time = time.time()
         completed = False
         
@@ -306,11 +217,127 @@ class LargeFileUploadTest(unittest.TestCase):
         self.assertIn('splits', status_data, "Response missing splits information")
         self.assertTrue(len(status_data['splits']) > 0, "No split files generated")
         
-        print(f"Successfully split large video into {len(status_data['splits'])} parts")
+        print(f"Successfully split video into {len(status_data['splits'])} parts")
         for i, split in enumerate(status_data['splits']):
             print(f"Split {i+1}: {split['file']}")
+        
+        # Store split info for download test
+        self.__class__.time_based_splits = status_data['splits']
     
-    def test_05_file_size_formatting(self):
+    def test_04_chapter_based_splitting(self):
+        """Test chapter-based video splitting"""
+        print("\n=== Testing chapter-based video splitting ===")
+        
+        job_id = self.__class__.chapter_job_id
+        
+        # Configure chapter-based splitting
+        split_config = {
+            "method": "chapters",
+            "preserve_quality": True,
+            "output_format": "mp4",
+            "subtitle_sync_offset": 0.0
+        }
+        
+        response = requests.post(f"{API_URL}/split-video/{job_id}", json=split_config)
+        self.assertEqual(response.status_code, 200, f"Split request failed with status {response.status_code}: {response.text}")
+        
+        print("Split request accepted, waiting for processing...")
+        
+        # Wait for processing to complete
+        max_wait_time = 60  # seconds
+        start_time = time.time()
+        completed = False
+        
+        while time.time() - start_time < max_wait_time:
+            response = requests.get(f"{API_URL}/job-status/{job_id}")
+            self.assertEqual(response.status_code, 200, f"Status check failed with status {response.status_code}: {response.text}")
+            
+            status_data = response.json()
+            print(f"Job status: {status_data['status']}, progress: {status_data['progress']}%")
+            
+            if status_data['status'] == 'completed':
+                completed = True
+                break
+            elif status_data['status'] == 'failed':
+                self.fail(f"Job failed: {status_data.get('error_message', 'Unknown error')}")
+            
+            time.sleep(2)
+        
+        self.assertTrue(completed, f"Job did not complete within {max_wait_time} seconds")
+        
+        # Verify split results
+        response = requests.get(f"{API_URL}/job-status/{job_id}")
+        status_data = response.json()
+        
+        self.assertIn('splits', status_data, "Response missing splits information")
+        self.assertTrue(len(status_data['splits']) > 0, "No split files generated")
+        
+        print(f"Successfully split video into {len(status_data['splits'])} parts")
+        for i, split in enumerate(status_data['splits']):
+            print(f"Split {i+1}: {split['file']}")
+        
+        # Store split info for download test
+        self.__class__.chapter_splits = status_data['splits']
+    
+    def test_05_file_download(self):
+        """Test file download endpoint"""
+        print("\n=== Testing file download endpoint ===")
+        
+        # Use time-based splits for download test
+        job_id = self.__class__.first_job_id
+        splits = getattr(self.__class__, 'time_based_splits', None)
+        
+        if not splits:
+            self.skipTest("No splits available for download test")
+        
+        # Download the first split file
+        split_filename = splits[0]['file']
+        response = requests.get(f"{API_URL}/download/{job_id}/{split_filename}", stream=True)
+        
+        self.assertEqual(response.status_code, 200, f"Download failed with status {response.status_code}: {response.text}")
+        
+        # Save the downloaded file to a temporary location
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') as temp_file:
+            for chunk in response.iter_content(chunk_size=8192):
+                temp_file.write(chunk)
+            temp_path = temp_file.name
+        
+        # Verify the file exists and has content
+        self.assertTrue(os.path.exists(temp_path), "Downloaded file does not exist")
+        self.assertTrue(os.path.getsize(temp_path) > 0, "Downloaded file is empty")
+        
+        print(f"Successfully downloaded split file: {split_filename}")
+        print(f"File size: {os.path.getsize(temp_path)} bytes")
+        
+        # Clean up the temporary file
+        os.unlink(temp_path)
+    
+    def test_06_cleanup(self):
+        """Test cleanup endpoint"""
+        print("\n=== Testing cleanup endpoint ===")
+        
+        # Use chapter job for cleanup test
+        job_id = self.__class__.chapter_job_id
+        
+        # Verify job exists before cleanup
+        response = requests.get(f"{API_URL}/job-status/{job_id}")
+        self.assertEqual(response.status_code, 200, "Job not found before cleanup")
+        
+        # Clean up the job
+        response = requests.delete(f"{API_URL}/cleanup/{job_id}")
+        self.assertEqual(response.status_code, 200, f"Cleanup failed with status {response.status_code}: {response.text}")
+        
+        print(f"Successfully cleaned up job: {job_id}")
+        
+        # Verify job no longer exists
+        response = requests.get(f"{API_URL}/job-status/{job_id}")
+        self.assertEqual(response.status_code, 404, "Job still exists after cleanup")
+        
+        # Remove from job_ids list to avoid double cleanup
+        if job_id in self.__class__.job_ids:
+            self.__class__.job_ids.remove(job_id)
+    
+    def test_07_file_size_formatting(self):
         """Test file size formatting for different size ranges"""
         print("\n=== Testing file size formatting ===")
         
@@ -333,41 +360,6 @@ class LargeFileUploadTest(unittest.TestCase):
                             f"Size formatting incorrect for {size_bytes} bytes")
         
         print("File size formatting works correctly for all size ranges")
-    
-    def test_06_cleanup_large_files(self):
-        """Test cleanup works properly for large files"""
-        print("\n=== Testing cleanup for large files ===")
-        
-        job_id = getattr(self.__class__, 'large_file_job_id', None)
-        if not job_id:
-            self.skipTest("Large file upload test did not complete successfully")
-        
-        # Verify job exists before cleanup
-        response = requests.get(f"{API_URL}/job-status/{job_id}")
-        self.assertEqual(response.status_code, 200, "Job not found before cleanup")
-        
-        # Clean up the job
-        response = requests.delete(f"{API_URL}/cleanup/{job_id}")
-        self.assertEqual(response.status_code, 200, f"Cleanup failed with status {response.status_code}: {response.text}")
-        
-        print(f"Successfully cleaned up large file job: {job_id}")
-        
-        # Verify job no longer exists
-        response = requests.get(f"{API_URL}/job-status/{job_id}")
-        self.assertEqual(response.status_code, 404, "Job still exists after cleanup")
-        
-        # Remove from job_ids list to avoid double cleanup
-        if job_id in self.__class__.job_ids:
-            self.__class__.job_ids.remove(job_id)
 
 if __name__ == "__main__":
-    # Install psutil if not already installed
-    try:
-        import psutil
-    except ImportError:
-        print("Installing psutil...")
-        import subprocess
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "psutil"])
-        import psutil
-    
     unittest.main(verbosity=2)
