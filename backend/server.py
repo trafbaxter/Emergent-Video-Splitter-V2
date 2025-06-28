@@ -44,13 +44,19 @@ app.router.route_class = type('CustomRoute', (app.router.route_class,), {
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
 
-# Create temp directories for video processing
-UPLOAD_DIR = Path("/tmp/video_uploads")
-PROCESS_DIR = Path("/tmp/video_processing")
-OUTPUT_DIR = Path("/tmp/video_outputs")
+# Create temp directories for video processing (Windows compatible)
+TEMP_BASE = Path(tempfile.gettempdir()) / "video_splitter"
+UPLOAD_DIR = TEMP_BASE / "uploads"
+PROCESS_DIR = TEMP_BASE / "processing"
+OUTPUT_DIR = TEMP_BASE / "outputs"
 
+# Create directories if they don't exist
 for dir_path in [UPLOAD_DIR, PROCESS_DIR, OUTPUT_DIR]:
-    dir_path.mkdir(exist_ok=True)
+    dir_path.mkdir(parents=True, exist_ok=True)
+
+print(f"Upload directory: {UPLOAD_DIR}")
+print(f"Process directory: {PROCESS_DIR}")
+print(f"Output directory: {OUTPUT_DIR}")
 
 # Models
 class VideoProcessingJob(BaseModel):
