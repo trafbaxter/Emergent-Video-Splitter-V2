@@ -196,7 +196,7 @@ function App() {
             Video Splitter Pro
           </h1>
           <p className="text-xl text-purple-200">
-            Split videos while preserving subtitles and quality
+            Split videos of any size while preserving subtitles and quality
           </p>
         </div>
 
