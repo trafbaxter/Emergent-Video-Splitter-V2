@@ -90,10 +90,9 @@ function App() {
       setJobId(response.data.job_id);
       setVideoInfo(response.data.video_info);
       
-      // Create video URL for preview
-      const videoUrl = URL.createObjectURL(selectedFile);
+      // Set video source to streaming endpoint
       if (videoRef.current) {
-        videoRef.current.src = videoUrl;
+        videoRef.current.src = `${API}/video-stream/${response.data.job_id}`;
       }
       
     } catch (error) {
