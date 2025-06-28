@@ -402,8 +402,22 @@ async def download_split(job_id: str, filename: str):
         filename=filename
     )
 
-@api_router.delete("/cleanup/{job_id}")
-async def cleanup_job(job_id: str):
+@api_router.get("/video-stream/{job_id}")
+async def stream_video(job_id: str):
+    """Stream video file for preview"""
+    job = await db.video_jobs.find_one({"id": job_id})
+    if not job or not job.get('file_path'):
+        raise HTTPException(status_code=404, detail="Video not found")
+    
+    file_path = Path(job['file_path'])
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Video file not found")
+    
+    return FileResponse(
+        file_path,
+        media_type='video/mp4',
+        filename=job['filename']
+    )
     """Clean up job files"""
     try:
         # Remove upload file
