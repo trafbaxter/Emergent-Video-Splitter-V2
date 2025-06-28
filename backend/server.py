@@ -170,21 +170,51 @@ async def split_video_with_subtitles(
             # Build ffmpeg command
             input_stream = ffmpeg.input(input_path, ss=start_time, t=duration)
             
-            # Configure output based on quality settings
-            if config.preserve_quality:
-                # Copy streams without re-encoding
+            # Configure output based on quality settings and keyframes
+            if config.preserve_quality and not config.force_keyframes:
+                # Copy streams without re-encoding (fastest but no keyframe control)
                 output_args = {
                     'c:v': 'copy',
                     'c:a': 'copy',
                     'c:s': 'copy'  # Copy subtitle streams
                 }
             else:
-                # Re-encode with default settings
+                # Re-encode with keyframe control
                 output_args = {
-                    'c:v': 'libx264',
-                    'c:a': 'aac',
-                    'c:s': 'copy'
+                    'c:v': 'libx264',  # Video codec
+                    'c:a': 'aac',      # Audio codec
+                    'c:s': 'copy'      # Copy subtitle streams
                 }
+                
+                # Add keyframe settings
+                if config.force_keyframes:
+                    # Force keyframes at regular intervals
+                    keyframe_times = []
+                    current_time = 0
+                    while current_time < duration:
+                        keyframe_times.append(current_time)
+                        current_time += config.keyframe_interval
+                    
+                    if keyframe_times:
+                        keyframe_string = ','.join([f"{t:.2f}" for t in keyframe_times])
+                        output_args.update({
+                            'force_key_frames': keyframe_string,
+                            'g': int(config.keyframe_interval * 25),  # GOP size (assuming 25fps)
+                            'keyint_min': int(config.keyframe_interval * 25),
+                            'sc_threshold': '0'  # Disable scene change detection
+                        })
+                    
+                    # Quality settings for re-encoding
+                    if config.preserve_quality:
+                        output_args.update({
+                            'crf': '18',  # High quality (lower = better quality)
+                            'preset': 'slow'  # Better compression
+                        })
+                    else:
+                        output_args.update({
+                            'crf': '23',  # Standard quality
+                            'preset': 'medium'
+                        })
             
             # Add subtitle sync offset if specified
             if config.subtitle_sync_offset != 0:
