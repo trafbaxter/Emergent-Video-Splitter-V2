@@ -294,7 +294,7 @@ async def process_video_job(job_id: str, file_path: str, config: SplitConfig):
 # API Endpoints
 @api_router.post("/upload-video")
 async def upload_video(file: UploadFile = File(...)):
-    """Upload video file"""
+    """Upload video file with support for large files"""
     if not file.filename.lower().endswith(('.mp4', '.mkv', '.avi', '.mov', '.wmv', '.flv', '.webm')):
         raise HTTPException(status_code=400, detail="Unsupported video format")
     
@@ -307,15 +307,22 @@ async def upload_video(file: UploadFile = File(...)):
         status="uploading"
     )
     
-    # Save file
+    # Save file with streaming to handle large files efficiently
     file_path = UPLOAD_DIR / f"{job_id}_{file.filename}"
     
     try:
+        # Stream file to disk to handle large files without loading into memory
+        total_size = 0
         async with aiofiles.open(file_path, 'wb') as f:
-            content = await file.read()
-            await f.write(content)
-            job.original_size = len(content)
-            job.file_path = str(file_path)
+            while True:
+                chunk = await file.read(1024 * 1024)  # Read 1MB chunks
+                if not chunk:
+                    break
+                await f.write(chunk)
+                total_size += len(chunk)
+        
+        job.original_size = total_size
+        job.file_path = str(file_path)
         
         # Get video info
         video_info = await get_video_info(str(file_path))
@@ -324,6 +331,8 @@ async def upload_video(file: UploadFile = File(...)):
         
         # Save to database
         await db.video_jobs.insert_one(job.dict())
+        
+        logger.info(f"Successfully uploaded video: {file.filename}, size: {total_size / 1024 / 1024:.1f} MB")
         
         return {
             "job_id": job_id,
@@ -334,6 +343,9 @@ async def upload_video(file: UploadFile = File(...)):
         
     except Exception as e:
         logger.error(f"Upload error: {e}")
+        # Clean up partial file if upload failed
+        if file_path.exists():
+            file_path.unlink()
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
 @api_router.post("/split-video/{job_id}")
