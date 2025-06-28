@@ -440,6 +440,40 @@ function App() {
                   </div>
                 </div>
 
+                {/* Keyframe Settings */}
+                <div>
+                  <label className="block text-white font-bold mb-3">Keyframe Settings</label>
+                  <div className="space-y-3">
+                    <label className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={splitConfig.force_keyframes}
+                        onChange={(e) => setSplitConfig({...splitConfig, force_keyframes: e.target.checked})}
+                        className="mr-2"
+                      />
+                      <span className="text-white">Force keyframes at split points (recommended)</span>
+                    </label>
+                    
+                    {splitConfig.force_keyframes && (
+                      <div>
+                        <label className="block text-white mb-2">Keyframe Interval (seconds)</label>
+                        <input
+                          type="number"
+                          step="0.5"
+                          min="1"
+                          max="10"
+                          value={splitConfig.keyframe_interval}
+                          onChange={(e) => setSplitConfig({...splitConfig, keyframe_interval: parseFloat(e.target.value)})}
+                          className="w-full bg-black/30 text-white rounded-lg p-2 border border-white/20"
+                        />
+                        <p className="text-sm text-gray-300 mt-1">
+                          Smaller intervals = more keyframes = better seeking but larger files
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
                 {/* Start Processing */}
                 <button
                   onClick={startSplitting}
