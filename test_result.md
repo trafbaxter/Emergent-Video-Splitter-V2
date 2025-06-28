@@ -252,10 +252,7 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Video file upload with chunked processing"
-    - "Video information extraction using FFmpeg"
-    - "Video splitting with subtitle preservation"
-    - "Background processing with progress tracking"
+    - "Large file upload handling improvements"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
