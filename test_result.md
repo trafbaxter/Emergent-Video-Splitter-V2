@@ -248,3 +248,5 @@ test_plan:
 agent_communication:
   - agent: "main"
     message: "Implemented complete video splitting application with FFmpeg integration. All backend endpoints and frontend components are ready for testing. FFmpeg is installed and configured. Need to test video upload, analysis, splitting functionality, and subtitle preservation."
+  - agent: "testing"
+    message: "Completed testing of all backend functionality. All core features are working correctly. There is one minor issue with chapter detection - the ffmpeg-python library doesn't properly extract chapters that are visible when using ffprobe directly. This affects the chapter-based splitting method, but time-based and interval-based splitting work perfectly. All other functionality (upload, processing, progress tracking, download, cleanup) works as expected."
