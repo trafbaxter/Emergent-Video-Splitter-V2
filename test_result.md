@@ -105,6 +105,21 @@
 user_problem_statement: "Build me an app that can split video files while retaining the subtitles"
 
 backend:
+  - task: "Large file upload handling improvements"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Modified upload endpoint to use streaming (1MB chunks) instead of loading entire file into memory. Removed any implied size restrictions. Added better logging for large file uploads. Improved error handling for partial uploads."
+      - working: true
+        agent: "testing"
+        comment: "Verified that the backend correctly handles video uploads using a streaming approach with 1MB chunks. Successfully tested file upload, video info extraction, splitting, and cleanup. Progress tracking works correctly during processing. File size formatting handles different size ranges correctly. The backend can now handle large video files without loading the entire file into memory."
+
   - task: "Video file upload with chunked processing"
     implemented: true
     working: true
