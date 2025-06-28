@@ -456,9 +456,22 @@ async def stream_video(job_id: str):
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Video file not found")
     
+    # Determine media type based on file extension
+    file_ext = file_path.suffix.lower()
+    media_type_map = {
+        '.mp4': 'video/mp4',
+        '.mkv': 'video/x-matroska',
+        '.avi': 'video/x-msvideo',
+        '.mov': 'video/quicktime',
+        '.wmv': 'video/x-ms-wmv',
+        '.flv': 'video/x-flv',
+        '.webm': 'video/webm'
+    }
+    media_type = media_type_map.get(file_ext, 'video/mp4')
+    
     return FileResponse(
         file_path,
-        media_type='video/mp4',
+        media_type=media_type,
         filename=job['filename']
     )
 
