@@ -73,6 +73,8 @@ class SplitConfig(BaseModel):
     preserve_quality: bool = True
     output_format: str = "mp4"
     subtitle_sync_offset: float = 0.0
+    force_keyframes: bool = True  # Force keyframes at split points
+    keyframe_interval: float = 2.0  # Keyframe interval in seconds
 
 class VideoInfo(BaseModel):
     duration: float
