@@ -30,7 +30,16 @@ client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
 # Create the main app without a prefix
-app = FastAPI()
+app = FastAPI(
+    title="Video Splitter API",
+    description="API for splitting video files while preserving subtitles",
+    version="1.0.0"
+)
+
+# Configure app for large file uploads
+app.router.route_class = type('CustomRoute', (app.router.route_class,), {
+    'get_route_handler': lambda self: lambda: self.get_route_handler()
+})
 
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
