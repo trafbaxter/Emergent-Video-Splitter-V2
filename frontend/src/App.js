@@ -16,7 +16,9 @@ function App() {
     interval_duration: 300, // 5 minutes
     preserve_quality: true,
     output_format: 'mp4',
-    subtitle_sync_offset: 0
+    subtitle_sync_offset: 0,
+    force_keyframes: true,      // Enable keyframes by default
+    keyframe_interval: 2.0      // Keyframe every 2 seconds
   });
   const [processing, setProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
