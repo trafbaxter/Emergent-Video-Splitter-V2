@@ -700,7 +700,8 @@ async def stream_video(job_id: str, request: Request):
         '.mov': 'video/quicktime',
         '.wmv': 'video/x-ms-wmv',
         '.flv': 'video/x-flv',
-        '.webm': 'video/webm'
+        '.webm': 'video/webm',
+        '.gif': 'image/gif'
     }
     media_type = media_type_map.get(file_ext, 'video/mp4')
     
