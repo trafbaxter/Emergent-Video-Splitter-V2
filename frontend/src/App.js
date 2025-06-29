@@ -116,8 +116,6 @@ function App() {
         }
       });
 
-      console.log('Upload response received:', response.data);
-      
       setJobId(response.data.job_id);
       setVideoInfo(response.data.video_info);
       
