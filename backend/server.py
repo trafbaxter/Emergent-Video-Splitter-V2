@@ -801,9 +801,7 @@ async def cleanup_job(job_id: str):
         logger.error(f"Cleanup error: {e}")
         raise HTTPException(status_code=500, detail=f"Cleanup failed: {str(e)}")
 
-# Include the router in the main app
-app.include_router(api_router)
-
+# Add CORS middleware before including routes
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
@@ -811,6 +809,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include the router in the main app
+app.include_router(api_router)
 
 # Configure logging
 logging.basicConfig(
