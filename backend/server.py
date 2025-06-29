@@ -401,6 +401,23 @@ async def test_video_preview():
         "test_url": f"http://localhost:8000/api/video-stream/{job_id}"
     }
 
+@api_router.get("/debug/list-jobs")
+async def list_jobs():
+    """List all jobs in database for debugging"""
+    try:
+        jobs = []
+        async for job in db.video_jobs.find({}):
+            jobs.append({
+                "id": job.get("id"),
+                "filename": job.get("filename"),
+                "status": job.get("status"),
+                "file_path": job.get("file_path"),
+                "file_exists": Path(job.get("file_path", "")).exists() if job.get("file_path") else False
+            })
+        return {"jobs": jobs, "total": len(jobs)}
+    except Exception as e:
+        return {"error": str(e), "jobs": []}
+
 @api_router.get("/debug/create-mock-job")
 async def create_mock_job():
     """Create a mock job for testing video streaming"""
