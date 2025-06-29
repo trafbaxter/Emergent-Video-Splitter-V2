@@ -349,55 +349,7 @@ function App() {
                 
                 <div className="mt-4 text-white">
                   <p><strong>Current Time:</strong> {formatTime(currentTime)}</p>
-                  <div className="mt-2">
-                    <p><strong>Video Source:</strong></p>
-                    <p className="text-sm text-gray-300 break-all">
-                      {videoRef.current?.src || 'No video source set'}
-                    </p>
-                    <p className="text-sm text-gray-400">
-                      videoRef exists: {videoRef.current ? 'Yes' : 'No'} | 
-                      jobId: {jobId || 'None'}
-                    </p>
-                    
-                    {videoRef.current?.src && (
-                      <>
-                        <button 
-                          onClick={() => {
-                            console.log('Testing video load...');
-                            if (videoRef.current) {
-                              console.log('Video element state:', {
-                                readyState: videoRef.current.readyState,
-                                networkState: videoRef.current.networkState,
-                                error: videoRef.current.error
-                              });
-                              videoRef.current.load();
-                            }
-                          }}
-                          className="mt-2 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm mr-2"
-                        >
-                          Reload Video
-                        </button>
-                        <button
-                          onClick={() => {
-                            // Test if we can fetch the URL directly
-                            fetch(videoRef.current.src)
-                              .then(response => {
-                                console.log('Direct fetch test:', {
-                                  status: response.status,
-                                  headers: Object.fromEntries(response.headers.entries())
-                                });
-                              })
-                              .catch(error => {
-                                console.error('Direct fetch failed:', error);
-                              });
-                          }}
-                          className="mt-2 bg-orange-600 hover:bg-orange-700 text-white px-3 py-1 rounded text-sm"
-                        >
-                          Test URL
-                        </button>
-                      </>
-                    )}
-                  </div>
+                </div>
                   <button
                     onClick={() => {
                       if (videoRef.current) {
