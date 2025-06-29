@@ -345,24 +345,36 @@ async def root():
 @api_router.get("/debug/create-mock-job")
 async def create_mock_job():
     """Create a mock job for testing video streaming"""
-    # Create a small test file
+    # Create a minimal MP4 file using base64 encoded data
+    # This is a tiny valid MP4 file
+    mp4_data = b''.join([
+        b'\x00\x00\x00\x18ftypmp42\x00\x00\x00\x00mp42isom',
+        b'\x00\x00\x00\x08free',
+        b'\x00\x00\x00\x28mdat',
+        b'Quick brown fox jumps over lazy dog'
+    ])
+    
     test_file_path = UPLOAD_DIR / "mock_test_video.mp4"
     
-    # Create a small mock file
-    with open(test_file_path, 'w') as f:
-        f.write("Mock video content for testing")
+    # Create the mock MP4 file
+    with open(test_file_path, 'wb') as f:
+        f.write(mp4_data)
     
     job_id = "mock-job-123"
+    
+    # Remove existing mock job if it exists
+    await db.video_jobs.delete_one({"id": job_id})
+    
     mock_job = {
         "id": job_id,
         "filename": "mock_test_video.mp4",
-        "original_size": 100,
+        "original_size": len(mp4_data),
         "status": "uploaded",
         "file_path": str(test_file_path),
         "video_info": {
-            "duration": 10.0,
+            "duration": 1.0,
             "format": "mp4",
-            "size": 100,
+            "size": len(mp4_data),
             "video_streams": [{"index": 0, "codec": "h264"}],
             "audio_streams": [],
             "subtitle_streams": [],
