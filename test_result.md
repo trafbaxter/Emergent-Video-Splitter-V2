@@ -124,13 +124,16 @@ backend:
     implemented: true
     working: false
     file: "/app/backend/server.py, /app/frontend/src/App.js"
-    stuck_count: 0
+    stuck_count: 1
     priority: "critical"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: false
         agent: "main"
         comment: "User reports network error preventing video uploads. Frontend configured to use preview URL 'https://5882bf0f-15a0-4459-ab86-2440762d3d05.preview.emergentagent.com' but this appears to not be routing correctly to the backend. Backend runs with APIRouter having '/api' prefix and should be accessible, but frontend cannot reach it. Need to test backend connectivity and fix routing/CORS issues."
+      - working: false
+        agent: "testing"
+        comment: "Identified port mismatch issue. The backend is running on port 8000 (confirmed in supervisor config), but the review request mentioned port 8001. The backend is accessible locally at http://localhost:8000/api/ but returns a 502 Bad Gateway error when accessed via the public URL https://5882bf0f-15a0-4459-ab86-2440762d3d05.preview.emergentagent.com/api/. CORS is properly configured to allow all origins. The issue appears to be with the Kubernetes ingress or proxy configuration not correctly routing to port 8000."
 
   - task: "Video file upload with chunked processing"
     implemented: true
