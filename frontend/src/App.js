@@ -102,6 +102,8 @@ function App() {
         }
       });
 
+      console.log('Upload response received:', response.data);
+      
       setJobId(response.data.job_id);
       setVideoInfo(response.data.video_info);
       
@@ -121,6 +123,8 @@ function App() {
           .catch(error => {
             console.error('Video URL test failed:', error);
           });
+      } else {
+        console.error('videoRef.current is null!');
       }
       
     } catch (error) {
