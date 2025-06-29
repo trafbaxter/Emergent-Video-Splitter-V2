@@ -550,8 +550,6 @@ async def create_mock_job():
 @api_router.post("/upload-video")
 async def upload_video(file: UploadFile = File(...)):
     """Upload video file with support for large files"""
-    print(f"Upload request received: {file.filename}, content_type: {file.content_type}")
-    
     if not file.filename.lower().endswith(('.mp4', '.mkv', '.avi', '.mov', '.wmv', '.flv', '.webm')):
         raise HTTPException(status_code=400, detail="Unsupported video format")
     
@@ -564,13 +562,10 @@ async def upload_video(file: UploadFile = File(...)):
         status="uploading"
     )
     
-    print(f"Created job: {job_id} for file: {file.filename}")
-    
     # Save file with streaming to handle large files efficiently
     file_path = UPLOAD_DIR / f"{job_id}_{file.filename}"
     
     try:
-        print(f"Starting file write to: {file_path}")
         # Stream file to disk to handle large files without loading into memory
         total_size = 0
         chunk_size = 1024 * 1024  # 1MB chunks
@@ -582,18 +577,11 @@ async def upload_video(file: UploadFile = File(...)):
                     break
                 await f.write(chunk)
                 total_size += len(chunk)
-                
-                # Log progress every 100MB
-                if total_size % (100 * 1024 * 1024) < chunk_size and total_size > chunk_size:
-                    print(f"Written: {total_size / (1024*1024):.1f} MB")
-        
-        print(f"Upload completed: {total_size / (1024*1024):.1f} MB")
         
         job.original_size = total_size
         job.file_path = str(file_path)
         
         # Get video info
-        print(f"Analyzing video with FFmpeg...")
         video_info = await get_video_info(str(file_path))
         job.video_info = video_info
         job.status = "uploaded"
@@ -601,7 +589,6 @@ async def upload_video(file: UploadFile = File(...)):
         # Save to database
         await db.video_jobs.insert_one(job.dict())
         
-        print(f"Successfully uploaded and analyzed: {file.filename}")
         logger.info(f"Successfully uploaded video: {file.filename}, size: {total_size / 1024 / 1024:.1f} MB")
         
         return {
@@ -612,7 +599,6 @@ async def upload_video(file: UploadFile = File(...)):
         }
         
     except Exception as e:
-        print(f"Upload error: {e}")
         logger.error(f"Upload error: {e}")
         # Clean up partial file if upload failed
         if file_path.exists():
