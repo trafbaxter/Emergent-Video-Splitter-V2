@@ -120,6 +120,18 @@ backend:
         agent: "testing"
         comment: "Verified that the backend correctly handles video uploads using a streaming approach with 1MB chunks. Successfully tested file upload, video info extraction, splitting, and cleanup. Progress tracking works correctly during processing. File size formatting handles different size ranges correctly. The backend can now handle large video files without loading the entire file into memory."
 
+  - task: "Network connectivity between frontend and backend"
+    implemented: true
+    working: false
+    file: "/app/backend/server.py, /app/frontend/src/App.js"
+    stuck_count: 0
+    priority: "critical"
+    needs_retesting: true
+    status_history:
+      - working: false
+        agent: "main"
+        comment: "User reports network error preventing video uploads. Frontend configured to use preview URL 'https://5882bf0f-15a0-4459-ab86-2440762d3d05.preview.emergentagent.com' but this appears to not be routing correctly to the backend. Backend runs with APIRouter having '/api' prefix and should be accessible, but frontend cannot reach it. Need to test backend connectivity and fix routing/CORS issues."
+
   - task: "Video file upload with chunked processing"
     implemented: true
     working: true
