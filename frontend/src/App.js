@@ -92,9 +92,11 @@ function App() {
       setJobId(response.data.job_id);
       setVideoInfo(response.data.video_info);
       
-      // Set video source to streaming endpoint
+      // Set video source to streaming endpoint with cache-busting
       if (videoRef.current) {
-        videoRef.current.src = `${API}/video-stream/${response.data.job_id}`;
+        const timestamp = Date.now();
+        videoRef.current.src = `${API}/video-stream/${response.data.job_id}?t=${timestamp}`;
+        videoRef.current.load(); // Force reload of video element
       }
       
     } catch (error) {
