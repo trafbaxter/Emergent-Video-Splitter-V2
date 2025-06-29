@@ -342,8 +342,6 @@ function App() {
                 <div className="mt-4 text-white">
                   <p><strong>Current Time:</strong> {formatTime(currentTime)}</p>
                 </div>
-
-                </div>
               </div>
               
               <div className="text-white space-y-4">
