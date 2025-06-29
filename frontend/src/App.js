@@ -35,6 +35,26 @@ function App() {
   const videoRef = useRef(null);
   const fileInputRef = useRef(null);
 
+  // Set video source when jobId changes
+  useEffect(() => {
+    if (jobId && videoRef.current) {
+      const timestamp = Date.now();
+      const videoUrl = `${API}/video-stream/${jobId}?t=${timestamp}`;
+      console.log('useEffect: Setting video src to:', videoUrl);
+      videoRef.current.src = videoUrl;
+      videoRef.current.load();
+      
+      // Test the URL
+      fetch(videoUrl, { method: 'HEAD' })
+        .then(response => {
+          console.log('useEffect: Video URL test response:', response.status, response.headers.get('content-type'));
+        })
+        .catch(error => {
+          console.error('useEffect: Video URL test failed:', error);
+        });
+    }
+  }, [jobId, API]); // Run when jobId changes
+
   // Format file size for display
   const formatFileSize = (bytes) => {
     if (bytes === 0) return '0 Bytes';
