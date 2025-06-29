@@ -69,6 +69,13 @@ function App() {
       setVideoInfo(null);
       setSplits([]);
       setProgress(0);
+      setSplitConfig({...splitConfig, time_points: []}); // Reset split points
+      
+      // Reset video player
+      if (videoRef.current) {
+        videoRef.current.src = '';
+        videoRef.current.load();
+      }
     }
   };
 
