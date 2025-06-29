@@ -401,6 +401,51 @@ async def test_video_preview():
         "test_url": f"http://localhost:8000/api/video-stream/{job_id}"
     }
 
+@api_router.get("/debug/create-mock-job")
+async def create_mock_job():
+    """Create a mock job for testing video streaming"""
+    # Create a minimal MP4 file using base64 encoded data
+    # This is a tiny valid MP4 file
+    mp4_data = b''.join([
+        b'\x00\x00\x00\x18ftypmp42\x00\x00\x00\x00mp42isom',
+        b'\x00\x00\x00\x08free',
+        b'\x00\x00\x00\x28mdat',
+        b'Quick brown fox jumps over lazy dog'
+    ])
+    
+    test_file_path = UPLOAD_DIR / "mock_test_video.mp4"
+    
+    # Create the mock MP4 file
+    with open(test_file_path, 'wb') as f:
+        f.write(mp4_data)
+    
+    job_id = "mock-job-123"
+    
+    # Remove existing mock job if it exists
+    await db.video_jobs.delete_one({"id": job_id})
+    
+    mock_job = {
+        "id": job_id,
+        "filename": "mock_test_video.mp4",
+        "original_size": len(mp4_data),
+        "status": "uploaded",
+        "file_path": str(test_file_path),
+        "video_info": {
+            "duration": 1.0,
+            "format": "mp4",
+            "size": len(mp4_data),
+            "video_streams": [{"index": 0, "codec": "h264"}],
+            "audio_streams": [],
+            "subtitle_streams": [],
+            "chapters": []
+        }
+    }
+    
+    # Save to database
+    await db.video_jobs.insert_one(mock_job)
+    
+    return {"message": "Mock job created", "job_id": job_id, "streaming_url": f"/api/video-stream/{job_id}"}
+
 @api_router.get("/debug/create-working-video")
 async def create_working_video():
     """Create a simple HTML5 video that actually works"""
