@@ -107,25 +107,27 @@ function App() {
       setJobId(response.data.job_id);
       setVideoInfo(response.data.video_info);
       
-      // Set video source to streaming endpoint with cache-busting
-      if (videoRef.current) {
-        const timestamp = Date.now();
-        const videoUrl = `${API}/video-stream/${response.data.job_id}?t=${timestamp}`;
-        console.log('Setting video src to:', videoUrl);
-        videoRef.current.src = videoUrl;
-        videoRef.current.load(); // Force reload of video element
-        
-        // Add a test to verify the URL is accessible
-        fetch(videoUrl, { method: 'HEAD' })
-          .then(response => {
-            console.log('Video URL test response:', response.status, response.headers.get('content-type'));
-          })
-          .catch(error => {
-            console.error('Video URL test failed:', error);
-          });
-      } else {
-        console.error('videoRef.current is null!');
-      }
+      // Set video source after state updates (use setTimeout to ensure rendering)
+      setTimeout(() => {
+        if (videoRef.current) {
+          const timestamp = Date.now();
+          const videoUrl = `${API}/video-stream/${response.data.job_id}?t=${timestamp}`;
+          console.log('Setting video src to:', videoUrl);
+          videoRef.current.src = videoUrl;
+          videoRef.current.load(); // Force reload of video element
+          
+          // Add a test to verify the URL is accessible
+          fetch(videoUrl, { method: 'HEAD' })
+            .then(response => {
+              console.log('Video URL test response:', response.status, response.headers.get('content-type'));
+            })
+            .catch(error => {
+              console.error('Video URL test failed:', error);
+            });
+        } else {
+          console.error('videoRef.current is still null after timeout!');
+        }
+      }, 100); // Small delay to ensure video element is rendered
       
     } catch (error) {
       console.error('Upload failed:', error);
