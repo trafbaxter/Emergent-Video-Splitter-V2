@@ -227,6 +227,8 @@ async def split_video_with_subtitles(
             
             # Run ffmpeg
             try:
+                print(f"Starting FFmpeg for split {i+1} with args: {output_args}")
+                
                 (
                     input_stream
                     .output(output_path, **output_args)
@@ -235,14 +237,21 @@ async def split_video_with_subtitles(
                 )
                 
                 output_files.append(output_path)
+                print(f"Successfully completed split {i+1}: {output_filename}")
                 
                 # Update progress
                 progress = ((i + 1) / total_splits) * 100
                 await update_job_progress(job_id, progress)
                 
             except ffmpeg.Error as e:
-                logger.error(f"FFmpeg error for split {i+1}: {e.stderr.decode()}")
-                raise Exception(f"Error processing split {i+1}: {e.stderr.decode()}")
+                error_msg = e.stderr.decode() if e.stderr else str(e)
+                print(f"FFmpeg error for split {i+1}: {error_msg}")
+                logger.error(f"FFmpeg error for split {i+1}: {error_msg}")
+                raise Exception(f"Error processing split {i+1}: {error_msg}")
+            except Exception as e:
+                print(f"General error for split {i+1}: {str(e)}")
+                logger.error(f"General error for split {i+1}: {str(e)}")
+                raise e
     
     except Exception as e:
         logger.error(f"Error splitting video: {e}")
