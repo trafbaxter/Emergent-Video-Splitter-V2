@@ -317,6 +317,12 @@ function App() {
                 
                 <div className="mt-4 text-white">
                   <p><strong>Current Time:</strong> {formatTime(currentTime)}</p>
+                  {videoRef.current?.src && (
+                    <div className="mt-2">
+                      <p><strong>Video Source:</strong></p>
+                      <p className="text-sm text-gray-300 break-all">{videoRef.current.src}</p>
+                    </div>
+                  )}
                 </div>
               </div>
               
