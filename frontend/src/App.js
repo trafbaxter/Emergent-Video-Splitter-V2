@@ -332,27 +332,6 @@ function App() {
               </button>
             )}
             
-            {/* Debug info to see current state */}
-            {selectedFile && (
-              <div className="text-white text-sm space-y-1">
-                <p>Debug: selectedFile: {selectedFile ? 'Yes' : 'No'}</p>
-                <p>Debug: jobId: {jobId || 'null'}</p>
-                <p>Debug: videoInfo: {videoInfo ? 'Yes' : 'No'}</p>
-                <button
-                  onClick={() => {
-                    setJobId(null);
-                    setVideoInfo(null);
-                    setSplits([]);
-                    setProgress(0);
-                    console.log('Cleared all state');
-                  }}
-                  className="mt-2 bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm"
-                >
-                  Clear State
-                </button>
-              </div>
-            )}
-            
             {uploadProgress > 0 && uploadProgress < 100 && (
               <div className="w-full bg-gray-700 rounded-full h-3">
                 <div 
