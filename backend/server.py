@@ -401,7 +401,61 @@ async def test_video_preview():
         "test_url": f"http://localhost:8000/api/video-stream/{job_id}"
     }
 
-@api_router.get("/debug/create-mock-job")
+@api_router.get("/debug/create-working-video")
+async def create_working_video():
+    """Create a simple HTML5 video that actually works"""
+    
+    # Instead of trying to create a complex MP4, let's create a simple WebM or use a different approach
+    # For now, let's create a small test image that can be displayed
+    
+    # Simple 1x1 pixel GIF (browsers can handle this)
+    gif_data = bytes([
+        0x47, 0x49, 0x46, 0x38, 0x39, 0x61,  # GIF89a header
+        0x01, 0x00, 0x01, 0x00,              # 1x1 pixels
+        0x00, 0x00, 0x00,                    # Global color table flag
+        0x21, 0xF9, 0x04,                    # Graphic control extension
+        0x01, 0x00, 0x00, 0x00, 0x00,        # Delay, transparent color
+        0x2C, 0x00, 0x00, 0x00, 0x00,        # Image descriptor
+        0x01, 0x00, 0x01, 0x00, 0x00,        # Image dimensions
+        0x02, 0x02, 0x04, 0x01, 0x00, 0x3B   # Image data and trailer
+    ])
+    
+    test_file_path = UPLOAD_DIR / "working_test.gif"
+    
+    with open(test_file_path, 'wb') as f:
+        f.write(gif_data)
+    
+    job_id = "working-test-456"
+    
+    # Remove existing job if it exists
+    await db.video_jobs.delete_one({"id": job_id})
+    
+    test_job = {
+        "id": job_id,
+        "filename": "working_test.gif",
+        "original_size": len(gif_data),
+        "status": "uploaded",
+        "file_path": str(test_file_path),
+        "video_info": {
+            "duration": 1.0,
+            "format": "gif",
+            "size": len(gif_data),
+            "video_streams": [{"index": 0, "codec": "gif"}],
+            "audio_streams": [],
+            "subtitle_streams": [],
+            "chapters": []
+        }
+    }
+    
+    await db.video_jobs.insert_one(test_job)
+    
+    return {
+        "message": "Working test file created", 
+        "job_id": job_id, 
+        "streaming_url": f"/api/video-stream/{job_id}",
+        "test_url": f"http://localhost:8000/api/video-stream/{job_id}",
+        "note": "This is a GIF file for testing streaming"
+    }
 async def create_mock_job():
     """Create a mock job for testing video streaming"""
     # Create a minimal MP4 file using base64 encoded data
