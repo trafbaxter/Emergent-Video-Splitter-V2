@@ -321,8 +321,32 @@ function App() {
                     <div className="mt-2">
                       <p><strong>Video Source:</strong></p>
                       <p className="text-sm text-gray-300 break-all">{videoRef.current.src}</p>
+                      <button 
+                        onClick={() => {
+                          console.log('Testing video load...');
+                          if (videoRef.current) {
+                            videoRef.current.load();
+                          }
+                        }}
+                        className="mt-2 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm"
+                      >
+                        Reload Video
+                      </button>
                     </div>
                   )}
+                  <button
+                    onClick={() => {
+                      if (videoRef.current) {
+                        const testUrl = `${API}/video-stream/mock-job-123`;
+                        console.log('Testing with mock video:', testUrl);
+                        videoRef.current.src = testUrl;
+                        videoRef.current.load();
+                      }
+                    }}
+                    className="mt-2 bg-purple-600 hover:bg-purple-700 text-white px-3 py-1 rounded text-sm"
+                  >
+                    Test Mock Video
+                  </button>
                 </div>
               </div>
               
