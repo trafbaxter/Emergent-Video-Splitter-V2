@@ -282,7 +282,11 @@ function App() {
                   ref={videoRef}
                   controls
                   onTimeUpdate={handleTimeUpdate}
+                  onError={handleVideoError}
+                  onLoadedData={handleVideoLoad}
                   className="w-full rounded-xl shadow-2xl"
+                  preload="metadata"
+                  crossOrigin="anonymous"
                 >
                   Your browser does not support the video tag.
                 </video>
