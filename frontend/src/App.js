@@ -128,43 +128,6 @@ function App() {
       setJobId(response.data.job_id);
       setVideoInfo(response.data.video_info);
       
-      // Set video source after state updates (use longer timeout to ensure rendering)
-      setTimeout(() => {
-        if (videoRef.current) {
-          const timestamp = Date.now();
-          const videoUrl = `${API}/video-stream/${response.data.job_id}?t=${timestamp}`;
-          console.log('Setting video src to:', videoUrl);
-          videoRef.current.src = videoUrl;
-          videoRef.current.load(); // Force reload of video element
-          
-          // Add a test to verify the URL is accessible
-          fetch(videoUrl, { method: 'HEAD' })
-            .then(response => {
-              console.log('Video URL test response:', response.status, response.headers.get('content-type'));
-            })
-            .catch(error => {
-              console.error('Video URL test failed:', error);
-            });
-        } else {
-          console.error('videoRef.current is still null after timeout!');
-          console.log('videoInfo state:', response.data.video_info);
-          console.log('jobId state should be:', response.data.job_id);
-          
-          // Try again with a longer timeout
-          setTimeout(() => {
-            if (videoRef.current) {
-              const timestamp = Date.now();
-              const videoUrl = `${API}/video-stream/${response.data.job_id}?t=${timestamp}`;
-              console.log('Second attempt - Setting video src to:', videoUrl);
-              videoRef.current.src = videoUrl;
-              videoRef.current.load();
-            } else {
-              console.error('Video element still not available after 500ms');
-            }
-          }, 500);
-        }
-      }, 200); // Increased timeout from 100ms to 200ms
-      
     } catch (error) {
       console.error('Upload failed:', error);
       alert('Upload failed: ' + (error.response?.data?.detail || error.message));
