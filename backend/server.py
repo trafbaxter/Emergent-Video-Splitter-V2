@@ -502,8 +502,8 @@ async def download_split(job_id: str, filename: str):
     )
 
 @api_router.get("/video-stream/{job_id}")
-async def stream_video(job_id: str):
-    """Stream video file for preview"""
+async def stream_video(job_id: str, request: Request):
+    """Stream video file for preview with proper headers"""
     job = await db.video_jobs.find_one({"id": job_id})
     if not job or not job.get('file_path'):
         raise HTTPException(status_code=404, detail="Video not found")
@@ -525,10 +525,52 @@ async def stream_video(job_id: str):
     }
     media_type = media_type_map.get(file_ext, 'video/mp4')
     
+    # Get file size
+    file_size = file_path.stat().st_size
+    
+    # Handle range requests for video streaming
+    range_header = request.headers.get('range')
+    if range_header:
+        # Parse range header
+        range_match = re.match(r'bytes=(\d+)-(\d*)', range_header)
+        if range_match:
+            start = int(range_match.group(1))
+            end = int(range_match.group(2)) if range_match.group(2) else file_size - 1
+            
+            # Read the requested range
+            with open(file_path, 'rb') as f:
+                f.seek(start)
+                data = f.read(end - start + 1)
+            
+            return StreamingResponse(
+                BytesIO(data),
+                status_code=206,
+                headers={
+                    'Accept-Ranges': 'bytes',
+                    'Content-Range': f'bytes {start}-{end}/{file_size}',
+                    'Content-Length': str(end - start + 1),
+                    'Content-Type': media_type,
+                    'Cache-Control': 'no-cache',
+                    'Access-Control-Allow-Origin': '*',
+                    'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+                    'Access-Control-Allow-Headers': 'Range'
+                },
+                media_type=media_type
+            )
+    
+    # Return full file for non-range requests
     return FileResponse(
         file_path,
         media_type=media_type,
-        filename=job['filename']
+        filename=job['filename'],
+        headers={
+            'Accept-Ranges': 'bytes',
+            'Content-Length': str(file_size),
+            'Cache-Control': 'no-cache',
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+            'Access-Control-Allow-Headers': 'Range'
+        }
     )
 
 @api_router.delete("/cleanup/{job_id}")
