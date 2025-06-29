@@ -342,6 +342,39 @@ async def process_video_job(job_id: str, file_path: str, config: SplitConfig):
 async def root():
     return {"message": "Hello World"}
 
+@api_router.get("/debug/create-mock-job")
+async def create_mock_job():
+    """Create a mock job for testing video streaming"""
+    # Create a small test file
+    test_file_path = UPLOAD_DIR / "mock_test_video.mp4"
+    
+    # Create a small mock file
+    with open(test_file_path, 'w') as f:
+        f.write("Mock video content for testing")
+    
+    job_id = "mock-job-123"
+    mock_job = {
+        "id": job_id,
+        "filename": "mock_test_video.mp4",
+        "original_size": 100,
+        "status": "uploaded",
+        "file_path": str(test_file_path),
+        "video_info": {
+            "duration": 10.0,
+            "format": "mp4",
+            "size": 100,
+            "video_streams": [{"index": 0, "codec": "h264"}],
+            "audio_streams": [],
+            "subtitle_streams": [],
+            "chapters": []
+        }
+    }
+    
+    # Save to database
+    await db.video_jobs.insert_one(mock_job)
+    
+    return {"message": "Mock job created", "job_id": job_id, "streaming_url": f"/api/video-stream/{job_id}"}
+
 @api_router.post("/upload-video")
 async def upload_video(file: UploadFile = File(...)):
     """Upload video file with support for large files"""
