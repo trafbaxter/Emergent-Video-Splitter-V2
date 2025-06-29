@@ -349,9 +349,22 @@ function App() {
                         videoRef.current.load();
                       }
                     }}
-                    className="mt-2 bg-purple-600 hover:bg-purple-700 text-white px-3 py-1 rounded text-sm"
+                    className="mt-2 bg-purple-600 hover:bg-purple-700 text-white px-3 py-1 rounded text-sm mr-2"
                   >
                     Test Mock Video
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (videoRef.current) {
+                        const testUrl = `${API}/video-stream/test-preview-123`;
+                        console.log('Testing with preview video:', testUrl);
+                        videoRef.current.src = testUrl;
+                        videoRef.current.load();
+                      }
+                    }}
+                    className="mt-2 bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm"
+                  >
+                    Test Preview Video
                   </button>
                 </div>
               </div>
