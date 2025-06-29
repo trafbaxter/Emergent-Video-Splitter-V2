@@ -323,6 +323,15 @@ function App() {
               </button>
             )}
             
+            {/* Debug info to see current state */}
+            {selectedFile && (
+              <div className="text-white text-sm">
+                <p>Debug: selectedFile: {selectedFile ? 'Yes' : 'No'}</p>
+                <p>Debug: jobId: {jobId || 'null'}</p>
+                <p>Debug: videoInfo: {videoInfo ? 'Yes' : 'No'}</p>
+              </div>
+            )}
+            
             {uploadProgress > 0 && uploadProgress < 100 && (
               <div className="w-full bg-gray-700 rounded-full h-3">
                 <div 
