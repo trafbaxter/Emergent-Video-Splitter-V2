@@ -29,6 +29,15 @@ function App() {
   const videoRef = useRef(null);
   const fileInputRef = useRef(null);
 
+  // Clear any stale state on component mount
+  useEffect(() => {
+    setJobId(null);
+    setVideoInfo(null);
+    setSplits([]);
+    setProgress(0);
+    setSelectedFile(null);
+  }, []); // Run once on mount
+
   // Set video source when jobId changes
   useEffect(() => {
     if (jobId && videoRef.current) {
