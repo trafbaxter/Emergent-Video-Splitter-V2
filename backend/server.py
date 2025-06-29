@@ -196,15 +196,14 @@ async def split_video_with_subtitles(
                 # Add keyframe settings (simplified)
                 if config.force_keyframes:
                     print(f"Enabling keyframes every {config.keyframe_interval}s for split {i+1}")
-                    # Simplified keyframe settings
-                    fps = 25  # Default FPS assumption
-                    gop_size = int(config.keyframe_interval * fps)
+                    # Very simple keyframe settings
+                    gop_size = int(config.keyframe_interval * 30)  # 30fps assumption
                     
                     output_args.update({
                         'g': gop_size,  # GOP size 
                         'keyint_min': gop_size,  # Minimum interval between keyframes
-                        'sc_threshold': '0',  # Disable scene change detection
-                        'force_key_frames': f'expr:gte(t,n_forced*{config.keyframe_interval})'  # Force keyframes at intervals
+                        'sc_threshold': '0'  # Disable scene change detection
+                        # Removed complex force_key_frames for now
                     })
                 
                 # Quality settings for re-encoding
