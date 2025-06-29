@@ -217,7 +217,7 @@ function App() {
           <input
             ref={fileInputRef}
             type="file"
-            accept="video/*"
+            accept="video/*,.mkv,.mp4,.avi,.mov,.wmv,.flv,.webm"
             onChange={handleFileSelect}
             className="hidden"
           />
