@@ -535,7 +535,10 @@ async def create_mock_job():
 @api_router.post("/upload-video")
 async def upload_video(file: UploadFile = File(...)):
     """Upload video file with support for large files"""
+    logger.info(f"Upload attempt - filename: {file.filename}, content_type: {file.content_type}")
+    
     if not file.filename.lower().endswith(('.mp4', '.mkv', '.avi', '.mov', '.wmv', '.flv', '.webm')):
+        logger.error(f"Unsupported format: {file.filename}")
         raise HTTPException(status_code=400, detail="Unsupported video format")
     
     # Create job record
