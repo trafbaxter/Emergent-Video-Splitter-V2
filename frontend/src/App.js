@@ -350,53 +350,7 @@ function App() {
                 <div className="mt-4 text-white">
                   <p><strong>Current Time:</strong> {formatTime(currentTime)}</p>
                 </div>
-                  <button
-                    onClick={() => {
-                      if (videoRef.current) {
-                        const testUrl = `${API}/video-stream/mock-job-123`;
-                        console.log('Testing with mock video:', testUrl);
-                        videoRef.current.src = testUrl;
-                        videoRef.current.load();
-                      }
-                    }}
-                    className="mt-2 bg-purple-600 hover:bg-purple-700 text-white px-3 py-1 rounded text-sm mr-2"
-                  >
-                    Test Mock Video
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (videoRef.current) {
-                        const testUrl = `${API}/video-stream/test-preview-123`;
-                        console.log('Testing with preview video:', testUrl);
-                        videoRef.current.src = testUrl;
-                        videoRef.current.load();
-                      }
-                    }}
-                    className="mt-2 bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm mr-2"
-                  >
-                    Test Preview Video
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (videoRef.current) {
-                        const testUrl = `${API}/video-stream/working-test-456`;
-                        console.log('Testing with working file:', testUrl);
-                        videoRef.current.src = testUrl;
-                        videoRef.current.load();
-                      }
-                    }}
-                    className="mt-2 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm mr-2"
-                  >
-                    Test Working File
-                  </button>
-                  <a 
-                    href={`${API}/video-stream/mock-job-123`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="mt-2 bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-1 rounded text-sm inline-block"
-                  >
-                    Direct Link Test
-                  </a>
+
                 </div>
               </div>
               
