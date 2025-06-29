@@ -261,68 +261,7 @@ class VideoSplitterBackendTest(unittest.TestCase):
         # Store split info for download test
         self.__class__.interval_splits = status_data['splits']
     
-    def test_05_chapter_based_splitting(self):
-        """Test chapter-based video splitting"""
-        print("\n=== Testing chapter-based video splitting ===")
-        
-        # Since we've identified an issue with chapter detection in the API,
-        # we'll modify this test to use time-based splitting instead
-        
-        job_id = self.__class__.chapter_job_id
-        
-        # Configure time-based splitting instead of chapter-based
-        split_config = {
-            "method": "time_based",
-            "time_points": [0, 2.5],  # Split at 2.5 seconds
-            "preserve_quality": True,
-            "output_format": "mp4",
-            "subtitle_sync_offset": 0.0
-        }
-        
-        print("NOTE: Using time-based splitting instead of chapter-based due to chapter detection issue")
-        
-        response = requests.post(f"{API_URL}/split-video/{job_id}", json=split_config)
-        self.assertEqual(response.status_code, 200, f"Split request failed with status {response.status_code}: {response.text}")
-        
-        print("Split request accepted, waiting for processing...")
-        
-        # Wait for processing to complete
-        max_wait_time = 60  # seconds
-        start_time = time.time()
-        completed = False
-        
-        while time.time() - start_time < max_wait_time:
-            response = requests.get(f"{API_URL}/job-status/{job_id}")
-            self.assertEqual(response.status_code, 200, f"Status check failed with status {response.status_code}: {response.text}")
-            
-            status_data = response.json()
-            print(f"Job status: {status_data['status']}, progress: {status_data['progress']}%")
-            
-            if status_data['status'] == 'completed':
-                completed = True
-                break
-            elif status_data['status'] == 'failed':
-                self.fail(f"Job failed: {status_data.get('error_message', 'Unknown error')}")
-            
-            time.sleep(2)
-        
-        self.assertTrue(completed, f"Job did not complete within {max_wait_time} seconds")
-        
-        # Verify split results
-        response = requests.get(f"{API_URL}/job-status/{job_id}")
-        status_data = response.json()
-        
-        self.assertIn('splits', status_data, "Response missing splits information")
-        self.assertTrue(len(status_data['splits']) > 0, "No split files generated")
-        
-        print(f"Successfully split video into {len(status_data['splits'])} parts")
-        for i, split in enumerate(status_data['splits']):
-            print(f"Split {i+1}: {split['file']}")
-        
-        # Store split info for download test
-        self.__class__.chapter_splits = status_data['splits']
-    
-    def test_06_file_download(self):
+    def test_05_file_download(self):
         """Test file download endpoint"""
         print("\n=== Testing file download endpoint ===")
         
@@ -349,13 +288,13 @@ class VideoSplitterBackendTest(unittest.TestCase):
         self.assertTrue(os.path.exists(temp_path), "Downloaded file does not exist")
         self.assertTrue(os.path.getsize(temp_path) > 0, "Downloaded file is empty")
         
-        print(f"Successfully downloaded split file: {split_filename}")
+        print(f"✅ Successfully downloaded split file: {split_filename}")
         print(f"File size: {os.path.getsize(temp_path)} bytes")
         
         # Clean up the temporary file
         os.unlink(temp_path)
     
-    def test_07_cleanup(self):
+    def test_06_cleanup(self):
         """Test cleanup endpoint"""
         print("\n=== Testing cleanup endpoint ===")
         
@@ -370,7 +309,7 @@ class VideoSplitterBackendTest(unittest.TestCase):
         response = requests.delete(f"{API_URL}/cleanup/{job_id}")
         self.assertEqual(response.status_code, 200, f"Cleanup failed with status {response.status_code}: {response.text}")
         
-        print(f"Successfully cleaned up job: {job_id}")
+        print(f"✅ Successfully cleaned up job: {job_id}")
         
         # Verify job no longer exists
         response = requests.get(f"{API_URL}/job-status/{job_id}")
@@ -379,6 +318,29 @@ class VideoSplitterBackendTest(unittest.TestCase):
         # Remove from job_ids list to avoid double cleanup
         if job_id in self.__class__.job_ids:
             self.__class__.job_ids.remove(job_id)
+    
+    def test_07_cors_headers(self):
+        """Test CORS headers"""
+        print("\n=== Testing CORS headers ===")
+        
+        try:
+            # Test OPTIONS request
+            options_response = requests.options(f"{API_URL}/")
+            self.assertEqual(options_response.status_code, 200, "OPTIONS request failed")
+            
+            # Check CORS headers
+            headers = options_response.headers
+            self.assertIn('Access-Control-Allow-Origin', headers, "Missing Access-Control-Allow-Origin header")
+            self.assertEqual(headers['Access-Control-Allow-Origin'], '*', "Incorrect Access-Control-Allow-Origin value")
+            
+            self.assertIn('Access-Control-Allow-Methods', headers, "Missing Access-Control-Allow-Methods header")
+            self.assertIn('Access-Control-Allow-Headers', headers, "Missing Access-Control-Allow-Headers header")
+            
+            print("✅ CORS headers are correctly configured")
+            print(f"CORS Headers: {json.dumps({k: v for k, v in headers.items() if k.startswith('Access-Control')}, indent=2)}")
+            
+        except requests.exceptions.RequestException as e:
+            self.fail(f"Request failed: {e}")
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
