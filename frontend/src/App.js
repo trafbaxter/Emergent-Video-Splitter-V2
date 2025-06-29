@@ -3,8 +3,8 @@ import './App.css';
 import axios from 'axios';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-// When using proxy setup (development), use local paths. Otherwise use full URL
-const API = process.env.NODE_ENV === 'development' ? '/api' : `${BACKEND_URL}/api`;
+// Use local proxy path since we have setupProxy.js configured
+const API = '/api';
 
 function App() {
   const [selectedFile, setSelectedFile] = useState(null);
