@@ -6,7 +6,13 @@ module.exports = function(app) {
     createProxyMiddleware({
       target: 'http://localhost:8000',
       changeOrigin: true,
-      logLevel: 'debug'
+      logLevel: 'debug',
+      onError: function (err, req, res) {
+        console.log('Proxy Error:', err);
+      },
+      onProxyReq: function (proxyReq, req, res) {
+        console.log('Proxying request to:', proxyReq.path);
+      }
     })
   );
 };
