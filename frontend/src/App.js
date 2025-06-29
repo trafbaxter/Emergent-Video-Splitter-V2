@@ -3,8 +3,8 @@ import './App.css';
 import axios from 'axios';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-// Use local proxy path since we have setupProxy.js configured
-const API = '/api';
+// Use external URL since we removed the proxy
+const API = `${BACKEND_URL}/api`;
 
 function App() {
   const [selectedFile, setSelectedFile] = useState(null);
