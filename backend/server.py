@@ -184,7 +184,6 @@ async def split_video_with_subtitles(
                     'c:a': 'copy',
                     'c:s': 'copy'  # Copy subtitle streams
                 }
-                print(f"Using stream copy (no keyframes) for split {i+1}")
             else:
                 # Re-encode with optional keyframe control
                 output_args = {
@@ -195,7 +194,6 @@ async def split_video_with_subtitles(
                 
                 # Add keyframe settings (simplified)
                 if config.force_keyframes:
-                    print(f"Enabling keyframes every {config.keyframe_interval}s for split {i+1}")
                     # Very simple keyframe settings
                     gop_size = int(config.keyframe_interval * 30)  # 30fps assumption
                     
@@ -212,13 +210,11 @@ async def split_video_with_subtitles(
                         'crf': '18',  # High quality (lower = better quality)
                         'preset': 'medium'  # Balanced speed/quality
                     })
-                    print(f"Using high quality encoding (CRF 18) for split {i+1}")
                 else:
                     output_args.update({
                         'crf': '23',  # Standard quality
                         'preset': 'medium'
                     })
-                    print(f"Using standard quality encoding (CRF 23) for split {i+1}")
             
             # Add subtitle sync offset if specified
             if config.subtitle_sync_offset != 0:
