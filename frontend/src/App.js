@@ -38,9 +38,9 @@ function App() {
     setSelectedFile(null);
   }, []); // Run once on mount
 
-  // Set video source when jobId changes
+  // Set video source when jobId changes (only for real uploads)
   useEffect(() => {
-    if (jobId && videoRef.current) {
+    if (jobId && videoRef.current && !jobId.includes('mock')) {
       const timestamp = Date.now();
       const videoUrl = `${API}/video-stream/${jobId}?t=${timestamp}`;
       console.log('useEffect: Setting video src to:', videoUrl);
