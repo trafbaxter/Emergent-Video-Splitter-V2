@@ -342,6 +342,65 @@ async def process_video_job(job_id: str, file_path: str, config: SplitConfig):
 async def root():
     return {"message": "Hello World"}
 
+@api_router.get("/debug/test-video-preview")
+async def test_video_preview():
+    """Test video preview functionality with a small video"""
+    # Create a more proper minimal MP4 file
+    # This is a minimal MP4 file that should be recognizable by browsers
+    mp4_header = bytes([
+        # ftyp box
+        0x00, 0x00, 0x00, 0x20,  # box size
+        0x66, 0x74, 0x79, 0x70,  # 'ftyp'
+        0x69, 0x73, 0x6F, 0x6D,  # major brand 'isom'
+        0x00, 0x00, 0x02, 0x00,  # minor version
+        0x69, 0x73, 0x6F, 0x6D,  # compatible brand 'isom'
+        0x69, 0x73, 0x6F, 0x32,  # compatible brand 'iso2'
+        0x61, 0x76, 0x63, 0x31,  # compatible brand 'avc1'
+        0x6D, 0x70, 0x34, 0x31,  # compatible brand 'mp41'
+        
+        # mdat box with minimal data
+        0x00, 0x00, 0x00, 0x10,  # box size
+        0x6D, 0x64, 0x61, 0x74,  # 'mdat'
+        0x00, 0x00, 0x00, 0x00,  # minimal data
+        0x00, 0x00, 0x00, 0x00   # minimal data
+    ])
+    
+    test_file_path = UPLOAD_DIR / "test_preview_video.mp4"
+    
+    with open(test_file_path, 'wb') as f:
+        f.write(mp4_header)
+    
+    job_id = "test-preview-123"
+    
+    # Remove existing job if it exists
+    await db.video_jobs.delete_one({"id": job_id})
+    
+    test_job = {
+        "id": job_id,
+        "filename": "test_preview_video.mp4",
+        "original_size": len(mp4_header),
+        "status": "uploaded",
+        "file_path": str(test_file_path),
+        "video_info": {
+            "duration": 1.0,
+            "format": "mp4",
+            "size": len(mp4_header),
+            "video_streams": [{"index": 0, "codec": "h264", "width": 640, "height": 480}],
+            "audio_streams": [],
+            "subtitle_streams": [],
+            "chapters": []
+        }
+    }
+    
+    await db.video_jobs.insert_one(test_job)
+    
+    return {
+        "message": "Test video created", 
+        "job_id": job_id, 
+        "streaming_url": f"/api/video-stream/{job_id}",
+        "test_url": f"http://localhost:8000/api/video-stream/{job_id}"
+    }
+
 @api_router.get("/debug/create-mock-job")
 async def create_mock_job():
     """Create a mock job for testing video streaming"""
