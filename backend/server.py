@@ -388,8 +388,6 @@ async def test_video_preview():
         "test_url": f"http://localhost:8000/api/video-stream/{job_id}"
     }
 
-@api_router.post("/upload-video")
-
 @api_router.get("/debug/create-mock-job")
 async def create_mock_job():
     """Create a mock job for testing video streaming"""
