@@ -572,6 +572,46 @@ async def download_split(job_id: str, filename: str):
         filename=filename
     )
 
+@api_router.head("/video-stream/{job_id}")
+async def video_stream_head(job_id: str):
+    """Handle HEAD requests for video streaming"""
+    job = await db.video_jobs.find_one({"id": job_id})
+    if not job or not job.get('file_path'):
+        raise HTTPException(status_code=404, detail="Video not found")
+    
+    file_path = Path(job['file_path'])
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Video file not found")
+    
+    # Determine media type based on file extension
+    file_ext = file_path.suffix.lower()
+    media_type_map = {
+        '.mp4': 'video/mp4',
+        '.mkv': 'video/x-matroska',
+        '.avi': 'video/x-msvideo',
+        '.mov': 'video/quicktime',
+        '.wmv': 'video/x-ms-wmv',
+        '.flv': 'video/x-flv',
+        '.webm': 'video/webm'
+    }
+    media_type = media_type_map.get(file_ext, 'video/mp4')
+    
+    # Get file size
+    file_size = file_path.stat().st_size
+    
+    return JSONResponse(
+        content={},
+        headers={
+            'Accept-Ranges': 'bytes',
+            'Content-Length': str(file_size),
+            'Content-Type': media_type,
+            'Cache-Control': 'no-cache',
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+            'Access-Control-Allow-Headers': 'Range'
+        }
+    )
+
 @api_router.options("/video-stream/{job_id}")
 async def video_stream_options(job_id: str):
     """Handle CORS preflight for video streaming"""
