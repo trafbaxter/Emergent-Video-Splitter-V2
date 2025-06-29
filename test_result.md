@@ -134,6 +134,9 @@ backend:
       - working: true
         agent: "testing"
         comment: "FIXED: Identified port mismatch issue. Backend was running on port 8000 but Kubernetes ingress was configured to route to port 8001, causing 502 Bad Gateway errors. Updated supervisor configuration to run backend on port 8001 and restarted service. Backend is now accessible via public URL. Tested basic connectivity and upload endpoint - both working correctly."
+      - working: false
+        agent: "main"
+        comment: "User still reports network errors. Found additional issues: 1) Duplicate @api_router.post('/upload-video') decorator causing mock response instead of real upload, 2) FFmpeg not installed causing video analysis errors. Fixed duplicate decorator and installed FFmpeg. Backend is accessible but needs proper video file for testing."
 
   - task: "Video file upload with chunked processing"
     implemented: true
