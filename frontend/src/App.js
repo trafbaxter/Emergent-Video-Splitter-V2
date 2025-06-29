@@ -220,13 +220,26 @@ function App() {
   // Handle video load errors
   const handleVideoError = (e) => {
     console.error('Video error:', e);
-    console.log('Video src:', videoRef.current?.src);
+    console.error('Video error details:', {
+      error: e.target.error,
+      code: e.target.error?.code,
+      message: e.target.error?.message,
+      src: e.target.src,
+      networkState: e.target.networkState,
+      readyState: e.target.readyState
+    });
   };
 
   // Handle video load success
   const handleVideoLoad = () => {
     console.log('Video loaded successfully');
-    console.log('Video src:', videoRef.current?.src);
+    console.log('Video details:', {
+      src: videoRef.current?.src,
+      duration: videoRef.current?.duration,
+      videoWidth: videoRef.current?.videoWidth,
+      videoHeight: videoRef.current?.videoHeight,
+      readyState: videoRef.current?.readyState
+    });
   };
 
   return (
