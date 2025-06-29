@@ -501,6 +501,19 @@ async def download_split(job_id: str, filename: str):
         filename=filename
     )
 
+@api_router.options("/video-stream/{job_id}")
+async def video_stream_options(job_id: str):
+    """Handle CORS preflight for video streaming"""
+    return JSONResponse(
+        content={},
+        headers={
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+            'Access-Control-Allow-Headers': 'Range, Content-Type',
+            'Access-Control-Max-Age': '3600'
+        }
+    )
+
 @api_router.get("/video-stream/{job_id}")
 async def stream_video(job_id: str, request: Request):
     """Stream video file for preview with proper headers"""
