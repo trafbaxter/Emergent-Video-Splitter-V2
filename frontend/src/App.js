@@ -362,9 +362,22 @@ function App() {
                         videoRef.current.load();
                       }
                     }}
-                    className="mt-2 bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm"
+                    className="mt-2 bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm mr-2"
                   >
                     Test Preview Video
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (videoRef.current) {
+                        const testUrl = `${API}/video-stream/working-test-456`;
+                        console.log('Testing with working file:', testUrl);
+                        videoRef.current.src = testUrl;
+                        videoRef.current.load();
+                      }
+                    }}
+                    className="mt-2 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm"
+                  >
+                    Test Working File
                   </button>
                 </div>
               </div>
