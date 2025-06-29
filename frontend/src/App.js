@@ -307,60 +307,62 @@ function App() {
         </div>
 
         {/* Video Preview */}
-        <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-8 mb-8 border border-white/20">
-          <h2 className="text-2xl font-bold text-white mb-6">Video Preview</h2>
-          
-          <div className="grid lg:grid-cols-2 gap-8">
-            <div>
-              <video
-                ref={videoRef}
-                controls
-                onTimeUpdate={handleTimeUpdate}
-                onError={handleVideoError}
-                onLoadedData={handleVideoLoad}
-                className="w-full rounded-xl shadow-2xl"
-                preload="metadata"
-                crossOrigin="anonymous"
-              >
-                Your browser does not support the video tag.
-              </video>
-              
-              <div className="mt-4 text-white">
-                <p><strong>Current Time:</strong> {formatTime(currentTime)}</p>
-              </div>
-            </div>
+        {(videoInfo || jobId) && (
+          <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-8 mb-8 border border-white/20">
+            <h2 className="text-2xl font-bold text-white mb-6">Video Preview</h2>
             
-            {videoInfo && (
-              <div className="text-white space-y-4">
-                <h3 className="text-xl font-bold">Video Information</h3>
-                <div className="bg-black/30 rounded-lg p-4 space-y-2">
-                  <p><strong>Duration:</strong> {formatTime(videoInfo.duration)}</p>
-                  <p><strong>Format:</strong> {videoInfo.format}</p>
-                  <p><strong>Size:</strong> {formatFileSize(videoInfo.size)}</p>
-                  <p><strong>Video Streams:</strong> {videoInfo.video_streams.length}</p>
-                  <p><strong>Audio Streams:</strong> {videoInfo.audio_streams.length}</p>
-                  <p><strong>Subtitle Streams:</strong> {videoInfo.subtitle_streams.length}</p>
+            <div className="grid lg:grid-cols-2 gap-8">
+              <div>
+                <video
+                  ref={videoRef}
+                  controls
+                  onTimeUpdate={handleTimeUpdate}
+                  onError={handleVideoError}
+                  onLoadedData={handleVideoLoad}
+                  className="w-full rounded-xl shadow-2xl"
+                  preload="metadata"
+                  crossOrigin="anonymous"
+                >
+                  Your browser does not support the video tag.
+                </video>
+                
+                <div className="mt-4 text-white">
+                  <p><strong>Current Time:</strong> {formatTime(currentTime)}</p>
+                </div>
+              </div>
+              
+              {videoInfo && (
+                <div className="text-white space-y-4">
+                  <h3 className="text-xl font-bold">Video Information</h3>
+                  <div className="bg-black/30 rounded-lg p-4 space-y-2">
+                    <p><strong>Duration:</strong> {formatTime(videoInfo.duration)}</p>
+                    <p><strong>Format:</strong> {videoInfo.format}</p>
+                    <p><strong>Size:</strong> {formatFileSize(videoInfo.size)}</p>
+                    <p><strong>Video Streams:</strong> {videoInfo.video_streams.length}</p>
+                    <p><strong>Audio Streams:</strong> {videoInfo.audio_streams.length}</p>
+                    <p><strong>Subtitle Streams:</strong> {videoInfo.subtitle_streams.length}</p>
+                    {videoInfo.chapters.length > 0 && (
+                      <p><strong>Chapters:</strong> {videoInfo.chapters.length}</p>
+                    )}
+                  </div>
+                  
                   {videoInfo.chapters.length > 0 && (
-                    <p><strong>Chapters:</strong> {videoInfo.chapters.length}</p>
+                    <div>
+                      <h4 className="font-bold mb-2">Chapters:</h4>
+                      <div className="bg-black/30 rounded-lg p-4 max-h-32 overflow-y-auto">
+                        {videoInfo.chapters.map((chapter, index) => (
+                          <div key={index} className="text-sm py-1">
+                            {formatTime(chapter.start)} - {chapter.title}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   )}
                 </div>
-                
-                {videoInfo.chapters.length > 0 && (
-                  <div>
-                    <h4 className="font-bold mb-2">Chapters:</h4>
-                    <div className="bg-black/30 rounded-lg p-4 max-h-32 overflow-y-auto">
-                      {videoInfo.chapters.map((chapter, index) => (
-                        <div key={index} className="text-sm py-1">
-                          {formatTime(chapter.start)} - {chapter.title}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Split Configuration */}
         {videoInfo && (
