@@ -110,24 +110,12 @@ class VideoSplitterBackendTest(unittest.TestCase):
         
         return job_id
     
-    def test_02_video_with_chapters_upload(self):
-        """Test video with chapters upload endpoint"""
-        print("\n=== Testing video with chapters upload endpoint ===")
+    def test_02_video_with_subtitles_upload(self):
+        """Test video with subtitles upload endpoint"""
+        print("\n=== Testing video with subtitles upload endpoint ===")
         
-        # First, let's verify the chapters are present in the test video using subprocess
-        import subprocess
-        import json
-        
-        cmd = ["ffprobe", "-v", "quiet", "-print_format", "json", "-show_chapters", self.test_video_with_chapters_path]
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        chapters_info = json.loads(result.stdout)
-        
-        print("FFprobe direct chapter detection:")
-        print(json.dumps(chapters_info, indent=2))
-        
-        # Now proceed with the upload test
-        with open(self.test_video_with_chapters_path, 'rb') as f:
-            files = {'file': ('test_video_with_chapters.mp4', f, 'video/mp4')}
+        with open(self.test_video_with_subs_path, 'rb') as f:
+            files = {'file': ('test_video_with_subs.mp4', f, 'video/mp4')}
             response = requests.post(f"{API_URL}/upload-video", files=files)
         
         self.assertEqual(response.status_code, 200, f"Upload failed with status {response.status_code}: {response.text}")
@@ -139,24 +127,17 @@ class VideoSplitterBackendTest(unittest.TestCase):
         # Store job ID for later tests
         job_id = data['job_id']
         self.__class__.job_ids.append(job_id)
-        self.__class__.chapter_job_id = job_id
+        self.__class__.subtitle_job_id = job_id
         
-        print(f"Successfully uploaded video with chapters, job_id: {job_id}")
+        print(f"✅ Successfully uploaded video with subtitles, job_id: {job_id}")
         
         # Verify video info extraction
         video_info = data['video_info']
-        self.assertIn('chapters', video_info, "Video info missing chapters")
+        self.assertIn('subtitle_streams', video_info, "Video info missing subtitle streams")
         
-        # Print the video info for debugging
-        print("API response video_info:")
-        print(json.dumps(video_info, indent=2))
-        
-        # Since we've verified chapters exist with ffprobe but the API isn't detecting them,
-        # we'll skip the chapter detection test for now and continue with other tests
-        print("NOTE: The API is not detecting chapters that ffprobe can see. This may be an issue with the ffmpeg-python library.")
-        
-        # For testing purposes, we'll use time-based splitting instead of chapter-based
-        self.__class__.chapter_job_id = job_id
+        print(f"Video duration: {video_info['duration']} seconds")
+        print(f"Detected {len(video_info['video_streams'])} video streams")
+        print(f"Detected {len(video_info.get('subtitle_streams', []))} subtitle streams")
         
         return job_id
     
@@ -178,7 +159,7 @@ class VideoSplitterBackendTest(unittest.TestCase):
         response = requests.post(f"{API_URL}/split-video/{job_id}", json=split_config)
         self.assertEqual(response.status_code, 200, f"Split request failed with status {response.status_code}: {response.text}")
         
-        print("Split request accepted, waiting for processing...")
+        print("✅ Split request accepted, waiting for processing...")
         
         # Wait for processing to complete
         max_wait_time = 60  # seconds
@@ -209,7 +190,7 @@ class VideoSplitterBackendTest(unittest.TestCase):
         self.assertIn('splits', status_data, "Response missing splits information")
         self.assertTrue(len(status_data['splits']) > 0, "No split files generated")
         
-        print(f"Successfully split video into {len(status_data['splits'])} parts")
+        print(f"✅ Successfully split video into {len(status_data['splits'])} parts")
         for i, split in enumerate(status_data['splits']):
             print(f"Split {i+1}: {split['file']}")
         
@@ -242,7 +223,7 @@ class VideoSplitterBackendTest(unittest.TestCase):
         response = requests.post(f"{API_URL}/split-video/{job_id}", json=split_config)
         self.assertEqual(response.status_code, 200, f"Split request failed with status {response.status_code}: {response.text}")
         
-        print("Split request accepted, waiting for processing...")
+        print("✅ Split request accepted, waiting for processing...")
         
         # Wait for processing to complete
         max_wait_time = 60  # seconds
@@ -273,7 +254,7 @@ class VideoSplitterBackendTest(unittest.TestCase):
         self.assertIn('splits', status_data, "Response missing splits information")
         self.assertTrue(len(status_data['splits']) > 0, "No split files generated")
         
-        print(f"Successfully split video into {len(status_data['splits'])} parts")
+        print(f"✅ Successfully split video into {len(status_data['splits'])} parts")
         for i, split in enumerate(status_data['splits']):
             print(f"Split {i+1}: {split['file']}")
         
