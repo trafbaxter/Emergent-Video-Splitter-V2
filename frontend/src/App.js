@@ -102,8 +102,19 @@ function App() {
       // Set video source to streaming endpoint with cache-busting
       if (videoRef.current) {
         const timestamp = Date.now();
-        videoRef.current.src = `${API}/video-stream/${response.data.job_id}?t=${timestamp}`;
+        const videoUrl = `${API}/video-stream/${response.data.job_id}?t=${timestamp}`;
+        console.log('Setting video src to:', videoUrl);
+        videoRef.current.src = videoUrl;
         videoRef.current.load(); // Force reload of video element
+        
+        // Add a test to verify the URL is accessible
+        fetch(videoUrl, { method: 'HEAD' })
+          .then(response => {
+            console.log('Video URL test response:', response.status, response.headers.get('content-type'));
+          })
+          .catch(error => {
+            console.error('Video URL test failed:', error);
+          });
       }
       
     } catch (error) {
