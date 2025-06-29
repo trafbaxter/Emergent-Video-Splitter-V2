@@ -206,6 +206,18 @@ function App() {
     }
   };
 
+  // Handle video load errors
+  const handleVideoError = (e) => {
+    console.error('Video error:', e);
+    console.log('Video src:', videoRef.current?.src);
+  };
+
+  // Handle video load success
+  const handleVideoLoad = () => {
+    console.log('Video loaded successfully');
+    console.log('Video src:', videoRef.current?.src);
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900">
       <div className="container mx-auto px-4 py-8">
