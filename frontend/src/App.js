@@ -40,21 +40,31 @@ function App() {
 
   // Set video source when jobId changes (only for real uploads)
   useEffect(() => {
-    if (jobId && videoRef.current && !jobId.includes('mock')) {
-      const timestamp = Date.now();
-      const videoUrl = `${API}/video-stream/${jobId}?t=${timestamp}`;
-      console.log('useEffect: Setting video src to:', videoUrl);
-      videoRef.current.src = videoUrl;
-      videoRef.current.load();
+    if (jobId && !jobId.includes('mock')) {
+      // Use a timeout to ensure video element is rendered when preview section appears
+      const setVideoSource = () => {
+        if (videoRef.current) {
+          const timestamp = Date.now();
+          const videoUrl = `${API}/video-stream/${jobId}?t=${timestamp}`;
+          console.log('useEffect: Setting video src to:', videoUrl);
+          videoRef.current.src = videoUrl;
+          videoRef.current.load();
+          
+          // Test the URL
+          fetch(videoUrl, { method: 'HEAD' })
+            .then(response => {
+              console.log('useEffect: Video URL test response:', response.status, response.headers.get('content-type'));
+            })
+            .catch(error => {
+              console.error('useEffect: Video URL test failed:', error);
+            });
+        } else {
+          // Retry after a short delay if video element not ready
+          setTimeout(setVideoSource, 100);
+        }
+      };
       
-      // Test the URL
-      fetch(videoUrl, { method: 'HEAD' })
-        .then(response => {
-          console.log('useEffect: Video URL test response:', response.status, response.headers.get('content-type'));
-        })
-        .catch(error => {
-          console.error('useEffect: Video URL test failed:', error);
-        });
+      setVideoSource();
     }
   }, [jobId, API]); // Run when jobId changes
 
