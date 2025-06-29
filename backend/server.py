@@ -779,6 +779,39 @@ async def stream_video(job_id: str, request: Request):
         }
     )
 
+@api_router.get("/download-source")
+async def download_source():
+    """Download complete source code as zip"""
+    import zipfile
+    import tempfile
+    
+    # Create temporary zip file
+    temp_zip = tempfile.NamedTemporaryFile(delete=False, suffix='.zip')
+    
+    with zipfile.ZipFile(temp_zip.name, 'w', zipfile.ZIP_DEFLATED) as zipf:
+        # Add backend files
+        for root, dirs, files in os.walk('/app/backend'):
+            for file in files:
+                if not file.endswith(('.pyc', '.log')):
+                    file_path = os.path.join(root, file)
+                    arcname = os.path.relpath(file_path, '/app')
+                    zipf.write(file_path, arcname)
+        
+        # Add frontend files (excluding node_modules)
+        for root, dirs, files in os.walk('/app/frontend'):
+            if 'node_modules' in root:
+                continue
+            for file in files:
+                file_path = os.path.join(root, file)
+                arcname = os.path.relpath(file_path, '/app')
+                zipf.write(file_path, arcname)
+    
+    return FileResponse(
+        temp_zip.name,
+        media_type='application/zip',
+        filename='VideoSplitter.zip'
+    )
+
 @api_router.delete("/cleanup/{job_id}")
 async def cleanup_job(job_id: str):
     """Clean up job files"""
