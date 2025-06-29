@@ -54,10 +54,6 @@ OUTPUT_DIR = TEMP_BASE / "outputs"
 for dir_path in [UPLOAD_DIR, PROCESS_DIR, OUTPUT_DIR]:
     dir_path.mkdir(parents=True, exist_ok=True)
 
-print(f"Upload directory: {UPLOAD_DIR}")
-print(f"Process directory: {PROCESS_DIR}")
-print(f"Output directory: {OUTPUT_DIR}")
-
 # Models
 class VideoProcessingJob(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
