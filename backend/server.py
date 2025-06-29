@@ -730,20 +730,14 @@ async def video_stream_options(job_id: str):
 @api_router.get("/video-stream/{job_id}")
 async def stream_video(job_id: str, request: Request):
     """Stream video file for preview with proper headers"""
-    print(f"Streaming request for job_id: {job_id}")
-    
     job = await db.video_jobs.find_one({"id": job_id})
-    print(f"Job found: {job is not None}")
     
     if not job or not job.get('file_path'):
-        print(f"Job not found or no file_path. Job: {job}")
         raise HTTPException(status_code=404, detail="Video not found")
     
     file_path = Path(job['file_path'])
-    print(f"File path: {file_path}, exists: {file_path.exists()}")
     
     if not file_path.exists():
-        print(f"File does not exist: {file_path}")
         raise HTTPException(status_code=404, detail="Video file not found")
     
     # Determine media type based on file extension
