@@ -158,7 +158,7 @@ function App() {
   const addManualTime = () => {
     if (manualTimeInput) {
       const time = parseTime(manualTimeInput);
-      if (time > 0 && videoInfo && time < videoInfo.duration) {
+      if (videoInfo && time < videoInfo.duration) {
         addSplitPoint(time);
         setManualTimeInput('');
       } else {
