@@ -1,0 +1,3 @@
+[submodule "dummy-submodule"]
+	path = dummy-submodule
+	url = https://github.com/trafbaxter/dummy-submodule.git
