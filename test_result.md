@@ -291,7 +291,7 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Video file upload with chunked processing"
+    - "AWS Amplify frontend configuration and build"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
