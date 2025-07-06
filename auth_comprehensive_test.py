@@ -40,8 +40,19 @@ class VideoSplitterAuthenticationTest(unittest.TestCase):
         # Create a small test video file
         cls.test_video_path = "/tmp/test_video.mp4"
         if not os.path.exists(cls.test_video_path):
-            print(f"Creating test video at {cls.test_video_path}")
-            os.system(f"ffmpeg -f lavfi -i testsrc=duration=5:size=640x480:rate=30 -c:v libx264 -y {cls.test_video_path}")
+            print(f"Creating test video file at {cls.test_video_path}")
+            # Create a simple binary file instead of using ffmpeg
+            with open(cls.test_video_path, 'wb') as f:
+                # Write a minimal MP4 header (not a valid video but enough for testing)
+                f.write(bytes([
+                    0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70,
+                    0x6D, 0x70, 0x34, 0x32, 0x00, 0x00, 0x00, 0x00,
+                    0x6D, 0x70, 0x34, 0x32, 0x69, 0x73, 0x6F, 0x6D,
+                    0x00, 0x00, 0x00, 0x08, 0x66, 0x72, 0x65, 0x65,
+                    0x00, 0x00, 0x00, 0x08, 0x6D, 0x64, 0x61, 0x74
+                ]))
+                # Add some dummy data
+                f.write(b'Test video content for authentication testing')
     
     @classmethod
     def tearDownClass(cls):
