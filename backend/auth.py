@@ -11,7 +11,7 @@ import os
 from fastapi import HTTPException, Depends, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from motor.motor_asyncio import AsyncIOMotorClient
-from models import UserInDB, UserResponse
+from backend.models import UserInDB, UserResponse
 
 # Security configuration
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
