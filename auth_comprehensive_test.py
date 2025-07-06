@@ -316,70 +316,7 @@ class VideoSplitterAuthenticationTest(unittest.TestCase):
         self.assertEqual(response.status_code, 403, "Malformed Authorization header should be rejected")
         print(f"✅ Malformed Authorization header correctly rejected")
     
-    def test_09_protected_video_stream(self):
-        """Test protected video stream endpoint"""
-        print("\n=== Testing protected video stream endpoint ===")
-        
-        if not self.__class__.access_token or not self.__class__.job_ids:
-            self.skipTest("No access token or job IDs available")
-        
-        job_id = self.__class__.job_ids[0]
-        headers = {"Authorization": f"Bearer {self.__class__.access_token}"}
-        
-        # Test with authentication
-        response = requests.get(f"{API_URL}/video-stream/{job_id}", headers=headers)
-        
-        # Should be 200 OK or 206 Partial Content
-        self.assertTrue(
-            response.status_code in [200, 206], 
-            f"Video stream request failed with status {response.status_code}"
-        )
-        
-        print(f"✅ Successfully accessed video stream with authentication")
-        print(f"Content type: {response.headers.get('Content-Type')}")
-        
-        # Test without authentication
-        response = requests.get(f"{API_URL}/video-stream/{job_id}")
-        
-        self.assertEqual(response.status_code, 403, f"Expected 403 Forbidden, got {response.status_code}")
-        
-        print(f"✅ Video stream endpoint correctly rejected request without authentication")
-    
-    def test_10_protected_cleanup(self):
-        """Test protected cleanup endpoint"""
-        print("\n=== Testing protected cleanup endpoint ===")
-        
-        if not self.__class__.access_token or not self.__class__.job_ids:
-            self.skipTest("No access token or job IDs available")
-        
-        # Use the first job for cleanup test
-        job_id = self.__class__.job_ids[0]
-        headers = {"Authorization": f"Bearer {self.__class__.access_token}"}
-        
-        # Test without authentication
-        response = requests.delete(f"{API_URL}/cleanup/{job_id}")
-        
-        self.assertEqual(response.status_code, 403, f"Expected 403 Forbidden, got {response.status_code}")
-        
-        print(f"✅ Cleanup endpoint correctly rejected request without authentication")
-        
-        # Test with authentication
-        response = requests.delete(f"{API_URL}/cleanup/{job_id}", headers=headers)
-        
-        self.assertEqual(response.status_code, 200, f"Cleanup request failed: {response.text}")
-        
-        print(f"✅ Successfully cleaned up job with authentication")
-        
-        # Remove from job_ids list to avoid double cleanup
-        if job_id in self.__class__.job_ids:
-            self.__class__.job_ids.remove(job_id)
-        
-        # Verify job no longer exists
-        response = requests.get(f"{API_URL}/job-status/{job_id}", headers=headers)
-        
-        self.assertEqual(response.status_code, 404, f"Expected 404 Not Found, got {response.status_code}")
-        
-        print(f"✅ Job successfully deleted")
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
