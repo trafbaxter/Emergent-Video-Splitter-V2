@@ -1,6 +1,7 @@
-from fastapi import FastAPI, APIRouter, UploadFile, File, HTTPException, BackgroundTasks, Form, Request, Depends
+from fastapi import FastAPI, APIRouter, UploadFile, File, HTTPException, BackgroundTasks, Form, Request, Depends, status, Security
 from fastapi.responses import FileResponse, StreamingResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from dotenv import load_dotenv
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
@@ -63,6 +64,8 @@ def get_db():
     """Get database connection"""
     return db
 
+# Security
+security = HTTPBearer()
 # Initialize authentication services on startup
 auth_service = None
 email_service = None
@@ -395,6 +398,64 @@ async def process_video_job(job_id: str, file_path: str, config: SplitConfig):
 
 # API Endpoints
 # Add your routes to the router instead of directly to app
+# Authentication Routes with explicit CORS
+@app.get("/auth/me")
+async def get_current_user_info_direct(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db = Depends(get_db)
+):
+    """Get current user information with explicit CORS handling"""
+    auth_service = AuthService(db)
+    
+    try:
+        # Extract token from Bearer scheme
+        token = credentials.credentials
+        
+        # Verify token
+        try:
+            from backend.auth import AuthUtils
+        except ImportError:
+            from auth import AuthUtils
+        
+        payload = AuthUtils.verify_token(token, "access")
+        user_id = payload.get("sub")
+        
+        if not user_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token payload"
+            )
+        
+        # Get user from database
+        user = await auth_service.get_user_by_id(user_id)
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User not found"
+            )
+        
+        try:
+            from backend.models import UserResponse
+        except ImportError:
+            from models import UserResponse
+        return UserResponse(
+            id=user.id,
+            username=user.username,
+            email=user.email,
+            name=user.name,
+            role=user.role,
+            is_verified=user.is_verified,
+            is_2fa_enabled=user.is_2fa_enabled,
+            created_at=user.created_at,
+            last_login=user.last_login
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials"
+        )
+
 @api_router.get("/test-cors")
 async def test_cors():
     """Simple CORS test endpoint"""
@@ -1011,7 +1072,7 @@ class CORSResponse(JSONResponse):
         self.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, Accept, Origin, User-Agent"
         self.headers["Access-Control-Allow-Credentials"] = "true"
 
-# Include authentication routes
+# Include authentication routes AFTER CORS middleware
 app.include_router(auth_router)
 app.include_router(admin_router)
 
