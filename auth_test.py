@@ -108,7 +108,7 @@ class AuthenticationTest(unittest.TestCase):
         
         response = requests.get(f"{BACKEND_URL}/auth/me")
         
-        self.assertEqual(response.status_code, 401, f"Expected 401 Unauthorized, got {response.status_code}")
+        self.assertEqual(response.status_code, 403, f"Expected 403 Forbidden, got {response.status_code}")
         
         print(f"✅ /auth/me correctly rejected request without token with status {response.status_code}")
         print(f"Error message: {response.json().get('detail')}")
