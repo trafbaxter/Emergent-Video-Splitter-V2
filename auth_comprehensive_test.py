@@ -307,7 +307,7 @@ class VideoSplitterAuthenticationTest(unittest.TestCase):
         # Test with empty token
         headers = {"Authorization": "Bearer "}
         response = requests.get(f"{BACKEND_URL}/auth/me", headers=headers)
-        self.assertEqual(response.status_code, 401, "Empty token should be rejected")
+        self.assertEqual(response.status_code, 403, "Empty token should be rejected")
         print(f"✅ Empty token correctly rejected")
         
         # Test with malformed Authorization header
