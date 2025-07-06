@@ -11,7 +11,12 @@ import os
 from fastapi import HTTPException, Depends, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from motor.motor_asyncio import AsyncIOMotorClient
-from backend.models import UserInDB, UserResponse
+try:
+    # Try supervisor-style imports first (when running from /app directory)
+    from backend.models import UserInDB, UserResponse
+except ImportError:
+    # Fallback to local imports (when running from /app/backend directory)
+    from models import UserInDB, UserResponse
 
 # Security configuration - lazy loaded
 def get_jwt_config():
