@@ -60,14 +60,14 @@ auth_service = None
 email_service = None
 
 # Update the auth routes dependencies
-def get_auth_service_dep(database: AsyncIOMotorClient = Depends(get_db)) -> AuthService:
+def get_auth_service_dep(database = Depends(get_db)):
     """Get authentication service"""
     global auth_service
     if not auth_service:
         auth_service = AuthService(database)
     return auth_service
 
-def get_email_service_dep(database: AsyncIOMotorClient = Depends(get_db)) -> EmailService:
+def get_email_service_dep(database = Depends(get_db)):
     """Get email service"""
     global email_service
     if not email_service:
