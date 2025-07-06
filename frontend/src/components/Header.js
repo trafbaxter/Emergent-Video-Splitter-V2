@@ -47,7 +47,7 @@ const Header = ({ isAWSMode }) => {
 
           {/* Dropdown menu */}
           {showUserMenu && (
-            <div className="absolute right-0 mt-2 w-64 bg-white/20 backdrop-blur-lg rounded-lg border border-white/20 shadow-xl z-50">
+            <div className="absolute right-0 mt-2 w-64 bg-white/20 backdrop-blur-lg rounded-lg border border-white/20 shadow-xl z-[9999]">
               <div className="p-4 border-b border-white/20">
                 <p className="text-white font-medium">{user?.name || user?.username}</p>
                 <p className="text-purple-300 text-sm">{user?.email}</p>
@@ -113,7 +113,7 @@ const Header = ({ isAWSMode }) => {
       {/* Close dropdown when clicking outside */}
       {showUserMenu && (
         <div 
-          className="fixed inset-0 z-40" 
+          className="fixed inset-0 z-[9998]" 
           onClick={() => setShowUserMenu(false)}
         ></div>
       )}
