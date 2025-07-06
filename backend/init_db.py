@@ -9,7 +9,7 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-from auth import AuthUtils
+from backend.auth import AuthUtils
 
 async def create_default_admin():
     """Create default admin user if it doesn't exist"""
