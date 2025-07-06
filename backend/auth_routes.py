@@ -43,10 +43,9 @@ def get_email_service_dep(db: AsyncIOMotorClient = Depends(get_db)) -> EmailServ
 @auth_router.post("/login", response_model=LoginResponse)
 async def login(
     request: LoginRequest,
-    db: AsyncIOMotorClient = Depends(get_db)
+    auth_service: AuthService = Depends(get_auth_service)
 ):
     """Login user with username/password and optional 2FA"""
-    auth_service = get_auth_service(db)
     
     # Authenticate user
     user = await auth_service.authenticate_user(request.username, request.password)
