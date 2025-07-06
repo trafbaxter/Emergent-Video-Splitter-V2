@@ -38,14 +38,50 @@ db = client[os.environ['DB_NAME']]
 # Create the main app without a prefix
 app = FastAPI(
     title="Video Splitter API",
-    description="API for splitting video files while preserving subtitles",
-    version="1.0.0"
+    description="API for splitting video files while preserving subtitles - with authentication",
+    version="2.0.0"
 )
 
 # Configure app for large file uploads
 app.router.route_class = type('CustomRoute', (app.router.route_class,), {
     'get_route_handler': lambda self: lambda: self.get_route_handler()
 })
+
+# Create a router with the /api prefix
+api_router = APIRouter(prefix="/api")
+
+# Database dependency
+def get_db():
+    """Get database connection"""
+    return db
+
+# Initialize authentication services on startup
+auth_service = None
+email_service = None
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialize services on startup"""
+    global auth_service, email_service
+    
+    # Initialize authentication service
+    auth_service = AuthService(db)
+    email_service = get_email_service(db)
+    
+    # Initialize database (create default admin, indexes, etc.)
+    try:
+        from init_db import initialize_database
+        await initialize_database()
+    except Exception as e:
+        logger.error(f"Database initialization error: {e}")
+
+def get_auth_service():
+    """Get authentication service"""
+    return auth_service
+
+def get_email_service_instance():
+    """Get email service"""
+    return email_service
 
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
