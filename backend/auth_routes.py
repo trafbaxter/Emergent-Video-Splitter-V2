@@ -43,7 +43,7 @@ def get_email_service_dep(db = Depends(get_db)):
 @auth_router.post("/login", response_model=LoginResponse)
 async def login(
     request: LoginRequest,
-    auth_service: AuthService = Depends(get_auth_service)
+    auth_service = Depends(get_auth_service)
 ):
     """Login user with username/password and optional 2FA"""
     
