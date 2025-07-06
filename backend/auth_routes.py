@@ -31,11 +31,11 @@ def get_db():
     # This is a placeholder - will be replaced with actual DB connection
     pass
 
-def get_auth_service(db: AsyncIOMotorClient = Depends(get_db)) -> AuthService:
+def get_auth_service(db = Depends(get_db)):
     """Get authentication service instance"""
     return AuthService(db)
 
-def get_email_service_dep(db: AsyncIOMotorClient = Depends(get_db)) -> EmailService:
+def get_email_service_dep(db = Depends(get_db)):
     """Get email service instance"""
     return get_email_service(db)
 
