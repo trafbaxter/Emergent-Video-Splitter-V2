@@ -1072,7 +1072,7 @@ class CORSResponse(JSONResponse):
         self.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, Accept, Origin, User-Agent"
         self.headers["Access-Control-Allow-Credentials"] = "true"
 
-# Include authentication routes
+# Include authentication routes AFTER CORS middleware
 app.include_router(auth_router)
 app.include_router(admin_router)
 
