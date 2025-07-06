@@ -395,8 +395,14 @@ async def process_video_job(job_id: str, file_path: str, config: SplitConfig):
 
 # API Endpoints
 # Add your routes to the router instead of directly to app
+@api_router.get("/test-cors")
+async def test_cors():
+    """Simple CORS test endpoint"""
+    return {"message": "CORS test successful", "timestamp": datetime.now().isoformat()}
+
 @api_router.get("/")
-async def root():
+async def hello_world():
+    """Basic hello world endpoint"""
     return {"message": "Hello World"}
 
 @api_router.get("/debug/test-video-preview")

@@ -183,8 +183,10 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Setup axios interceptor for automatic token refresh
+  // Setup axios interceptor for automatic token refresh (temporarily disabled for debugging)
   useEffect(() => {
+    // Temporarily comment out the interceptor to debug CORS issues
+    /*
     const interceptor = axios.interceptors.response.use(
       (response) => response,
       async (error) => {
@@ -208,6 +210,16 @@ export const AuthProvider = ({ children }) => {
 
     return () => {
       axios.interceptors.response.eject(interceptor);
+    };
+    */
+    
+    // Set default axios headers instead
+    if (tokens.access_token) {
+      axios.defaults.headers.common['Authorization'] = `Bearer ${tokens.access_token}`;
+    }
+    
+    return () => {
+      delete axios.defaults.headers.common['Authorization'];
     };
   }, [tokens.refresh_token, tokens.access_token]);
 

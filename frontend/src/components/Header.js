@@ -94,6 +94,32 @@ const Header = ({ isAWSMode }) => {
             </button>
           )}
 
+          {/* Test CORS */}
+          <button 
+            onClick={async () => {
+              try {
+                console.log('Testing CORS...');
+                const response = await fetch('http://localhost:8001/api/test-cors', {
+                  method: 'GET',
+                  headers: {
+                    'Origin': 'http://localhost:3000',
+                    'Content-Type': 'application/json'
+                  }
+                });
+                const data = await response.json();
+                console.log('CORS test successful:', data);
+                alert('CORS test successful!');
+              } catch (error) {
+                console.error('CORS test failed:', error);
+                alert('CORS test failed: ' + error.message);
+              }
+              setShowUserMenu(false);
+            }}
+            className="w-full text-left px-3 py-2 text-yellow-300 hover:bg-yellow-500/10 rounded-md transition-colors"
+          >
+            🧪 Test CORS
+          </button>
+
           {/* 2FA Setup */}
           <button 
             onClick={() => {console.log('2FA clicked'); setShowUserMenu(false);}}
