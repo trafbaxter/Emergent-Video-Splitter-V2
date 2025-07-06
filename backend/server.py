@@ -692,11 +692,19 @@ async def get_job_status(
     }
 
 @api_router.get("/download/{job_id}/{filename}")
-async def download_split(job_id: str, filename: str):
-    """Download split video file"""
+async def download_split(
+    job_id: str, 
+    filename: str,
+    current_user: UserResponse = Depends(get_current_verified_user)
+):
+    """Download split video file (requires authentication)"""
     job = await db.video_jobs.find_one({"id": job_id})
     if not job or job['status'] != 'completed':
         raise HTTPException(status_code=404, detail="Job not found or not completed")
+    
+    # Check if user owns this job (admins can access any job)
+    if current_user.role != "admin" and job.get("user_id") != current_user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
     
     file_path = OUTPUT_DIR / job_id / filename
     if not file_path.exists():
