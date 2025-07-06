@@ -142,11 +142,10 @@ async def refresh_token(
 async def register(
     request: UserCreate,
     background_tasks: BackgroundTasks,
-    db: AsyncIOMotorClient = Depends(get_db)
+    auth_service: AuthService = Depends(get_auth_service),
+    email_service: EmailService = Depends(get_email_service_dep)
 ):
     """Register a new user (admin only, unless public registration is enabled)"""
-    auth_service = get_auth_service(db)
-    email_service = get_email_service(db)
     
     # Check if public registration is allowed
     settings = await auth_service.get_system_settings()
