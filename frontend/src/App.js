@@ -60,6 +60,48 @@ function AppContent() {
   const videoRef = useRef(null);
   const fileInputRef = useRef(null);
 
+  // Detect if we're running in AWS mode
+  useEffect(() => {
+    const awsMode = process.env.REACT_APP_API_GATEWAY_URL || process.env.REACT_APP_S3_BUCKET;
+    setIsAWSMode(!!awsMode);
+    
+    if (awsMode) {
+      console.log('🚀 Running in AWS Amplify mode');
+      console.log('API Gateway:', process.env.REACT_APP_API_GATEWAY_URL);
+      console.log('S3 Bucket:', process.env.REACT_APP_S3_BUCKET);
+    } else {
+      console.log('🖥️ Running in local development mode');
+    }
+  }, []);
+
+  // Clear any stale state on component mount
+  useEffect(() => {
+    setJobId(null);
+    setVideoInfo(null);
+    setSplits([]);
+    setProgress(0);
+    setSelectedFile(null);
+  }, []);
+
+  // Set video source when jobId changes
+  useEffect(() => {
+    if (jobId && !jobId.includes('mock')) {
+      const setVideoSource = () => {
+        if (videoRef.current) {
+          const timestamp = Date.now();
+          const videoUrl = `${API}/video-stream/${jobId}?t=${timestamp}`;
+          console.log('Setting video src to:', videoUrl);
+          videoRef.current.src = videoUrl;
+          videoRef.current.load();
+        } else {
+          setTimeout(setVideoSource, 100);
+        }
+      };
+      
+      setVideoSource();
+    }
+  }, [jobId, API]);
+
   // Show loading screen while checking authentication
   if (isLoading) {
     return (
@@ -77,19 +119,39 @@ function AppContent() {
     return <Login />;
   }
 
-  // Detect if we're running in AWS mode
-  useEffect(() => {
-    const awsMode = process.env.REACT_APP_API_GATEWAY_URL || process.env.REACT_APP_S3_BUCKET;
-    setIsAWSMode(!!awsMode);
-    
-    if (awsMode) {
-      console.log('🚀 Running in AWS Amplify mode');
-      console.log('API Gateway:', process.env.REACT_APP_API_GATEWAY_URL);
-      console.log('S3 Bucket:', process.env.REACT_APP_S3_BUCKET);
-    } else {
-      console.log('🖥️ Running in local development mode');
-    }
-  }, []);
+  // Main authenticated app content
+  return <AuthenticatedApp 
+    BACKEND_URL={BACKEND_URL}
+    API={API}
+    isAWSMode={isAWSMode}
+    getAuthHeader={getAuthHeader}
+  />;
+}
+
+// Separate component for authenticated app to avoid hooks issues
+function AuthenticatedApp({ BACKEND_URL, API, isAWSMode, getAuthHeader }) {
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [jobId, setJobId] = useState(null);
+  const [videoInfo, setVideoInfo] = useState(null);
+  const [splitConfig, setSplitConfig] = useState({
+    method: 'time_based',
+    time_points: [],
+    interval_duration: 300, // 5 minutes
+    preserve_quality: true,
+    output_format: 'mp4',
+    subtitle_sync_offset: 0,
+    force_keyframes: true,
+    keyframe_interval: 2.0
+  });
+  const [processing, setProcessing] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [splits, setSplits] = useState([]);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [manualTimeInput, setManualTimeInput] = useState('');
+  
+  const videoRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   // Clear any stale state on component mount
   useEffect(() => {
