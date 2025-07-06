@@ -22,10 +22,10 @@ from io import BytesIO
 import time
 
 # Import authentication modules
-from models import UserResponse
-from auth import get_current_verified_user, AuthService
-from auth_routes import auth_router, admin_router
-from email_service import get_email_service, EmailService
+from backend.models import UserResponse
+from backend.auth import get_current_verified_user, AuthService
+from backend.auth_routes import auth_router, admin_router
+from backend.email_service import get_email_service, EmailService
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
