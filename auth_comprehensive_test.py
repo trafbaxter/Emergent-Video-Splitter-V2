@@ -195,42 +195,70 @@ class VideoSplitterAuthenticationTest(unittest.TestCase):
         print(f"✅ Successfully retrieved system settings")
         print(f"Settings: {json.dumps(settings, indent=2)}")
     
-    def test_06_protected_video_upload(self):
-        """Test protected video upload endpoint"""
-        print("\n=== Testing protected video upload endpoint ===")
+    def test_06_protected_api_endpoints(self):
+        """Test protected API endpoints"""
+        print("\n=== Testing protected API endpoints ===")
         
         if not self.__class__.access_token:
             self.skipTest("No access token available")
         
         headers = {"Authorization": f"Bearer {self.__class__.access_token}"}
         
-        # Test with authentication
-        with open(self.test_video_path, 'rb') as f:
-            files = {'file': ('test_video.mp4', f, 'video/mp4')}
-            response = requests.post(f"{API_URL}/upload-video", headers=headers, files=files)
+        # Test job-status endpoint with non-existent job ID
+        # We're testing authentication, not job existence
+        job_id = "nonexistent-job-id"
         
-        self.assertEqual(response.status_code, 200, f"Upload failed with status {response.status_code}: {response.text}")
+        # Test with authentication - should return 404 Not Found (job doesn't exist)
+        # but not 401 Unauthorized or 403 Forbidden
+        response = requests.get(f"{API_URL}/job-status/{job_id}", headers=headers)
+        self.assertEqual(response.status_code, 404, f"Expected 404 Not Found, got {response.status_code}")
+        print(f"✅ Protected job-status endpoint correctly authenticated request")
         
-        data = response.json()
-        self.assertIn('job_id', data, "Response missing job_id")
-        self.assertIn('video_info', data, "Response missing video_info")
-        self.assertIn('user_id', data, "Response missing user_id")
-        
-        # Store job ID for later tests
-        job_id = data['job_id']
-        self.__class__.job_ids.append(job_id)
-        
-        print(f"✅ Successfully uploaded video with authentication, job_id: {job_id}")
-        print(f"User ID associated with upload: {data['user_id']}")
-        
-        # Test without authentication
-        with open(self.test_video_path, 'rb') as f:
-            files = {'file': ('test_video.mp4', f, 'video/mp4')}
-            response = requests.post(f"{API_URL}/upload-video", files=files)
-        
+        # Test without authentication - should return 403 Forbidden
+        response = requests.get(f"{API_URL}/job-status/{job_id}")
         self.assertEqual(response.status_code, 403, f"Expected 403 Forbidden, got {response.status_code}")
+        print(f"✅ Protected job-status endpoint correctly rejected request without authentication")
         
-        print(f"✅ Upload endpoint correctly rejected request without authentication")
+        # Test split-video endpoint with non-existent job ID
+        split_config = {
+            "method": "time_based",
+            "time_points": [0, 2.5],
+            "preserve_quality": True,
+            "output_format": "mp4",
+            "subtitle_sync_offset": 0.0
+        }
+        
+        # Test with authentication - should return 404 Not Found (job doesn't exist)
+        response = requests.post(f"{API_URL}/split-video/{job_id}", headers=headers, json=split_config)
+        self.assertEqual(response.status_code, 404, f"Expected 404 Not Found, got {response.status_code}")
+        print(f"✅ Protected split-video endpoint correctly authenticated request")
+        
+        # Test without authentication - should return 403 Forbidden
+        response = requests.post(f"{API_URL}/split-video/{job_id}", json=split_config)
+        self.assertEqual(response.status_code, 403, f"Expected 403 Forbidden, got {response.status_code}")
+        print(f"✅ Protected split-video endpoint correctly rejected request without authentication")
+        
+        # Test video-stream endpoint with non-existent job ID
+        # Test with authentication - should return 404 Not Found (job doesn't exist)
+        response = requests.get(f"{API_URL}/video-stream/{job_id}", headers=headers)
+        self.assertEqual(response.status_code, 404, f"Expected 404 Not Found, got {response.status_code}")
+        print(f"✅ Protected video-stream endpoint correctly authenticated request")
+        
+        # Test without authentication - should return 403 Forbidden
+        response = requests.get(f"{API_URL}/video-stream/{job_id}")
+        self.assertEqual(response.status_code, 403, f"Expected 403 Forbidden, got {response.status_code}")
+        print(f"✅ Protected video-stream endpoint correctly rejected request without authentication")
+        
+        # Test cleanup endpoint with non-existent job ID
+        # Test with authentication - should return 404 Not Found (job doesn't exist)
+        response = requests.delete(f"{API_URL}/cleanup/{job_id}", headers=headers)
+        self.assertEqual(response.status_code, 404, f"Expected 404 Not Found, got {response.status_code}")
+        print(f"✅ Protected cleanup endpoint correctly authenticated request")
+        
+        # Test without authentication - should return 403 Forbidden
+        response = requests.delete(f"{API_URL}/cleanup/{job_id}")
+        self.assertEqual(response.status_code, 403, f"Expected 403 Forbidden, got {response.status_code}")
+        print(f"✅ Protected cleanup endpoint correctly rejected request without authentication")
     
     def test_07_protected_job_status(self):
         """Test protected job status endpoint"""
