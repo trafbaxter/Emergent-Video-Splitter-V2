@@ -13,10 +13,14 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from motor.motor_asyncio import AsyncIOMotorClient
 from backend.models import UserInDB, UserResponse
 
-# Security configuration
-JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
-JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
-JWT_ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "4320"))
+# Security configuration - lazy loaded
+def get_jwt_config():
+    """Get JWT configuration"""
+    return {
+        'secret_key': os.getenv("JWT_SECRET_KEY", "default_secret_key_for_development"),
+        'algorithm': os.getenv("JWT_ALGORITHM", "HS256"),
+        'expire_minutes': int(os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "4320"))
+    }
 
 # Initialize security
 security = HTTPBearer()
@@ -38,30 +42,33 @@ class AuthUtils:
     @staticmethod
     def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta] = None) -> str:
         """Create a JWT access token"""
+        jwt_config = get_jwt_config()
         to_encode = data.copy()
         if expires_delta:
             expire = datetime.utcnow() + expires_delta
         else:
-            expire = datetime.utcnow() + timedelta(minutes=JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
+            expire = datetime.utcnow() + timedelta(minutes=jwt_config['expire_minutes'])
         
         to_encode.update({"exp": expire, "type": "access"})
-        encoded_jwt = jwt.encode(to_encode, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
+        encoded_jwt = jwt.encode(to_encode, jwt_config['secret_key'], algorithm=jwt_config['algorithm'])
         return encoded_jwt
     
     @staticmethod
     def create_refresh_token(data: Dict[str, Any]) -> str:
         """Create a JWT refresh token (3 days expiry)"""
+        jwt_config = get_jwt_config()
         to_encode = data.copy()
         expire = datetime.utcnow() + timedelta(days=3)
         to_encode.update({"exp": expire, "type": "refresh"})
-        encoded_jwt = jwt.encode(to_encode, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
+        encoded_jwt = jwt.encode(to_encode, jwt_config['secret_key'], algorithm=jwt_config['algorithm'])
         return encoded_jwt
     
     @staticmethod
     def verify_token(token: str, token_type: str = "access") -> Dict[str, Any]:
         """Verify and decode a JWT token"""
+        jwt_config = get_jwt_config()
         try:
-            payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
+            payload = jwt.decode(token, jwt_config['secret_key'], algorithms=[jwt_config['algorithm']])
             if payload.get("type") != token_type:
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
