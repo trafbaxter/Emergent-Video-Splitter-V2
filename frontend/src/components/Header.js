@@ -45,9 +45,17 @@ const Header = ({ isAWSMode }) => {
             </svg>
           </button>
 
-          {/* Dropdown menu */}
+          {/* Dropdown menu - positioned absolutely but with very high z-index */}
           {showUserMenu && (
-            <div className="absolute right-0 mt-2 w-64 bg-white/20 backdrop-blur-lg rounded-lg border border-white/20 shadow-xl z-[9999]">
+            <>
+              {/* Backdrop overlay */}
+              <div 
+                className="fixed inset-0 z-[9998]" 
+                onClick={() => setShowUserMenu(false)}
+              ></div>
+              
+              {/* Dropdown content */}
+              <div className="absolute right-0 top-full mt-2 w-64 bg-white/20 backdrop-blur-lg rounded-lg border border-white/20 shadow-xl z-[10001]" style={{position: 'fixed', right: '1rem', top: '5rem'}}>
               <div className="p-4 border-b border-white/20">
                 <p className="text-white font-medium">{user?.name || user?.username}</p>
                 <p className="text-purple-300 text-sm">{user?.email}</p>
