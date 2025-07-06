@@ -118,14 +118,6 @@ const Header = ({ isAWSMode }) => {
           )}
         </div>
       </div>
-
-      {/* Close dropdown when clicking outside */}
-      {showUserMenu && (
-        <div 
-          className="fixed inset-0 z-[9998]" 
-          onClick={() => setShowUserMenu(false)}
-        ></div>
-      )}
     </div>
   );
 };
