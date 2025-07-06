@@ -1,6 +1,7 @@
-from fastapi import FastAPI, APIRouter, UploadFile, File, HTTPException, BackgroundTasks, Form, Request, Depends
+from fastapi import FastAPI, APIRouter, UploadFile, File, HTTPException, BackgroundTasks, Form, Request, Depends, status, Security
 from fastapi.responses import FileResponse, StreamingResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from dotenv import load_dotenv
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
