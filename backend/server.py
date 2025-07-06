@@ -398,6 +398,59 @@ async def process_video_job(job_id: str, file_path: str, config: SplitConfig):
 
 # API Endpoints
 # Add your routes to the router instead of directly to app
+# Authentication Routes with explicit CORS
+@app.get("/auth/me")
+async def get_current_user_info_direct(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db = Depends(get_db)
+):
+    """Get current user information with explicit CORS handling"""
+    auth_service = AuthService(db)
+    
+    try:
+        # Extract token from Bearer scheme
+        token = credentials.credentials
+        
+        # Verify token
+        from backend.auth import AuthUtils
+        config = AuthUtils.get_jwt_config()
+        
+        payload = AuthUtils.verify_token(token, "access")
+        user_id = payload.get("sub")
+        
+        if not user_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token payload"
+            )
+        
+        # Get user from database
+        user = await auth_service.get_user_by_id(user_id)
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User not found"
+            )
+        
+        from backend.models import UserResponse
+        return UserResponse(
+            id=user.id,
+            username=user.username,
+            email=user.email,
+            name=user.name,
+            role=user.role,
+            is_verified=user.is_verified,
+            is_2fa_enabled=user.is_2fa_enabled,
+            created_at=user.created_at,
+            last_login=user.last_login
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials"
+        )
+
 @api_router.get("/test-cors")
 async def test_cors():
     """Simple CORS test endpoint"""
