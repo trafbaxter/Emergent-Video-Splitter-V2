@@ -25,10 +25,10 @@ const Header = ({ isAWSMode }) => {
         </div>
 
         {/* Right side - User menu */}
-        <div className="relative">
+        <div className="relative z-[9999]">
           <button
             onClick={() => setShowUserMenu(!showUserMenu)}
-            className="flex items-center space-x-3 bg-black/30 rounded-lg px-4 py-2 text-white hover:bg-black/40 transition-colors"
+            className="flex items-center space-x-3 bg-black/30 rounded-lg px-4 py-2 text-white hover:bg-black/40 transition-colors relative z-[10000]"
           >
             <div className="w-8 h-8 bg-gradient-to-r from-purple-500 to-blue-500 rounded-full flex items-center justify-center text-sm font-bold">
               {user?.username?.charAt(0).toUpperCase() || 'U'}
@@ -45,9 +45,17 @@ const Header = ({ isAWSMode }) => {
             </svg>
           </button>
 
-          {/* Dropdown menu */}
+          {/* Dropdown menu - positioned absolutely but with very high z-index */}
           {showUserMenu && (
-            <div className="absolute right-0 mt-2 w-64 bg-white/20 backdrop-blur-lg rounded-lg border border-white/20 shadow-xl z-[9999]">
+            <>
+              {/* Backdrop overlay */}
+              <div 
+                className="fixed inset-0 z-[9998]" 
+                onClick={() => setShowUserMenu(false)}
+              ></div>
+              
+              {/* Dropdown content */}
+              <div className="absolute right-0 top-full mt-2 w-64 bg-white/20 backdrop-blur-lg rounded-lg border border-white/20 shadow-xl z-[10001]" style={{position: 'fixed', right: '1rem', top: '5rem'}}>
               <div className="p-4 border-b border-white/20">
                 <p className="text-white font-medium">{user?.name || user?.username}</p>
                 <p className="text-purple-300 text-sm">{user?.email}</p>
