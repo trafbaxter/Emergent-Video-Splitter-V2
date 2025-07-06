@@ -39,15 +39,7 @@ class VideoSplitterAuthenticationTest(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         """Clean up after tests"""
-        # Clean up any remaining job data
-        if cls.access_token:
-            headers = {"Authorization": f"Bearer {cls.access_token}"}
-            for job_id in cls.job_ids:
-                try:
-                    requests.delete(f"{API_URL}/cleanup/{job_id}", headers=headers)
-                except Exception as e:
-                    print(f"Error cleaning up job {job_id}: {e}")
-    
+        pass
     def test_01_login_with_valid_credentials(self):
         """Test login with valid admin credentials"""
         print("\n=== Testing login with valid admin credentials ===")
