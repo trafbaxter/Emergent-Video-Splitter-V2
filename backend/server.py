@@ -771,12 +771,20 @@ async def video_stream_options(job_id: str):
     )
 
 @api_router.get("/video-stream/{job_id}")
-async def stream_video(job_id: str, request: Request):
-    """Stream video file for preview with proper headers"""
+async def stream_video(
+    job_id: str, 
+    request: Request,
+    current_user: UserResponse = Depends(get_current_verified_user)
+):
+    """Stream video file for preview with proper headers (requires authentication)"""
     job = await db.video_jobs.find_one({"id": job_id})
     
     if not job or not job.get('file_path'):
         raise HTTPException(status_code=404, detail="Video not found")
+    
+    # Check if user owns this job (admins can access any job)
+    if current_user.role != "admin" and job.get("user_id") != current_user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
     
     file_path = Path(job['file_path'])
     
