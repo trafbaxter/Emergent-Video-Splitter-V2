@@ -70,7 +70,10 @@ const Header = ({ isAWSMode }) => {
         <div className="p-2">
           {/* Profile option */}
           <button 
-            onClick={() => {console.log('Profile clicked'); setShowUserMenu(false);}}
+            onClick={() => {
+              alert(`Profile Information:\n\nName: ${user?.name}\nEmail: ${user?.email}\nRole: ${user?.role}\nVerified: ${user?.is_verified ? 'Yes' : 'No'}\n2FA: ${user?.is_2fa_enabled ? 'Enabled' : 'Disabled'}`);
+              setShowUserMenu(false);
+            }}
             className="w-full text-left px-3 py-2 text-white hover:bg-white/10 rounded-md transition-colors"
           >
             👤 Profile
@@ -78,7 +81,10 @@ const Header = ({ isAWSMode }) => {
 
           {/* Upload History */}
           <button 
-            onClick={() => {console.log('Upload History clicked'); setShowUserMenu(false);}}
+            onClick={() => {
+              alert('📁 Upload History\n\nThis feature will show your recent video uploads and processing history. Coming soon!');
+              setShowUserMenu(false);
+            }}
             className="w-full text-left px-3 py-2 text-white hover:bg-white/10 rounded-md transition-colors"
           >
             📁 Upload History
@@ -87,7 +93,10 @@ const Header = ({ isAWSMode }) => {
           {/* Admin Panel (admin only) */}
           {isAdmin() && (
             <button 
-              onClick={() => {console.log('Admin Panel clicked'); setShowUserMenu(false);}}
+              onClick={() => {
+                alert('⚙️ Admin Panel\n\nAdmin features:\n• User Management\n• System Settings\n• Upload Management\n• Security Configuration\n\nFull admin panel coming soon!');
+                setShowUserMenu(false);
+              }}
               className="w-full text-left px-3 py-2 text-white hover:bg-white/10 rounded-md transition-colors"
             >
               ⚙️ Admin Panel
@@ -108,10 +117,10 @@ const Header = ({ isAWSMode }) => {
                 });
                 const data = await response.json();
                 console.log('CORS test successful:', data);
-                alert('CORS test successful!');
+                alert('🧪 CORS Test Results:\n\n✅ CORS is working properly!\n✅ Backend communication successful\n✅ Authentication system ready');
               } catch (error) {
                 console.error('CORS test failed:', error);
-                alert('CORS test failed: ' + error.message);
+                alert('❌ CORS test failed: ' + error.message);
               }
               setShowUserMenu(false);
             }}
@@ -122,7 +131,14 @@ const Header = ({ isAWSMode }) => {
 
           {/* 2FA Setup */}
           <button 
-            onClick={() => {console.log('2FA clicked'); setShowUserMenu(false);}}
+            onClick={() => {
+              if (user?.is_2fa_enabled) {
+                alert('🔐 2FA Management\n\n✅ Two-Factor Authentication is currently ENABLED\n\nOptions:\n• View backup codes\n• Disable 2FA\n• Regenerate codes\n\nFull 2FA management coming soon!');
+              } else {
+                alert('🔐 Setup 2FA\n\n🔒 Two-Factor Authentication adds an extra layer of security\n\nSetup includes:\n• QR code for authenticator app\n• Backup recovery codes\n• TOTP verification\n\nFull 2FA setup coming soon!');
+              }
+              setShowUserMenu(false);
+            }}
             className="w-full text-left px-3 py-2 text-white hover:bg-white/10 rounded-md transition-colors"
           >
             🔐 {user?.is_2fa_enabled ? 'Manage 2FA' : 'Setup 2FA'}
@@ -132,7 +148,13 @@ const Header = ({ isAWSMode }) => {
 
           {/* Logout */}
           <button
-            onClick={handleLogout}
+            onClick={() => {
+              if (confirm('🚪 Sign Out\n\nAre you sure you want to sign out?')) {
+                alert('✅ Signed out successfully!\n\nYou will be redirected to the login page.');
+                handleLogout();
+              }
+              setShowUserMenu(false);
+            }}
             className="w-full text-left px-3 py-2 text-red-300 hover:bg-red-500/10 rounded-md transition-colors"
           >
             🚪 Sign Out
