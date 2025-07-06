@@ -45,8 +45,14 @@ security = HTTPBearer()
 
 def get_db():
     """Get database connection"""
-    from backend.server import db
-    return db
+    try:
+        # Try supervisor-style import first
+        from backend.server import db
+        return db
+    except ImportError:
+        # Fallback to local import  
+        from server import db
+        return db
 
 def get_auth_service(db = Depends(get_db)):
     """Get authentication service instance"""
