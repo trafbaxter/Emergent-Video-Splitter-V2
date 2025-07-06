@@ -93,7 +93,12 @@ async def startup_event():
     
     # Initialize database (create default admin, indexes, etc.)
     try:
-        from backend.init_db import initialize_database
+        try:
+            # Try supervisor-style import first
+            from backend.init_db import initialize_database
+        except ImportError:
+            # Fallback to local import
+            from init_db import initialize_database
         await initialize_database()
     except Exception as e:
         logger.error(f"Database initialization error: {e}")
