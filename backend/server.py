@@ -64,6 +64,8 @@ def get_db():
     """Get database connection"""
     return db
 
+# Security
+security = HTTPBearer()
 # Initialize authentication services on startup
 auth_service = None
 email_service = None
