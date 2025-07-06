@@ -26,14 +26,18 @@ admin_router = APIRouter(prefix="/admin", tags=["Admin"])
 # Initialize security
 security = HTTPBearer()
 
-def get_auth_service(db: AsyncIOMotorClient) -> AuthService:
-    """Get authentication service instance"""
-    return AuthService(db)
-
 def get_db():
     """Get database connection (this will be replaced with actual DB dependency)"""
     # This is a placeholder - will be replaced with actual DB connection
     pass
+
+def get_auth_service(db: AsyncIOMotorClient = Depends(get_db)) -> AuthService:
+    """Get authentication service instance"""
+    return AuthService(db)
+
+def get_email_service_dep(db: AsyncIOMotorClient = Depends(get_db)) -> EmailService:
+    """Get email service instance"""
+    return get_email_service(db)
 
 # Authentication Endpoints
 @auth_router.post("/login", response_model=LoginResponse)
