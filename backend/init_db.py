@@ -9,7 +9,12 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-from backend.auth import AuthUtils
+try:
+    # Try supervisor-style imports first (when running from /app directory)
+    from backend.auth import AuthUtils
+except ImportError:
+    # Fallback to local imports (when running from /app/backend directory)
+    from auth import AuthUtils
 
 async def create_default_admin():
     """Create default admin user if it doesn't exist"""
