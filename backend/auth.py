@@ -312,11 +312,24 @@ class AuthService:
         )
 
 # Dependency for getting current user
+def get_auth_service_for_user():
+    """Get auth service for current user dependencies"""
+    from backend.server import get_auth_service_dep, get_db
+    return get_auth_service_dep()
+
 async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-    auth_service: AuthService = Depends()
+    credentials: HTTPAuthorizationCredentials = Depends(security)
 ) -> UserResponse:
     """Get current authenticated user"""
+    # Get database and auth service
+    from backend.server import db, auth_service as global_auth_service
+    
+    # Use global auth service if available, otherwise create one
+    if global_auth_service:
+        auth_service = global_auth_service
+    else:
+        auth_service = AuthService(db)
+    
     try:
         # Extract token from Bearer scheme
         token = credentials.credentials
