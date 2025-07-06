@@ -1,8 +1,9 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import axios from 'axios';
 
-// Get backend URL from environment
-const BACKEND_URL = process.env.REACT_APP_API_GATEWAY_URL || process.env.REACT_APP_BACKEND_URL;
+// Get backend URL from environment - for authentication, always use local backend
+// since auth routes are not yet deployed to AWS Lambda
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8001';
 
 // Create Auth Context
 const AuthContext = createContext();
