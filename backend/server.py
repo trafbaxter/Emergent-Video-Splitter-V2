@@ -645,13 +645,18 @@ async def upload_video(
 async def split_video(
     job_id: str, 
     config: SplitConfig,
-    background_tasks: BackgroundTasks
+    background_tasks: BackgroundTasks,
+    current_user: UserResponse = Depends(get_current_verified_user)
 ):
-    """Start video splitting process"""
-    # Get job from database
+    """Start video splitting process (requires authentication)"""
+    # Get job from database and verify ownership
     job = await db.video_jobs.find_one({"id": job_id})
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
+    
+    # Check if user owns this job (admins can access any job)
+    if current_user.role != "admin" and job.get("user_id") != current_user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
     
     if job['status'] != 'uploaded':
         raise HTTPException(status_code=400, detail="Video not ready for processing")
