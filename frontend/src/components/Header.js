@@ -45,21 +45,29 @@ const Header = ({ isAWSMode }) => {
             </svg>
           </button>
 
-          {/* Dropdown menu - positioned absolutely but with very high z-index */}
+          {/* Dropdown menu - using portal-like approach */}
           {showUserMenu && (
             <>
               {/* Backdrop overlay */}
               <div 
-                className="fixed inset-0 z-[9998]" 
+                className="fixed inset-0 z-[999999]" 
                 onClick={() => setShowUserMenu(false)}
               ></div>
               
-              {/* Dropdown content */}
-              <div className="absolute right-0 top-full mt-2 w-64 bg-white/20 backdrop-blur-lg rounded-lg border border-white/20 shadow-xl z-[10001]" style={{position: 'fixed', right: '1rem', top: '5rem'}}>
+              {/* Dropdown content - positioned at viewport level */}
+              <div 
+                className="fixed w-64 bg-white/20 backdrop-blur-lg rounded-lg border border-white/20 shadow-xl z-[9999999]"
+                style={{
+                  top: '80px',
+                  right: '20px',
+                  maxHeight: 'calc(100vh - 100px)',
+                  overflowY: 'auto'
+                }}
+              >
                 <div className="p-4 border-b border-white/20">
                   <p className="text-white font-medium">{user?.name || user?.username}</p>
                   <p className="text-purple-300 text-sm">{user?.email}</p>
-                  <div className="flex items-center space-x-2 mt-2">
+                  <div className="flex items-center space-x-2 mt-2 flex-wrap">
                     <span className={`px-2 py-1 rounded text-xs font-medium ${
                       user?.role === 'admin' 
                         ? 'bg-purple-500/30 text-purple-200' 
