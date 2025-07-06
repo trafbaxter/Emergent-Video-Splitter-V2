@@ -934,7 +934,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include the router in the main app
+# Include authentication routes
+app.include_router(auth_router)
+app.include_router(admin_router)
+
+# Include the API router in the main app
 app.include_router(api_router)
 
 # Configure logging
