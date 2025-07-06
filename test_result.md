@@ -330,7 +330,7 @@ metadata:
 
 test_plan:
   current_focus:
-    - "AWS Amplify frontend configuration and build"
+    - "Authentication system frontend integration"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
