@@ -434,7 +434,10 @@ async def get_current_user_info_direct(
                 detail="User not found"
             )
         
-        from backend.models import UserResponse
+        try:
+            from backend.models import UserResponse
+        except ImportError:
+            from models import UserResponse
         return UserResponse(
             id=user.id,
             username=user.username,
