@@ -105,10 +105,9 @@ async def login(
 @auth_router.post("/refresh", response_model=TokenResponse)
 async def refresh_token(
     request: TokenRefreshRequest,
-    db: AsyncIOMotorClient = Depends(get_db)
+    auth_service: AuthService = Depends(get_auth_service)
 ):
     """Refresh access token using refresh token"""
-    auth_service = get_auth_service(db)
     
     # Verify refresh token
     payload = AuthUtils.verify_token(request.refresh_token, "refresh")
