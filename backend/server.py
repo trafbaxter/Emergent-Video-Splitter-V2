@@ -986,6 +986,15 @@ app.add_middleware(
     expose_headers=["*"],
 )
 
+# Custom response class with CORS headers
+class CORSResponse(JSONResponse):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.headers["Access-Control-Allow-Origin"] = "*"
+        self.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
+        self.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, Accept, Origin, User-Agent"
+        self.headers["Access-Control-Allow-Credentials"] = "true"
+
 # Include authentication routes
 app.include_router(auth_router)
 app.include_router(admin_router)
