@@ -412,8 +412,10 @@ async def get_current_user_info_direct(
         token = credentials.credentials
         
         # Verify token
-        from backend.auth import AuthUtils
-        config = AuthUtils.get_jwt_config()
+        try:
+            from backend.auth import AuthUtils
+        except ImportError:
+            from auth import AuthUtils
         
         payload = AuthUtils.verify_token(token, "access")
         user_id = payload.get("sub")
