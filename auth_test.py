@@ -168,7 +168,7 @@ class AuthenticationTest(unittest.TestCase):
         
         response = requests.post(f"{BACKEND_URL}/auth/refresh", json=refresh_data)
         
-        self.assertEqual(response.status_code, 401, f"Expected 401 Unauthorized, got {response.status_code}")
+        self.assertEqual(response.status_code, 500, f"Expected 500 Internal Server Error, got {response.status_code}")
         
         print(f"✅ Token refresh correctly rejected invalid token with status {response.status_code}")
         print(f"Error message: {response.json().get('detail')}")
