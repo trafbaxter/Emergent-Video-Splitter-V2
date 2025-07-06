@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, UploadFile, File, HTTPException, BackgroundTasks, Form, Request
+from fastapi import FastAPI, APIRouter, UploadFile, File, HTTPException, BackgroundTasks, Form, Request, Depends
 from fastapi.responses import FileResponse, StreamingResponse, JSONResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -21,33 +21,82 @@ import re
 from io import BytesIO
 import time
 
+# Import authentication modules
+from backend.models import UserResponse
+from backend.auth import get_current_verified_user, AuthService
+from backend.auth_routes import auth_router, admin_router
+from backend.email_service import get_email_service, EmailService
+
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-# MongoDB connection with error handling
-try:
-    mongo_url = os.environ.get('MONGO_URL', 'mongodb://localhost:27017')
-    db_name = os.environ.get('DB_NAME', 'video_splitter')
-    client = AsyncIOMotorClient(mongo_url)
-    db = client[db_name]
-    print(f"✅ Connected to MongoDB: {mongo_url}")
-except Exception as e:
-    print(f"❌ MongoDB connection failed: {e}")
-    print("💡 Make sure MongoDB is running and .env file is configured")
-    # Create a mock db object for development
-    db = None
-    
+# MongoDB connection
+mongo_url = os.environ['MONGO_URL']
+client = AsyncIOMotorClient(mongo_url)
+db = client[os.environ['DB_NAME']]
+
 # Create the main app without a prefix
 app = FastAPI(
     title="Video Splitter API",
-    description="API for splitting video files while preserving subtitles",
-    version="1.0.0"
+    description="API for splitting video files while preserving subtitles - with authentication",
+    version="2.0.0"
 )
 
 # Configure app for large file uploads
 app.router.route_class = type('CustomRoute', (app.router.route_class,), {
     'get_route_handler': lambda self: lambda: self.get_route_handler()
 })
+
+# Create a router with the /api prefix
+api_router = APIRouter(prefix="/api")
+
+# Database dependency
+def get_db():
+    """Get database connection"""
+    return db
+
+# Initialize authentication services on startup
+auth_service = None
+email_service = None
+
+# Update the auth routes dependencies
+def get_auth_service_dep(database = Depends(get_db)):
+    """Get authentication service"""
+    global auth_service
+    if not auth_service:
+        auth_service = AuthService(database)
+    return auth_service
+
+def get_email_service_dep(database = Depends(get_db)):
+    """Get email service"""
+    global email_service
+    if not email_service:
+        email_service = get_email_service(database)
+    return email_service
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialize services on startup"""
+    global auth_service, email_service
+    
+    # Initialize authentication service
+    auth_service = AuthService(db)
+    email_service = get_email_service(db)
+    
+    # Initialize database (create default admin, indexes, etc.)
+    try:
+        from backend.init_db import initialize_database
+        await initialize_database()
+    except Exception as e:
+        logger.error(f"Database initialization error: {e}")
+
+def get_auth_service():
+    """Get authentication service"""
+    return auth_service
+
+def get_email_service_instance():
+    """Get email service"""
+    return email_service
 
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
@@ -541,15 +590,18 @@ async def create_mock_job():
     return {"message": "Mock job created", "job_id": job_id, "streaming_url": f"/api/video-stream/{job_id}"}
 
 @api_router.post("/upload-video")
-async def upload_video(file: UploadFile = File(...)):
-    """Upload video file with support for large files"""
-    logger.info(f"Upload attempt - filename: {file.filename}, content_type: {file.content_type}")
+async def upload_video(
+    file: UploadFile = File(...),
+    current_user: UserResponse = Depends(get_current_verified_user)
+):
+    """Upload video file with support for large files (requires authentication)"""
+    logger.info(f"Upload attempt by user {current_user.username} - filename: {file.filename}, content_type: {file.content_type}")
     
     if not file.filename.lower().endswith(('.mp4', '.mkv', '.avi', '.mov', '.wmv', '.flv', '.webm')):
         logger.error(f"Unsupported format: {file.filename}")
         raise HTTPException(status_code=400, detail="Unsupported video format")
     
-    # Create job record
+    # Create job record with user ID
     job_id = str(uuid.uuid4())
     job = VideoProcessingJob(
         id=job_id,
@@ -582,16 +634,19 @@ async def upload_video(file: UploadFile = File(...)):
         job.video_info = video_info
         job.status = "uploaded"
         
-        # Save to database
-        await db.video_jobs.insert_one(job.dict())
+        # Save to database with user ID
+        job_dict = job.dict()
+        job_dict["user_id"] = current_user.id  # Link upload to user
+        await db.video_jobs.insert_one(job_dict)
         
-        logger.info(f"Successfully uploaded video: {file.filename}, size: {total_size / 1024 / 1024:.1f} MB")
+        logger.info(f"Successfully uploaded video by {current_user.username}: {file.filename}, size: {total_size / 1024 / 1024:.1f} MB")
         
         return {
             "job_id": job_id,
             "filename": file.filename,
             "size": job.original_size,
-            "video_info": video_info
+            "video_info": video_info,
+            "user_id": current_user.id
         }
         
     except Exception as e:
@@ -605,13 +660,18 @@ async def upload_video(file: UploadFile = File(...)):
 async def split_video(
     job_id: str, 
     config: SplitConfig,
-    background_tasks: BackgroundTasks
+    background_tasks: BackgroundTasks,
+    current_user: UserResponse = Depends(get_current_verified_user)
 ):
-    """Start video splitting process"""
-    # Get job from database
+    """Start video splitting process (requires authentication)"""
+    # Get job from database and verify ownership
     job = await db.video_jobs.find_one({"id": job_id})
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
+    
+    # Check if user owns this job (admins can access any job)
+    if current_user.role != "admin" and job.get("user_id") != current_user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
     
     if job['status'] != 'uploaded':
         raise HTTPException(status_code=400, detail="Video not ready for processing")
@@ -622,11 +682,18 @@ async def split_video(
     return {"message": "Video splitting started", "job_id": job_id}
 
 @api_router.get("/job-status/{job_id}")
-async def get_job_status(job_id: str):
-    """Get job status and progress"""
+async def get_job_status(
+    job_id: str,
+    current_user: UserResponse = Depends(get_current_verified_user)
+):
+    """Get job status and progress (requires authentication)"""
     job = await db.video_jobs.find_one({"id": job_id})
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
+    
+    # Check if user owns this job (admins can access any job)
+    if current_user.role != "admin" and job.get("user_id") != current_user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
     
     return {
         "id": job['id'],
@@ -635,15 +702,24 @@ async def get_job_status(job_id: str):
         "progress": job['progress'],
         "splits": job.get('splits', []),
         "error_message": job.get('error_message'),
-        "video_info": job.get('video_info')
+        "video_info": job.get('video_info'),
+        "user_id": job.get('user_id')
     }
 
 @api_router.get("/download/{job_id}/{filename}")
-async def download_split(job_id: str, filename: str):
-    """Download split video file"""
+async def download_split(
+    job_id: str, 
+    filename: str,
+    current_user: UserResponse = Depends(get_current_verified_user)
+):
+    """Download split video file (requires authentication)"""
     job = await db.video_jobs.find_one({"id": job_id})
     if not job or job['status'] != 'completed':
         raise HTTPException(status_code=404, detail="Job not found or not completed")
+    
+    # Check if user owns this job (admins can access any job)
+    if current_user.role != "admin" and job.get("user_id") != current_user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
     
     file_path = OUTPUT_DIR / job_id / filename
     if not file_path.exists():
@@ -710,12 +786,20 @@ async def video_stream_options(job_id: str):
     )
 
 @api_router.get("/video-stream/{job_id}")
-async def stream_video(job_id: str, request: Request):
-    """Stream video file for preview with proper headers"""
+async def stream_video(
+    job_id: str, 
+    request: Request,
+    current_user: UserResponse = Depends(get_current_verified_user)
+):
+    """Stream video file for preview with proper headers (requires authentication)"""
     job = await db.video_jobs.find_one({"id": job_id})
     
     if not job or not job.get('file_path'):
         raise HTTPException(status_code=404, detail="Video not found")
+    
+    # Check if user owns this job (admins can access any job)
+    if current_user.role != "admin" and job.get("user_id") != current_user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
     
     file_path = Path(job['file_path'])
     
@@ -821,12 +905,23 @@ async def download_source():
     )
 
 @api_router.delete("/cleanup/{job_id}")
-async def cleanup_job(job_id: str):
-    """Clean up job files"""
+async def cleanup_job(
+    job_id: str,
+    current_user: UserResponse = Depends(get_current_verified_user)
+):
+    """Clean up job files (requires authentication)"""
     try:
-        # Remove upload file
+        # Get job and verify ownership
         job = await db.video_jobs.find_one({"id": job_id})
-        if job and job.get('file_path'):
+        if not job:
+            raise HTTPException(status_code=404, detail="Job not found")
+        
+        # Check if user owns this job (admins can clean up any job)
+        if current_user.role != "admin" and job.get("user_id") != current_user.id:
+            raise HTTPException(status_code=403, detail="Access denied")
+        
+        # Remove upload file
+        if job.get('file_path'):
             upload_path = Path(job['file_path'])
             if upload_path.exists():
                 upload_path.unlink()
@@ -854,7 +949,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include the router in the main app
+# Include authentication routes
+app.include_router(auth_router)
+app.include_router(admin_router)
+
+# Include the API router in the main app
 app.include_router(api_router)
 
 # Configure logging
