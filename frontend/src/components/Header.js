@@ -69,24 +69,36 @@ const Header = ({ isAWSMode }) => {
 
         <div className="p-2">
           {/* Profile option */}
-          <button className="w-full text-left px-3 py-2 text-white hover:bg-white/10 rounded-md transition-colors">
+          <button 
+            onClick={() => {console.log('Profile clicked'); setShowUserMenu(false);}}
+            className="w-full text-left px-3 py-2 text-white hover:bg-white/10 rounded-md transition-colors"
+          >
             👤 Profile
           </button>
 
           {/* Upload History */}
-          <button className="w-full text-left px-3 py-2 text-white hover:bg-white/10 rounded-md transition-colors">
+          <button 
+            onClick={() => {console.log('Upload History clicked'); setShowUserMenu(false);}}
+            className="w-full text-left px-3 py-2 text-white hover:bg-white/10 rounded-md transition-colors"
+          >
             📁 Upload History
           </button>
 
           {/* Admin Panel (admin only) */}
           {isAdmin() && (
-            <button className="w-full text-left px-3 py-2 text-white hover:bg-white/10 rounded-md transition-colors">
+            <button 
+              onClick={() => {console.log('Admin Panel clicked'); setShowUserMenu(false);}}
+              className="w-full text-left px-3 py-2 text-white hover:bg-white/10 rounded-md transition-colors"
+            >
               ⚙️ Admin Panel
             </button>
           )}
 
           {/* 2FA Setup */}
-          <button className="w-full text-left px-3 py-2 text-white hover:bg-white/10 rounded-md transition-colors">
+          <button 
+            onClick={() => {console.log('2FA clicked'); setShowUserMenu(false);}}
+            className="w-full text-left px-3 py-2 text-white hover:bg-white/10 rounded-md transition-colors"
+          >
             🔐 {user?.is_2fa_enabled ? 'Manage 2FA' : 'Setup 2FA'}
           </button>
 
