@@ -1,32 +1,41 @@
 import React, { useState, useRef, useEffect } from 'react';
 import './App.css';
 import axios from 'axios';
-import { Amplify } from 'aws-amplify';
 import { AuthProvider, useAuth } from './AuthContext';
 import Login from './components/Login';
 import Header from './components/Header';
 import ProtectedRoute from './components/ProtectedRoute';
 
-// AWS Configuration
-const awsConfig = {
-  API: {
-    endpoints: [
-      {
-        name: 'videoapi',
-        endpoint: process.env.REACT_APP_API_GATEWAY_URL || 'https://your-api-gateway-url/prod',
+// Conditionally import and configure AWS Amplify only if available
+let Amplify = null;
+try {
+  const amplifyModule = require('aws-amplify');
+  Amplify = amplifyModule.Amplify;
+  
+  // AWS Configuration - only configure if Amplify is available
+  const awsConfig = {
+    API: {
+      endpoints: [
+        {
+          name: 'videoapi',
+          endpoint: process.env.REACT_APP_API_GATEWAY_URL || 'https://your-api-gateway-url/prod',
+          region: 'us-east-1'
+        }
+      ]
+    },
+    Storage: {
+      AWSS3: {
+        bucket: process.env.REACT_APP_S3_BUCKET || 'videosplitter-storage-1751560247',
         region: 'us-east-1'
       }
-    ]
-  },
-  Storage: {
-    AWSS3: {
-      bucket: process.env.REACT_APP_S3_BUCKET || 'videosplitter-storage-1751560247',
-      region: 'us-east-1'
     }
-  }
-};
+  };
 
-Amplify.configure(awsConfig);
+  Amplify.configure(awsConfig);
+  console.log('✅ AWS Amplify configured successfully');
+} catch (error) {
+  console.log('⚠️ AWS Amplify not available - running in local mode');
+}
 
 // Main App Component with Authentication
 function AppContent() {
