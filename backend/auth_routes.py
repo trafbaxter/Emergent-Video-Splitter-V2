@@ -5,19 +5,36 @@ from datetime import datetime, timedelta
 from typing import List, Optional
 import os
 
-from backend.models import (
-    LoginRequest, LoginResponse, TokenRefreshRequest, TokenResponse,
-    UserCreate, UserResponse, UserUpdate, EmailVerificationRequest,
-    PasswordResetRequest, PasswordResetConfirm, TwoFactorSetupResponse,
-    TwoFactorVerifyRequest, TwoFactorToggleRequest, AdminUserCreate,
-    AdminUserUpdate, AdminUserResponse, SystemSettings, UploadHistoryItem,
-    UserUploadHistory
-)
-from backend.auth import (
-    AuthService, AuthUtils, get_current_user, get_current_admin_user,
-    get_current_verified_user
-)
-from backend.email_service import EmailService, get_email_service
+try:
+    # Try supervisor-style imports first (when running from /app directory)
+    from backend.models import (
+        LoginRequest, LoginResponse, TokenRefreshRequest, TokenResponse,
+        UserCreate, UserResponse, UserUpdate, EmailVerificationRequest,
+        PasswordResetRequest, PasswordResetConfirm, TwoFactorSetupResponse,
+        TwoFactorVerifyRequest, TwoFactorToggleRequest, AdminUserCreate,
+        AdminUserUpdate, AdminUserResponse, SystemSettings, UploadHistoryItem,
+        UserUploadHistory
+    )
+    from backend.auth import (
+        AuthService, AuthUtils, get_current_user, get_current_admin_user,
+        get_current_verified_user
+    )
+    from backend.email_service import EmailService, get_email_service
+except ImportError:
+    # Fallback to local imports (when running from /app/backend directory)
+    from models import (
+        LoginRequest, LoginResponse, TokenRefreshRequest, TokenResponse,
+        UserCreate, UserResponse, UserUpdate, EmailVerificationRequest,
+        PasswordResetRequest, PasswordResetConfirm, TwoFactorSetupResponse,
+        TwoFactorVerifyRequest, TwoFactorToggleRequest, AdminUserCreate,
+        AdminUserUpdate, AdminUserResponse, SystemSettings, UploadHistoryItem,
+        UserUploadHistory
+    )
+    from auth import (
+        AuthService, AuthUtils, get_current_user, get_current_admin_user,
+        get_current_verified_user
+    )
+    from email_service import EmailService, get_email_service
 
 # Initialize router
 auth_router = APIRouter(prefix="/auth", tags=["Authentication"])
