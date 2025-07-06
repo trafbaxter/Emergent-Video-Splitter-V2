@@ -27,9 +27,9 @@ admin_router = APIRouter(prefix="/admin", tags=["Admin"])
 security = HTTPBearer()
 
 def get_db():
-    """Get database connection (this will be replaced with actual DB dependency)"""
-    # This is a placeholder - will be replaced with actual DB connection
-    pass
+    """Get database connection"""
+    from backend.server import db
+    return db
 
 def get_auth_service(db = Depends(get_db)):
     """Get authentication service instance"""
