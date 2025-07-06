@@ -32,9 +32,11 @@ class EmailService:
     """Email service for sending authentication emails via AWS SES"""
     
     def __init__(self, db: AsyncIOMotorClient):
-        self.fastmail = FastMail(conf)
         self.db = db
         self.tokens_collection = db.email_tokens
+        
+        # Initialize FastMail with configuration
+        self.fastmail = FastMail(get_email_config())
         
         # Create email templates directory if it doesn't exist
         self.templates_dir = Path(__file__).parent / "templates"
