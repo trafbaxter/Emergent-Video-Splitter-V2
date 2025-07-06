@@ -667,11 +667,18 @@ async def split_video(
     return {"message": "Video splitting started", "job_id": job_id}
 
 @api_router.get("/job-status/{job_id}")
-async def get_job_status(job_id: str):
-    """Get job status and progress"""
+async def get_job_status(
+    job_id: str,
+    current_user: UserResponse = Depends(get_current_verified_user)
+):
+    """Get job status and progress (requires authentication)"""
     job = await db.video_jobs.find_one({"id": job_id})
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
+    
+    # Check if user owns this job (admins can access any job)
+    if current_user.role != "admin" and job.get("user_id") != current_user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
     
     return {
         "id": job['id'],
@@ -680,7 +687,8 @@ async def get_job_status(job_id: str):
         "progress": job['progress'],
         "splits": job.get('splits', []),
         "error_message": job.get('error_message'),
-        "video_info": job.get('video_info')
+        "video_info": job.get('video_info'),
+        "user_id": job.get('user_id')
     }
 
 @api_router.get("/download/{job_id}/{filename}")
