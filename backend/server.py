@@ -25,7 +25,7 @@ import time
 from models import UserResponse
 from auth import get_current_verified_user, AuthService
 from auth_routes import auth_router, admin_router
-from email_service import get_email_service
+from email_service import get_email_service, EmailService
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
