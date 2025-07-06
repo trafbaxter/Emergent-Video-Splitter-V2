@@ -56,75 +56,68 @@ const Header = ({ isAWSMode }) => {
               
               {/* Dropdown content */}
               <div className="absolute right-0 top-full mt-2 w-64 bg-white/20 backdrop-blur-lg rounded-lg border border-white/20 shadow-xl z-[10001]" style={{position: 'fixed', right: '1rem', top: '5rem'}}>
-              <div className="p-4 border-b border-white/20">
-                <p className="text-white font-medium">{user?.name || user?.username}</p>
-                <p className="text-purple-300 text-sm">{user?.email}</p>
-                <div className="flex items-center space-x-2 mt-2">
-                  <span className={`px-2 py-1 rounded text-xs font-medium ${
-                    user?.role === 'admin' 
-                      ? 'bg-purple-500/30 text-purple-200' 
-                      : 'bg-blue-500/30 text-blue-200'
-                  }`}>
-                    {user?.role === 'admin' ? '👑 Admin' : '👤 User'}
-                  </span>
-                  {user?.is_verified && (
-                    <span className="px-2 py-1 rounded text-xs font-medium bg-green-500/30 text-green-200">
-                      ✅ Verified
+                <div className="p-4 border-b border-white/20">
+                  <p className="text-white font-medium">{user?.name || user?.username}</p>
+                  <p className="text-purple-300 text-sm">{user?.email}</p>
+                  <div className="flex items-center space-x-2 mt-2">
+                    <span className={`px-2 py-1 rounded text-xs font-medium ${
+                      user?.role === 'admin' 
+                        ? 'bg-purple-500/30 text-purple-200' 
+                        : 'bg-blue-500/30 text-blue-200'
+                    }`}>
+                      {user?.role === 'admin' ? '👑 Admin' : '👤 User'}
                     </span>
+                    {user?.is_verified && (
+                      <span className="px-2 py-1 rounded text-xs font-medium bg-green-500/30 text-green-200">
+                        ✅ Verified
+                      </span>
+                    )}
+                    {user?.is_2fa_enabled && (
+                      <span className="px-2 py-1 rounded text-xs font-medium bg-orange-500/30 text-orange-200">
+                        🔐 2FA
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="p-2">
+                  {/* Profile option */}
+                  <button className="w-full text-left px-3 py-2 text-white hover:bg-white/10 rounded-md transition-colors">
+                    👤 Profile
+                  </button>
+
+                  {/* Upload History */}
+                  <button className="w-full text-left px-3 py-2 text-white hover:bg-white/10 rounded-md transition-colors">
+                    📁 Upload History
+                  </button>
+
+                  {/* Admin Panel (admin only) */}
+                  {isAdmin() && (
+                    <button className="w-full text-left px-3 py-2 text-white hover:bg-white/10 rounded-md transition-colors">
+                      ⚙️ Admin Panel
+                    </button>
                   )}
-                  {user?.is_2fa_enabled && (
-                    <span className="px-2 py-1 rounded text-xs font-medium bg-orange-500/30 text-orange-200">
-                      🔐 2FA
-                    </span>
-                  )}
+
+                  {/* 2FA Setup */}
+                  <button className="w-full text-left px-3 py-2 text-white hover:bg-white/10 rounded-md transition-colors">
+                    🔐 {user?.is_2fa_enabled ? 'Manage 2FA' : 'Setup 2FA'}
+                  </button>
+
+                  <div className="border-t border-white/20 my-2"></div>
+
+                  {/* Logout */}
+                  <button
+                    onClick={handleLogout}
+                    className="w-full text-left px-3 py-2 text-red-300 hover:bg-red-500/10 rounded-md transition-colors"
+                  >
+                    🚪 Sign Out
+                  </button>
                 </div>
               </div>
-
-              <div className="p-2">
-                {/* Profile option */}
-                <button className="w-full text-left px-3 py-2 text-white hover:bg-white/10 rounded-md transition-colors">
-                  👤 Profile
-                </button>
-
-                {/* Upload History */}
-                <button className="w-full text-left px-3 py-2 text-white hover:bg-white/10 rounded-md transition-colors">
-                  📁 Upload History
-                </button>
-
-                {/* Admin Panel (admin only) */}
-                {isAdmin() && (
-                  <button className="w-full text-left px-3 py-2 text-white hover:bg-white/10 rounded-md transition-colors">
-                    ⚙️ Admin Panel
-                  </button>
-                )}
-
-                {/* 2FA Setup */}
-                <button className="w-full text-left px-3 py-2 text-white hover:bg-white/10 rounded-md transition-colors">
-                  🔐 {user?.is_2fa_enabled ? 'Manage 2FA' : 'Setup 2FA'}
-                </button>
-
-                <div className="border-t border-white/20 my-2"></div>
-
-                {/* Logout */}
-                <button
-                  onClick={handleLogout}
-                  className="w-full text-left px-3 py-2 text-red-300 hover:bg-red-500/10 rounded-md transition-colors"
-                >
-                  🚪 Sign Out
-                </button>
-              </div>
-            </div>
+            </>
           )}
         </div>
       </div>
-
-      {/* Close dropdown when clicking outside */}
-      {showUserMenu && (
-        <div 
-          className="fixed inset-0 z-[9998]" 
-          onClick={() => setShowUserMenu(false)}
-        ></div>
-      )}
     </div>
   );
 };
