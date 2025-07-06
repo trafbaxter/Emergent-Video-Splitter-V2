@@ -575,15 +575,18 @@ async def create_mock_job():
     return {"message": "Mock job created", "job_id": job_id, "streaming_url": f"/api/video-stream/{job_id}"}
 
 @api_router.post("/upload-video")
-async def upload_video(file: UploadFile = File(...)):
-    """Upload video file with support for large files"""
-    logger.info(f"Upload attempt - filename: {file.filename}, content_type: {file.content_type}")
+async def upload_video(
+    file: UploadFile = File(...),
+    current_user: UserResponse = Depends(get_current_verified_user)
+):
+    """Upload video file with support for large files (requires authentication)"""
+    logger.info(f"Upload attempt by user {current_user.username} - filename: {file.filename}, content_type: {file.content_type}")
     
     if not file.filename.lower().endswith(('.mp4', '.mkv', '.avi', '.mov', '.wmv', '.flv', '.webm')):
         logger.error(f"Unsupported format: {file.filename}")
         raise HTTPException(status_code=400, detail="Unsupported video format")
     
-    # Create job record
+    # Create job record with user ID
     job_id = str(uuid.uuid4())
     job = VideoProcessingJob(
         id=job_id,
@@ -616,16 +619,19 @@ async def upload_video(file: UploadFile = File(...)):
         job.video_info = video_info
         job.status = "uploaded"
         
-        # Save to database
-        await db.video_jobs.insert_one(job.dict())
+        # Save to database with user ID
+        job_dict = job.dict()
+        job_dict["user_id"] = current_user.id  # Link upload to user
+        await db.video_jobs.insert_one(job_dict)
         
-        logger.info(f"Successfully uploaded video: {file.filename}, size: {total_size / 1024 / 1024:.1f} MB")
+        logger.info(f"Successfully uploaded video by {current_user.username}: {file.filename}, size: {total_size / 1024 / 1024:.1f} MB")
         
         return {
             "job_id": job_id,
             "filename": file.filename,
             "size": job.original_size,
-            "video_info": video_info
+            "video_info": video_info,
+            "user_id": current_user.id
         }
         
     except Exception as e:
