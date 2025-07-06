@@ -199,14 +199,14 @@ class EmailService:
 </body>
 </html>"""
         
-        # Write templates to files
-        with open(self.templates_dir / "verification_email.html", "w") as f:
+        # Write templates to files with UTF-8 encoding
+        with open(self.templates_dir / "verification_email.html", "w", encoding='utf-8') as f:
             f.write(verification_template)
         
-        with open(self.templates_dir / "password_reset_email.html", "w") as f:
+        with open(self.templates_dir / "password_reset_email.html", "w", encoding='utf-8') as f:
             f.write(password_reset_template)
         
-        with open(self.templates_dir / "welcome_email.html", "w") as f:
+        with open(self.templates_dir / "welcome_email.html", "w", encoding='utf-8') as f:
             f.write(welcome_template)
     
     def generate_token(self, user_id: str, token_type: str) -> str:
