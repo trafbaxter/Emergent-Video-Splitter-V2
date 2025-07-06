@@ -278,73 +278,43 @@ class VideoSplitterAuthenticationTest(unittest.TestCase):
         self.assertEqual(response.status_code, 403, f"Expected 403 Forbidden, got {response.status_code}")
         print(f"✅ Unauthenticated request correctly denied access to admin/settings endpoint")
     
-    def test_08_protected_split_video(self):
-        """Test protected split video endpoint"""
-        print("\n=== Testing protected split video endpoint ===")
+    def test_08_token_validation(self):
+        """Test token validation"""
+        print("\n=== Testing token validation ===")
         
-        if not self.__class__.access_token or not self.__class__.job_ids:
-            self.skipTest("No access token or job IDs available")
+        if not self.__class__.access_token:
+            self.skipTest("No access token available")
         
-        job_id = self.__class__.job_ids[0]
+        # Test with valid token
         headers = {"Authorization": f"Bearer {self.__class__.access_token}"}
+        response = requests.get(f"{BACKEND_URL}/auth/me", headers=headers)
+        self.assertEqual(response.status_code, 200, "Valid token should be accepted")
+        print(f"✅ Valid token correctly accepted")
         
-        # Configure time-based splitting
-        split_config = {
-            "method": "time_based",
-            "time_points": [0, 2.5],  # Split at 2.5 seconds
-            "preserve_quality": True,
-            "output_format": "mp4",
-            "subtitle_sync_offset": 0.0
-        }
+        # Test with expired token (simulated)
+        expired_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0YWRtaW4iLCJ1c2VybmFtZSI6InRhZG1pbiIsInJvbGUiOiJhZG1pbiIsInR5cGUiOiJhY2Nlc3MiLCJleHAiOjE2MTk5MjQwMDB9.invalid_signature"
+        headers = {"Authorization": f"Bearer {expired_token}"}
+        response = requests.get(f"{BACKEND_URL}/auth/me", headers=headers)
+        self.assertEqual(response.status_code, 401, "Expired token should be rejected")
+        print(f"✅ Expired token correctly rejected")
         
-        # Test with authentication
-        response = requests.post(
-            f"{API_URL}/split-video/{job_id}", 
-            headers=headers, 
-            json=split_config
-        )
+        # Test with invalid token format
+        headers = {"Authorization": "Bearer invalid.token.format"}
+        response = requests.get(f"{BACKEND_URL}/auth/me", headers=headers)
+        self.assertEqual(response.status_code, 401, "Invalid token format should be rejected")
+        print(f"✅ Invalid token format correctly rejected")
         
-        self.assertEqual(response.status_code, 200, f"Split request failed: {response.text}")
+        # Test with empty token
+        headers = {"Authorization": "Bearer "}
+        response = requests.get(f"{BACKEND_URL}/auth/me", headers=headers)
+        self.assertEqual(response.status_code, 401, "Empty token should be rejected")
+        print(f"✅ Empty token correctly rejected")
         
-        print(f"✅ Successfully initiated video splitting with authentication")
-        
-        # Test without authentication
-        response = requests.post(
-            f"{API_URL}/split-video/{job_id}", 
-            json=split_config
-        )
-        
-        self.assertEqual(response.status_code, 403, f"Expected 403 Forbidden, got {response.status_code}")
-        
-        print(f"✅ Split video endpoint correctly rejected request without authentication")
-        
-        # Wait for processing to complete
-        max_wait_time = 30  # seconds
-        start_time = time.time()
-        completed = False
-        
-        while time.time() - start_time < max_wait_time:
-            response = requests.get(f"{API_URL}/job-status/{job_id}", headers=headers)
-            
-            if response.status_code != 200:
-                break
-                
-            status_data = response.json()
-            print(f"Job status: {status_data['status']}, progress: {status_data['progress']}%")
-            
-            if status_data['status'] == 'completed':
-                completed = True
-                break
-            elif status_data['status'] == 'failed':
-                print(f"Job failed: {status_data.get('error_message', 'Unknown error')}")
-                break
-            
-            time.sleep(2)
-        
-        if completed:
-            print(f"✅ Video splitting completed successfully")
-        else:
-            print(f"⚠️ Video splitting did not complete within {max_wait_time} seconds")
+        # Test with malformed Authorization header
+        headers = {"Authorization": "NotBearer token123"}
+        response = requests.get(f"{BACKEND_URL}/auth/me", headers=headers)
+        self.assertEqual(response.status_code, 403, "Malformed Authorization header should be rejected")
+        print(f"✅ Malformed Authorization header correctly rejected")
     
     def test_09_protected_video_stream(self):
         """Test protected video stream endpoint"""
