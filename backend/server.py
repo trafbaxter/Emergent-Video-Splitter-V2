@@ -890,12 +890,23 @@ async def download_source():
     )
 
 @api_router.delete("/cleanup/{job_id}")
-async def cleanup_job(job_id: str):
-    """Clean up job files"""
+async def cleanup_job(
+    job_id: str,
+    current_user: UserResponse = Depends(get_current_verified_user)
+):
+    """Clean up job files (requires authentication)"""
     try:
-        # Remove upload file
+        # Get job and verify ownership
         job = await db.video_jobs.find_one({"id": job_id})
-        if job and job.get('file_path'):
+        if not job:
+            raise HTTPException(status_code=404, detail="Job not found")
+        
+        # Check if user owns this job (admins can clean up any job)
+        if current_user.role != "admin" and job.get("user_id") != current_user.id:
+            raise HTTPException(status_code=403, detail="Access denied")
+        
+        # Remove upload file
+        if job.get('file_path'):
             upload_path = Path(job['file_path'])
             if upload_path.exists():
                 upload_path.unlink()
