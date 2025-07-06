@@ -955,23 +955,32 @@ async def cleanup_job(
 
 # Add a global OPTIONS handler for CORS preflight
 @app.options("/{path:path}")
-async def options_handler(request, path: str):
+async def options_handler(path: str):
     """Handle CORS preflight requests"""
     return JSONResponse(
         content={},
         headers={
             "Access-Control-Allow-Origin": "*",
             "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, PATCH",
-            "Access-Control-Allow-Headers": "*",
+            "Access-Control-Allow-Headers": "Content-Type, Authorization, Accept, Origin, User-Agent",
             "Access-Control-Allow-Credentials": "true",
+            "Access-Control-Max-Age": "86400",
         }
     )
 
-# Add CORS middleware before including routes
+# Configure CORS middleware with specific settings for authentication
+origins = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:3001",
+    "https://localhost:3000",
+    "*"  # Allow all origins for development
+]
+
 app.add_middleware(
     CORSMiddleware,
+    allow_origins=origins,
     allow_credentials=True,
-    allow_origins=["*"],  # In production, specify exact origins
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],
     expose_headers=["*"],
