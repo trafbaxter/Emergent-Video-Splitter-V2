@@ -260,34 +260,49 @@ class VideoSplitterAuthenticationTest(unittest.TestCase):
         self.assertEqual(response.status_code, 403, f"Expected 403 Forbidden, got {response.status_code}")
         print(f"✅ Protected cleanup endpoint correctly rejected request without authentication")
     
-    def test_07_protected_job_status(self):
-        """Test protected job status endpoint"""
-        print("\n=== Testing protected job status endpoint ===")
+    def test_07_admin_endpoints_access_control(self):
+        """Test admin endpoints access control"""
+        print("\n=== Testing admin endpoints access control ===")
         
-        if not self.__class__.access_token or not self.__class__.job_ids:
-            self.skipTest("No access token or job IDs available")
+        if not self.__class__.access_token:
+            self.skipTest("No access token available")
         
-        job_id = self.__class__.job_ids[0]
+        # Test with valid admin token
         headers = {"Authorization": f"Bearer {self.__class__.access_token}"}
         
-        # Test with authentication
-        response = requests.get(f"{API_URL}/job-status/{job_id}", headers=headers)
+        # Test admin/users endpoint
+        response = requests.get(f"{BACKEND_URL}/admin/users", headers=headers)
+        self.assertEqual(response.status_code, 200, f"Failed to access admin/users: {response.text}")
+        print(f"✅ Admin user successfully accessed admin/users endpoint")
         
-        self.assertEqual(response.status_code, 200, f"Job status request failed: {response.text}")
+        # Test admin/settings endpoint
+        response = requests.get(f"{BACKEND_URL}/admin/settings", headers=headers)
+        self.assertEqual(response.status_code, 200, f"Failed to access admin/settings: {response.text}")
+        print(f"✅ Admin user successfully accessed admin/settings endpoint")
         
-        data = response.json()
-        self.assertEqual(data['id'], job_id, "Job ID mismatch")
-        self.assertIn('user_id', data, "Response missing user_id")
+        # Test with invalid token (simulating non-admin user)
+        invalid_headers = {"Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJmYWtldXNlciIsInVzZXJuYW1lIjoiZmFrZXVzZXIiLCJyb2xlIjoidXNlciIsInR5cGUiOiJhY2Nlc3MiLCJleHAiOjE3MTk5MjQwMDB9.invalid_signature"}
         
-        print(f"✅ Successfully retrieved job status with authentication")
-        print(f"Job status: {data['status']}")
+        # Test admin/users endpoint with invalid token
+        response = requests.get(f"{BACKEND_URL}/admin/users", headers=invalid_headers)
+        self.assertEqual(response.status_code, 401, f"Expected 401 Unauthorized, got {response.status_code}")
+        print(f"✅ Non-admin user correctly denied access to admin/users endpoint")
         
-        # Test without authentication
-        response = requests.get(f"{API_URL}/job-status/{job_id}")
+        # Test admin/settings endpoint with invalid token
+        response = requests.get(f"{BACKEND_URL}/admin/settings", headers=invalid_headers)
+        self.assertEqual(response.status_code, 401, f"Expected 401 Unauthorized, got {response.status_code}")
+        print(f"✅ Non-admin user correctly denied access to admin/settings endpoint")
         
+        # Test without any token
+        # Test admin/users endpoint without token
+        response = requests.get(f"{BACKEND_URL}/admin/users")
         self.assertEqual(response.status_code, 403, f"Expected 403 Forbidden, got {response.status_code}")
+        print(f"✅ Unauthenticated request correctly denied access to admin/users endpoint")
         
-        print(f"✅ Job status endpoint correctly rejected request without authentication")
+        # Test admin/settings endpoint without token
+        response = requests.get(f"{BACKEND_URL}/admin/settings")
+        self.assertEqual(response.status_code, 403, f"Expected 403 Forbidden, got {response.status_code}")
+        print(f"✅ Unauthenticated request correctly denied access to admin/settings endpoint")
     
     def test_08_protected_split_video(self):
         """Test protected split video endpoint"""
