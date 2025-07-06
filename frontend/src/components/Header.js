@@ -25,10 +25,10 @@ const Header = ({ isAWSMode }) => {
         </div>
 
         {/* Right side - User menu */}
-        <div className="relative">
+        <div className="relative z-[9999]">
           <button
             onClick={() => setShowUserMenu(!showUserMenu)}
-            className="flex items-center space-x-3 bg-black/30 rounded-lg px-4 py-2 text-white hover:bg-black/40 transition-colors"
+            className="flex items-center space-x-3 bg-black/30 rounded-lg px-4 py-2 text-white hover:bg-black/40 transition-colors relative z-[10000]"
           >
             <div className="w-8 h-8 bg-gradient-to-r from-purple-500 to-blue-500 rounded-full flex items-center justify-center text-sm font-bold">
               {user?.username?.charAt(0).toUpperCase() || 'U'}
