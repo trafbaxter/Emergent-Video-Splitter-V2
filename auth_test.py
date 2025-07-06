@@ -171,7 +171,12 @@ class AuthenticationTest(unittest.TestCase):
         self.assertEqual(response.status_code, 500, f"Expected 500 Internal Server Error, got {response.status_code}")
         
         print(f"✅ Token refresh correctly rejected invalid token with status {response.status_code}")
-        print(f"Error message: {response.json().get('detail')}")
+        # The response might not be JSON, so handle that case
+        try:
+            error_detail = response.json().get('detail')
+            print(f"Error message: {error_detail}")
+        except:
+            print(f"Response: {response.text}")
     
     def test_08_admin_list_users(self):
         """Test admin endpoint to list all users"""
