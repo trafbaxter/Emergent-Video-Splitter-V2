@@ -7,19 +7,26 @@ from datetime import datetime, timedelta
 from motor.motor_asyncio import AsyncIOMotorClient
 from pathlib import Path
 
-# Email configuration
-conf = ConnectionConfig(
-    MAIL_USERNAME=os.getenv("SES_SMTP_USER"),
-    MAIL_PASSWORD=os.getenv("SES_SMTP_PASSWORD"),
-    MAIL_FROM=os.getenv("FROM_EMAIL"),
-    MAIL_PORT=int(os.getenv("SES_SMTP_PORT", 587)),
-    MAIL_SERVER=os.getenv("SES_SMTP_SERVER"),
-    MAIL_FROM_NAME="Video Splitter Pro",
-    MAIL_STARTTLS=True,
-    MAIL_SSL_TLS=False,
-    USE_CREDENTIALS=True,
-    VALIDATE_CERTS=True
-)
+# Email configuration - with defaults to prevent import errors
+conf = None
+
+def get_email_config():
+    """Get email configuration, creating it if needed"""
+    global conf
+    if conf is None:
+        conf = ConnectionConfig(
+            MAIL_USERNAME=os.getenv("SES_SMTP_USER", ""),
+            MAIL_PASSWORD=os.getenv("SES_SMTP_PASSWORD", ""),
+            MAIL_FROM=os.getenv("FROM_EMAIL", "noreply@example.com"),
+            MAIL_PORT=int(os.getenv("SES_SMTP_PORT", 587)),
+            MAIL_SERVER=os.getenv("SES_SMTP_SERVER", "smtp.example.com"),
+            MAIL_FROM_NAME="Video Splitter Pro",
+            MAIL_STARTTLS=True,
+            MAIL_SSL_TLS=False,
+            USE_CREDENTIALS=True,
+            VALIDATE_CERTS=True
+        )
+    return conf
 
 class EmailService:
     """Email service for sending authentication emails via AWS SES"""
