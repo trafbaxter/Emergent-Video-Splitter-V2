@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verify Your Email</title>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; text-align: center; border-radius: 10px 10px 0 0; }
+        .content { padding: 30px; background-color: #f8f9fa; border-radius: 0 0 10px 10px; }
+        .button { display: inline-block; padding: 12px 24px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; }
+        .footer { text-align: center; padding: 20px; font-size: 12px; color: #666; }
+        .logo { font-size: 24px; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">🎬 Video Splitter Pro</div>
+            <h1>Verify Your Email Address</h1>
+        </div>
+        <div class="content">
+            <p>Hello {{ user_name }},</p>
+            <p>Thank you for signing up for Video Splitter Pro! Please click the button below to verify your email address:</p>
+            <p style="text-align: center;">
+                <a href="{{ verification_link }}" class="button">Verify Email Address</a>
+            </p>
+            <p>If the button doesn't work, you can copy and paste this link into your browser:</p>
+            <p><a href="{{ verification_link }}">{{ verification_link }}</a></p>
+            <p>This link will expire in 1 hour for security reasons.</p>
+            <p>If you didn't create an account, please ignore this email.</p>
+            <p>Best regards,<br>The Video Splitter Pro Team</p>
+        </div>
+        <div class="footer">
+            <p>&copy; 2024 Video Splitter Pro. All rights reserved.</p>
+        </div>
+    </div>
+</body>
+</html>
