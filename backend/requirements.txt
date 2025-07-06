@@ -25,3 +25,13 @@ jq>=1.6.0
 typer>=0.9.0
 ffmpeg-python>=0.2.0
 aiofiles>=23.2.1
+# Authentication dependencies
+bcrypt>=4.1.2
+pyotp>=2.9.0
+qrcode>=7.4.2
+pillow>=10.2.0
+# Email dependencies
+fastapi-mail>=1.4.1
+jinja2>=3.1.3
+# Additional security
+python-jose[cryptography]>=3.3.0
