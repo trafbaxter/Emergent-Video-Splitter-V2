@@ -21,7 +21,7 @@ def update_lambda_function():
         # Update function code
         with open('lambda-update.zip', 'rb') as zip_file:
             response = lambda_client.update_function_code(
-                FunctionName='video-splitter-lambda',
+                FunctionName='videosplitter-api',
                 ZipFile=zip_file.read()
             )
         
