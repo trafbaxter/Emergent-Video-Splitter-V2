@@ -31,6 +31,14 @@ def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
         
         logger.info(f"Processing {http_method} request to {path}")
         
+        # Handle CORS preflight requests
+        if http_method == 'OPTIONS':
+            return {
+                'statusCode': 200,
+                'headers': get_cors_headers(),
+                'body': json.dumps({'message': 'CORS preflight'})
+            }
+        
         # Route to appropriate handler
         if path.startswith('/api/upload-video') and http_method == 'POST':
             return handle_upload_video(event, context)
