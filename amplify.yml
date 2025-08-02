@@ -13,6 +13,7 @@ frontend:
         - export GENERATE_SOURCEMAP=false
         - export DISABLE_ESLINT_PLUGIN=true
         - export CI=false
+        - export NODE_OPTIONS="--max-old-space-size=4096"
         - yarn build
   artifacts:
     baseDirectory: frontend/build
@@ -21,3 +22,9 @@ frontend:
   cache:
     paths:
       - frontend/node_modules/**/*
+  environment:
+    variables:
+      SKIP_PREFLIGHT_CHECK: true
+      GENERATE_SOURCEMAP: false
+      DISABLE_ESLINT_PLUGIN: true
+      CI: false
