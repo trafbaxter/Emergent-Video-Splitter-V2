@@ -40,7 +40,8 @@ def configure_s3_cors():
                 ],
                 'ExposeHeaders': [
                     'ETag',
-                    'x-amz-meta-*'
+                    'Content-Length',
+                    'Content-Type'
                 ],
                 'MaxAgeSeconds': 3000
             }
