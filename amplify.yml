@@ -3,17 +3,22 @@ frontend:
   phases:
     preBuild:
       commands:
-        - cd frontend && yarn install
+        - yarn install
     build:
       commands:
-        - cd frontend && export SKIP_PREFLIGHT_CHECK=true && export GENERATE_SOURCEMAP=false && export DISABLE_ESLINT_PLUGIN=true && export CI=false && export NODE_OPTIONS="--max-old-space-size=4096" && yarn build
+        - export SKIP_PREFLIGHT_CHECK=true
+        - export GENERATE_SOURCEMAP=false
+        - export DISABLE_ESLINT_PLUGIN=true
+        - export CI=false
+        - export NODE_OPTIONS="--max-old-space-size=4096"
+        - yarn build
   artifacts:
-    baseDirectory: frontend/build
+    baseDirectory: build
     files:
       - '**/*'
   cache:
     paths:
-      - frontend/node_modules/**/*
+      - node_modules/**/*
   environment:
     variables:
       SKIP_PREFLIGHT_CHECK: true
