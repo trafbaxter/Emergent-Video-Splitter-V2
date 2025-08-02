@@ -12,7 +12,7 @@ frontend:
         - export SKIP_PREFLIGHT_CHECK=true
         - export GENERATE_SOURCEMAP=false
         - export DISABLE_ESLINT_PLUGIN=true
-        - export DISABLE_HOT_RELOAD=true
+        - export CI=false
         - npm run build
   artifacts:
     baseDirectory: frontend/build
