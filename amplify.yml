@@ -4,11 +4,16 @@ frontend:
     preBuild:
       commands:
         - cd frontend
-        - yarn install
+        - npm install --legacy-peer-deps
+        - npm install react@18.3.1 react-dom@18.3.1 --save --legacy-peer-deps
     build:
       commands:
         - cd frontend
-        - yarn build
+        - export SKIP_PREFLIGHT_CHECK=true
+        - export GENERATE_SOURCEMAP=false
+        - export DISABLE_ESLINT_PLUGIN=true
+        - export DISABLE_HOT_RELOAD=true
+        - npm run build
   artifacts:
     baseDirectory: frontend/build
     files:
