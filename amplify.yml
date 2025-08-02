@@ -3,16 +3,25 @@ frontend:
   phases:
     preBuild:
       commands:
-        - npm ci
-        - cd frontend
-        - npm install react@19.0.0 react-dom@19.0.0 --save --force        
+        - yarn install
     build:
       commands:
-        - npx react-scripts build
+        - export SKIP_PREFLIGHT_CHECK=true
+        - export GENERATE_SOURCEMAP=false
+        - export DISABLE_ESLINT_PLUGIN=true
+        - export CI=false
+        - export NODE_OPTIONS="--max-old-space-size=4096"
+        - yarn build
   artifacts:
-    baseDirectory: ./frontend/build
+    baseDirectory: build
     files:
       - '**/*'
   cache:
     paths:
-      - ./frontend/node_modules/**/*
+      - node_modules/**/*
+  environment:
+    variables:
+      SKIP_PREFLIGHT_CHECK: true
+      GENERATE_SOURCEMAP: false
+      DISABLE_ESLINT_PLUGIN: true
+      CI: false
