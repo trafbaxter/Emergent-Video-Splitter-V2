@@ -3,16 +3,16 @@ frontend:
   phases:
     preBuild:
       commands:
-        - npm ci
         - cd frontend
-        - npm install react@19.0.0 react-dom@19.0.0 --save --force        
+        - yarn install
     build:
       commands:
-        - npx react-scripts build
+        - cd frontend
+        - yarn build
   artifacts:
-    baseDirectory: ./frontend/build
+    baseDirectory: frontend/build
     files:
       - '**/*'
   cache:
     paths:
-      - ./frontend/node_modules/**/*
+      - frontend/node_modules/**/*
