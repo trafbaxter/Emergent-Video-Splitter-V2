@@ -232,12 +232,39 @@ def handle_download(event: Dict[str, Any], context) -> Dict[str, Any]:
 def handle_video_stream(event: Dict[str, Any], context) -> Dict[str, Any]:
     """Handle video streaming request"""
     try:
-        job_id = event['pathParameters']['job_id']
+        # Extract job_id from path
+        path = event.get('path', '')
+        job_id = path.split('/')[-1]  # Get job_id from /api/video-stream/{job_id}
+        
+        # List objects to find the actual video file
+        try:
+            response = s3.list_objects_v2(
+                Bucket=BUCKET_NAME,
+                Prefix=f'videos/{job_id}/'
+            )
+            
+            if 'Contents' not in response or len(response['Contents']) == 0:
+                return {
+                    'statusCode': 404,
+                    'headers': get_cors_headers(),
+                    'body': json.dumps({'error': 'Video not found'})
+                }
+            
+            # Get the first video file
+            video_key = response['Contents'][0]['Key']
+            
+        except Exception as e:
+            logger.error(f"Error finding video: {str(e)}")
+            return {
+                'statusCode': 404,
+                'headers': get_cors_headers(),
+                'body': json.dumps({'error': 'Video not found'})
+            }
         
         # Generate presigned URL for video streaming
         stream_url = s3.generate_presigned_url(
             'get_object',
-            Params={'Bucket': BUCKET_NAME, 'Key': f'videos/{job_id}.mp4'},
+            Params={'Bucket': BUCKET_NAME, 'Key': video_key},
             ExpiresIn=3600
         )
         
