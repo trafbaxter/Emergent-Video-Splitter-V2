@@ -8,13 +8,13 @@ from pathlib import Path
 import tempfile
 import shutil
 
-# Use AWS API Gateway URL for testing
+# Use AWS API Gateway URL for testing AWS Lambda backend
 BACKEND_URL = "https://2419j971hh.execute-api.us-east-1.amazonaws.com/prod"
 API_URL = f"{BACKEND_URL}/api"
 
-print(f"Using API URL: {API_URL}")
+print(f"Testing AWS Lambda Backend at: {API_URL}")
 
-class VideoSplitterBackendTest(unittest.TestCase):
+class AWSLambdaBackendTest(unittest.TestCase):
     """Test suite for the Video Splitter Backend API"""
     
     @classmethod
