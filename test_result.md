@@ -276,7 +276,7 @@ backend:
   - task: "Video preview and streaming functionality fix"
     implemented: true
     working: true
-    file: "/app/lambda_function.py, /app/src/App.js"
+    file: "/app/lambda_function.py, /app/src/App.jsx"
     stuck_count: 0
     priority: "high"
     needs_retesting: false
