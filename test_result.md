@@ -252,6 +252,18 @@ backend:
         agent: "main"
         comment: "RESOLVED by switching from react-scripts to Vite build system. Created vite.config.js with React plugin, moved index.html to root, renamed .js files to .jsx, updated package.json scripts to use Vite. This completely bypasses the ajv/webpack dependency conflicts. Local build tested successfully (243KB gzipped). Simplified amplify.yml to use Node.js 18 with clean Vite build process. Solution eliminates legacy webpack/ajv issues while maintaining all application functionality."
 
+  - task: "FFmpeg Lambda integration for real video processing"
+    implemented: true
+    working: true
+    file: "/app/lambda_function.py, /app/ffmpeg_lambda_function.py, /app/deploy_ffmpeg_lambda.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "IMPLEMENTED: Created separate ffmpeg-converter Lambda function with ffmpeg-layer for real video processing. Updated main videosplitter-api to call FFmpeg Lambda for metadata extraction and video splitting. FFmpeg function handles actual FFprobe for duration extraction and real video splitting with time-based/interval methods. Main API acts as orchestrator calling dedicated FFmpeg processor. Backend testing confirmed integration working correctly with proper async processing (202 status) and fallback to estimation when FFmpeg unavailable."
+
   - task: "Video duration and metadata extraction fix"
     implemented: true
     working: true
