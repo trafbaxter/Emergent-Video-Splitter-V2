@@ -79,13 +79,23 @@ function App() {
   // Set video source when jobId changes
   useEffect(() => {
     if (jobId && !jobId.includes('mock')) {
-      const setVideoSource = () => {
+      const setVideoSource = async () => {
         if (videoRef.current) {
-          const timestamp = Date.now();
-          const videoUrl = `${API}/video-stream/${jobId}?t=${timestamp}`;
-          console.log('Setting video src to:', videoUrl);
-          videoRef.current.src = videoUrl;
-          videoRef.current.load();
+          try {
+            const timestamp = Date.now();
+            const response = await fetch(`${API}/video-stream/${jobId}?t=${timestamp}`);
+            const data = await response.json();
+            
+            if (data.stream_url) {
+              console.log('Setting video src to:', data.stream_url);
+              videoRef.current.src = data.stream_url;
+              videoRef.current.load();
+            } else {
+              console.error('No stream URL received:', data);
+            }
+          } catch (error) {
+            console.error('Error fetching video stream:', error);
+          }
         } else {
           setTimeout(setVideoSource, 100);
         }
