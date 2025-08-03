@@ -317,6 +317,21 @@ backend:
       - working: true
         agent: "main"
         comment: "FIXED: Enhanced video splitting endpoint with proper request validation and error handling. Added validation for time_points (time-based) and interval_duration (intervals). Now returns descriptive 400 errors instead of 500 errors for invalid configurations. Added JSON parsing error handling and detailed error messages. Backend testing confirmed 500 errors resolved."
+
+  - task: "AWS Lambda FFmpeg integration testing"
+    implemented: true
+    working: true
+    file: "/app/lambda_function.py, /app/ffmpeg_lambda_function.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Integrated ffmpeg-converter Lambda function for real video processing. Updated videosplitter-api to call ffmpeg-converter for metadata extraction and video splitting. FFmpeg Lambda function has ffmpeg-layer attached for real FFmpeg/FFprobe processing. Main Lambda function now calls separate FFmpeg function instead of using file size estimates."
+      - working: true
+        agent: "testing"
+        comment: "COMPREHENSIVE FFMPEG INTEGRATION TESTING COMPLETED: Successfully tested all 7 requirements from review request. ✅ FFmpeg Lambda Architecture: Verified two-Lambda setup with main videosplitter-api calling dedicated ffmpeg-converter Lambda. ✅ Metadata Extraction: Video-info endpoint calls FFmpeg Lambda for real FFprobe data instead of file size estimation, with fallback when unavailable. ✅ Video Splitting Integration: Split-video endpoint properly invokes FFmpeg Lambda asynchronously, returns 202 status. ✅ Error Handling: Proper validation prevents 500 errors, returns descriptive 400 errors for invalid configs. ✅ Asynchronous Processing: Video splitting returns 202 status correctly for async FFmpeg processing. ✅ CORS Headers: All CORS headers maintained with FFmpeg integration. ✅ Upload/Streaming Compatibility: Video upload and streaming endpoints work correctly with FFmpeg processing. The FFmpeg integration provides real video processing while maintaining backward compatibility and proper error handling."
     implemented: true
     working: true
     file: "/app/frontend/src/App.js"
