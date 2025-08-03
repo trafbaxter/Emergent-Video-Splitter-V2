@@ -146,7 +146,7 @@ def handle_upload_video(event: Dict[str, Any], context) -> Dict[str, Any]:
         }
 
 def handle_split_video(event: Dict[str, Any], context) -> Dict[str, Any]:
-    """Handle video splitting request"""
+    """Handle video splitting request using FFmpeg Lambda function"""
     try:
         job_id = event['pathParameters']['job_id']
         
@@ -159,11 +159,11 @@ def handle_split_video(event: Dict[str, Any], context) -> Dict[str, Any]:
         # Validate split configuration
         if split_method == 'time_based':
             time_points = body.get('time_points', [])
-            if not time_points:
+            if not time_points or len(time_points) < 2:
                 return {
                     'statusCode': 400,
                     'headers': get_cors_headers(),
-                    'body': json.dumps({'error': 'No time points specified for time-based splitting'})
+                    'body': json.dumps({'error': 'Time-based splitting requires at least 2 time points'})
                 }
         elif split_method == 'intervals':
             interval_duration = body.get('interval_duration', 0)
@@ -174,19 +174,58 @@ def handle_split_video(event: Dict[str, Any], context) -> Dict[str, Any]:
                     'body': json.dumps({'error': 'Invalid interval duration specified'})
                 }
         
-        # For now, simulate processing by creating job status
-        # In production, this would trigger actual video processing
-        logger.info(f"Video splitting simulation started for job {job_id}")
+        # Find the uploaded video file in S3
+        video_key = f"uploads/{job_id}"
+        
+        # Check if video exists in S3
+        try:
+            s3.head_object(Bucket=BUCKET_NAME, Key=video_key)
+        except Exception as e:
+            logger.error(f"Video not found in S3: {video_key} - {str(e)}")
+            return {
+                'statusCode': 404,
+                'headers': get_cors_headers(),
+                'body': json.dumps({'error': 'Video file not found. Please upload video first.'})
+            }
+        
+        # Prepare payload for FFmpeg Lambda
+        payload = {
+            'operation': 'split_video',
+            'source_bucket': BUCKET_NAME,
+            'source_key': video_key,
+            'job_id': job_id,
+            'split_config': {
+                'method': split_method,
+                'time_points': body.get('time_points', []),
+                'interval_duration': body.get('interval_duration', 300),
+                'preserve_quality': body.get('preserve_quality', True),
+                'output_format': body.get('output_format', 'mp4'),
+                'force_keyframes': body.get('force_keyframes', False),
+                'keyframe_interval': body.get('keyframe_interval', 2.0),
+                'subtitle_sync_offset': body.get('subtitle_sync_offset', 0.0)
+            }
+        }
+        
+        logger.info(f"Invoking FFmpeg Lambda for video splitting: {job_id}")
+        
+        # Invoke FFmpeg Lambda function asynchronously for long operations
+        response = lambda_client.invoke(
+            FunctionName=FFMPEG_LAMBDA_FUNCTION,
+            InvocationType='Event',  # Asynchronous call for splitting
+            Payload=json.dumps(payload)
+        )
+        
+        logger.info(f"FFmpeg Lambda invoked for splitting job {job_id}")
         
         return {
-            'statusCode': 200,
+            'statusCode': 202,  # Accepted for processing
             'headers': get_cors_headers(),
             'body': json.dumps({
-                'message': 'Video splitting request received and queued for processing',
+                'message': 'Video splitting started using FFmpeg processing',
                 'job_id': job_id,
                 'status': 'processing',
                 'method': split_method,
-                'note': 'This is a demo implementation - actual video processing would be implemented with FFmpeg in a separate processing service'
+                'note': 'Processing is running asynchronously. Check status for updates.'
             })
         }
         
