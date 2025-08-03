@@ -198,15 +198,25 @@ function App() {
         }
         
         setJobId(job_id);
-        setVideoInfo({
-          duration: 120, // Placeholder - would be extracted by Lambda
-          format: 'mp4',
-          size: selectedFile.size,
-          video_streams: [],
-          audio_streams: [],
-          subtitle_streams: [],
-          chapters: []
-        });
+        
+        // Fetch actual video metadata from the API
+        try {
+          const infoResponse = await axios.get(`${API}/video-info/${job_id}`);
+          const { metadata } = infoResponse.data;
+          setVideoInfo(metadata);
+        } catch (infoError) {
+          console.warn('Could not fetch video metadata:', infoError);
+          // Fallback to basic info
+          setVideoInfo({
+            duration: 0,
+            format: selectedFile.name.split('.').pop() || 'unknown',
+            size: selectedFile.size,
+            video_streams: [],
+            audio_streams: [],
+            subtitle_streams: [],
+            chapters: []
+          });
+        }
         
       } else {
         // Local mode: Direct upload to FastAPI
