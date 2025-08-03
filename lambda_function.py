@@ -285,6 +285,59 @@ def handle_video_stream(event: Dict[str, Any], context) -> Dict[str, Any]:
             'body': json.dumps({'error': str(e)})
         }
 
+def handle_video_info(event: Dict[str, Any], context) -> Dict[str, Any]:
+    """Handle video info request"""
+    try:
+        # Extract job_id from path
+        path = event.get('path', '')
+        job_id = path.split('/')[-1]  # Get job_id from /api/video-info/{job_id}
+        
+        # List objects to find the actual video file
+        try:
+            response = s3.list_objects_v2(
+                Bucket=BUCKET_NAME,
+                Prefix=f'videos/{job_id}/'
+            )
+            
+            if 'Contents' not in response or len(response['Contents']) == 0:
+                return {
+                    'statusCode': 404,
+                    'headers': get_cors_headers(),
+                    'body': json.dumps({'error': 'Video not found'})
+                }
+            
+            # Get the first video file
+            video_key = response['Contents'][0]['Key']
+            
+        except Exception as e:
+            logger.error(f"Error finding video: {str(e)}")
+            return {
+                'statusCode': 404,
+                'headers': get_cors_headers(),
+                'body': json.dumps({'error': 'Video not found'})
+            }
+        
+        # Extract video metadata
+        metadata = extract_video_metadata(video_key)
+        
+        return {
+            'statusCode': 200,
+            'headers': get_cors_headers(),
+            'body': json.dumps({
+                'job_id': job_id,
+                'video_key': video_key,
+                'metadata': metadata
+            })
+        }
+        
+    except Exception as e:
+        logger.error(f"Video info handler error: {str(e)}")
+        return {
+            'statusCode': 500,
+            'headers': get_cors_headers(),
+            'body': json.dumps({'error': str(e)})
+        }
+
 def extract_video_metadata(s3_key: str) -> dict:
     """Extract video metadata using FFprobe (simplified for Lambda)"""
     try:
