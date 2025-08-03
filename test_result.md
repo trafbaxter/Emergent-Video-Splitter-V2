@@ -274,10 +274,10 @@ frontend:
   - task: "AWS Amplify frontend configuration and build"
     implemented: true
     working: true
-    file: "/app/frontend/src/App.amplify.js, /app/frontend/build/"
+    file: "/app/src/App.js, /app/amplify.yml, /app/package.json"
     stuck_count: 0
     priority: "high"
-    needs_retesting: false
+    needs_retesting: true
     status_history:
       - working: "NA"
         agent: "main"
@@ -285,6 +285,9 @@ frontend:
       - working: true
         agent: "testing"
         comment: "Verified that the AWS Amplify frontend is correctly configured and working. The app successfully detects AWS mode and displays the '⚡ AWS Amplify Mode' indicator in the header. AWS environment variables (API Gateway URL: https://2419j971hh.execute-api.us-east-1.amazonaws.com/prod and S3 Bucket: videosplitter-storage-1751560247) are correctly loaded and used. The file selection interface works properly, and the 'Upload to AWS S3' button appears when a file is selected in AWS mode. The UI has a beautiful gradient background and responsive design that works well on desktop, tablet, and mobile views. All required AWS Amplify dependencies are correctly imported and configured."
+      - working: "NA"
+        agent: "main"
+        comment: "Fixed Yarn registry build error by updating amplify.yml to use npm instead of yarn. Removed packageManager field from package.json and deleted yarn.lock file to ensure consistent npm usage. Configuration now uses npm install --legacy-peer-deps and npm run build in amplify.yml. Ready for deployment testing."
 
 metadata:
   created_by: "main_agent"
