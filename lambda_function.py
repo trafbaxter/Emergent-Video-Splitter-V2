@@ -380,7 +380,71 @@ def handle_video_info(event: Dict[str, Any], context) -> Dict[str, Any]:
         }
 
 def extract_video_metadata(s3_key: str) -> dict:
-    """Extract video metadata with estimated duration based on file size"""
+    """Extract video metadata using FFmpeg Lambda function"""
+    try:
+        logger.info(f"Extracting metadata for {s3_key} using FFmpeg Lambda")
+        
+        # Prepare payload for FFmpeg Lambda
+        payload = {
+            'operation': 'extract_metadata',
+            'source_bucket': BUCKET_NAME,
+            'source_key': s3_key,
+            'job_id': s3_key.replace('/', '_').replace('.', '_')
+        }
+        
+        # Invoke FFmpeg Lambda function
+        response = lambda_client.invoke(
+            FunctionName=FFMPEG_LAMBDA_FUNCTION,
+            InvocationType='RequestResponse',  # Synchronous call
+            Payload=json.dumps(payload)
+        )
+        
+        # Parse response
+        response_payload = json.loads(response['Payload'].read())
+        logger.info(f"FFmpeg Lambda response: {response_payload.get('statusCode')}")
+        
+        if response_payload.get('statusCode') != 200:
+            logger.error(f"FFmpeg Lambda error: {response_payload}")
+            # Fallback to file size estimation
+            return extract_video_metadata_fallback(s3_key)
+        
+        # Parse the successful response
+        body = json.loads(response_payload.get('body', '{}'))
+        metadata = body.get('metadata', {})
+        
+        # Convert to our expected format
+        return {
+            'format': metadata.get('format', 'unknown'),
+            'duration': metadata.get('duration', 0),
+            'size': metadata.get('size', 0),
+            'video_streams': [
+                {
+                    'index': 0,
+                    'codec_name': metadata.get('video_info', {}).get('codec', 'unknown'),
+                    'width': metadata.get('video_info', {}).get('width', 1920),
+                    'height': metadata.get('video_info', {}).get('height', 1080),
+                    'fps': metadata.get('video_info', {}).get('fps', 30)
+                }
+            ] if metadata.get('video_streams', 0) > 0 else [],
+            'audio_streams': [
+                {
+                    'index': 1,
+                    'codec_name': metadata.get('audio_info', {}).get('codec', 'aac'),
+                    'sample_rate': metadata.get('audio_info', {}).get('sample_rate', 44100),
+                    'channels': metadata.get('audio_info', {}).get('channels', 2)
+                }
+            ] if metadata.get('audio_streams', 0) > 0 else [],
+            'subtitle_streams': [],
+            'chapters': []
+        }
+        
+    except Exception as e:
+        logger.error(f"FFmpeg metadata extraction failed: {str(e)}")
+        # Fallback to file size estimation
+        return extract_video_metadata_fallback(s3_key)
+
+def extract_video_metadata_fallback(s3_key: str) -> dict:
+    """Fallback metadata extraction based on file size (original method)"""
     try:
         # Get file extension to determine format
         file_extension = s3_key.lower().split('.')[-1]
@@ -402,21 +466,15 @@ def extract_video_metadata(s3_key: str) -> dict:
             file_size = 0
         
         # Estimate duration based on file size (improved approximation)
-        # Different video qualities have different bitrates:
-        # HD (1080p): ~8-12 Mbps average, ~60MB per minute
-        # Standard: ~4-6 Mbps average, ~30MB per minute 
-        # For 693MB file showing as 10:49, that's ~64MB per minute
-        
         if file_size > 0:
-            # Use 60MB per minute as baseline for HD video
             estimated_duration_minutes = file_size / (60 * 1024 * 1024)  # 60MB per minute
-            estimated_duration = max(60, int(estimated_duration_minutes * 60))  # Convert to seconds, minimum 1 minute
+            estimated_duration = max(60, int(estimated_duration_minutes * 60))  # Convert to seconds
         else:
             estimated_duration = 300  # Default 5 minutes if no size info
         
         return {
             'format': format_map.get(file_extension, file_extension),
-            'duration': estimated_duration,  # Estimated duration in seconds
+            'duration': estimated_duration,
             'size': file_size,
             'video_streams': [
                 {
@@ -440,10 +498,10 @@ def extract_video_metadata(s3_key: str) -> dict:
         }
         
     except Exception as e:
-        logger.error(f"Metadata extraction error: {str(e)}")
+        logger.error(f"Fallback metadata extraction error: {str(e)}")
         return {
             'format': 'unknown',
-            'duration': 0,
+            'duration': 300,
             'size': 0,
             'video_streams': [],
             'audio_streams': [],
