@@ -24,9 +24,16 @@ const awsConfig = {
 
 Amplify.configure(awsConfig);
 
-// Use API Gateway URL if available, otherwise fallback to current backend
-const BACKEND_URL = process.env.REACT_APP_API_GATEWAY_URL || process.env.REACT_APP_BACKEND_URL;
+// Use API Gateway URL exclusively for AWS mode
+const BACKEND_URL = process.env.REACT_APP_API_GATEWAY_URL || 'https://2419j971hh.execute-api.us-east-1.amazonaws.com/prod';
 const API = `${BACKEND_URL}/api`;
+
+console.log('🔧 API Configuration:', {
+  BACKEND_URL,
+  API,
+  REACT_APP_API_GATEWAY_URL: process.env.REACT_APP_API_GATEWAY_URL,
+  mode: 'AWS Lambda'
+});
 
 function App() {
   const [selectedFile, setSelectedFile] = useState(null);
