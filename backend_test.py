@@ -15,7 +15,17 @@ API_URL = f"{BACKEND_URL}/api"
 print(f"Testing AWS Lambda Backend at: {API_URL}")
 
 class AWSLambdaBackendTest(unittest.TestCase):
-    """Test suite for the Video Splitter Backend API"""
+    """Test suite for the AWS Lambda Video Splitter Backend API
+    
+    Focus on testing recent fixes:
+    1. Fixed hardcoded duration=0 issue - now estimates duration based on file size
+    2. Changed video-stream endpoint to return JSON with stream_url instead of redirect
+    3. Test video-info endpoint to verify duration is no longer 0
+    4. Test video-stream endpoint to verify it returns JSON with stream_url
+    5. Verify S3 presigned URLs are being generated correctly
+    6. Test metadata extraction shows estimated duration instead of 0
+    7. Ensure all CORS headers are still properly configured
+    """
     
     @classmethod
     def setUpClass(cls):
