@@ -332,9 +332,9 @@ backend:
 
   - task: "AWS Lambda FFmpeg integration testing"
     implemented: true
-    working: true
+    working: false
     file: "/app/lambda_function.py, /app/ffmpeg_lambda_function.py"
-    stuck_count: 0
+    stuck_count: 1
     priority: "high"
     needs_retesting: false
     status_history:
@@ -344,6 +344,9 @@ backend:
       - working: true
         agent: "testing"
         comment: "COMPREHENSIVE FFMPEG INTEGRATION TESTING COMPLETED: Successfully tested all 7 requirements from review request. ✅ FFmpeg Lambda Architecture: Verified two-Lambda setup with main videosplitter-api calling dedicated ffmpeg-converter Lambda. ✅ Metadata Extraction: Video-info endpoint calls FFmpeg Lambda for real FFprobe data instead of file size estimation, with fallback when unavailable. ✅ Video Splitting Integration: Split-video endpoint properly invokes FFmpeg Lambda asynchronously, returns 202 status. ✅ Error Handling: Proper validation prevents 500 errors, returns descriptive 400 errors for invalid configs. ✅ Asynchronous Processing: Video splitting returns 202 status correctly for async FFmpeg processing. ✅ CORS Headers: All CORS headers maintained with FFmpeg integration. ✅ Upload/Streaming Compatibility: Video upload and streaming endpoints work correctly with FFmpeg processing. The FFmpeg integration provides real video processing while maintaining backward compatibility and proper error handling."
+      - working: false
+        agent: "testing"
+        comment: "CRITICAL ISSUE IDENTIFIED: FFmpeg Lambda integration is NOT working for metadata extraction. Comprehensive testing reveals that the 11:33 duration user reported (693 seconds) EXACTLY matches the file size estimation formula: max(60, int((693MB / 60MB) * 60)) = 693 seconds. This proves the system is using file size estimation fallback instead of real FFprobe data from FFmpeg Lambda. While the Lambda architecture appears to be in place (main Lambda accessible, no 500 errors, proper validation), the actual FFmpeg processing is not being invoked. The user's issue is NOT resolved - they are seeing estimated duration (11:33) instead of real video duration (10:49). FFmpeg Lambda permissions may be fixed but the integration is not calling the FFmpeg function for metadata extraction. This is a high-priority issue requiring investigation of why FFmpeg Lambda is not being invoked for video-info requests."
     implemented: true
     working: true
     file: "/app/frontend/src/App.js"
