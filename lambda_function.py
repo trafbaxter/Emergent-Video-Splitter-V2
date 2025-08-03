@@ -360,9 +360,18 @@ def extract_video_metadata(s3_key: str) -> dict:
         except Exception:
             file_size = 0
         
-        # Estimate duration based on file size (very rough approximation)
-        # This is a temporary solution until we implement proper FFprobe
-        estimated_duration = max(300, int(file_size / (8 * 1024 * 1024)))  # Assume ~8MB per minute for HD video
+        # Estimate duration based on file size (improved approximation)
+        # Different video qualities have different bitrates:
+        # HD (1080p): ~8-12 Mbps average, ~60MB per minute
+        # Standard: ~4-6 Mbps average, ~30MB per minute 
+        # For 693MB file showing as 10:49, that's ~64MB per minute
+        
+        if file_size > 0:
+            # Use 60MB per minute as baseline for HD video
+            estimated_duration_minutes = file_size / (60 * 1024 * 1024)  # 60MB per minute
+            estimated_duration = max(60, int(estimated_duration_minutes * 60))  # Convert to seconds, minimum 1 minute
+        else:
+            estimated_duration = 300  # Default 5 minutes if no size info
         
         return {
             'format': format_map.get(file_extension, file_extension),
