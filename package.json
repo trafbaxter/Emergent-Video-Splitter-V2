@@ -15,8 +15,9 @@
     "react-scripts": "5.0.1"
   },
   "scripts": {
-    "start": "craco start",
-    "build": "craco build",
+    "start": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
     "test": "craco test",
     "eject": "react-scripts eject"
   },
