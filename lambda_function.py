@@ -270,13 +270,11 @@ def handle_video_stream(event: Dict[str, Any], context) -> Dict[str, Any]:
             ExpiresIn=3600
         )
         
+        # Return the stream URL as JSON instead of redirect
         return {
-            'statusCode': 302,
-            'headers': {
-                **get_cors_headers(),
-                'Location': stream_url
-            },
-            'body': ''
+            'statusCode': 200,
+            'headers': get_cors_headers(),
+            'body': json.dumps({'stream_url': stream_url})
         }
         
     except Exception as e:
