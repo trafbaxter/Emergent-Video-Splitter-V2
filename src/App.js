@@ -162,16 +162,40 @@ function App() {
           fileSize: selectedFile.size
         });
         
-        const { upload_url, job_id } = response.data;
+        const { upload_url, upload_post, job_id, content_type } = response.data;
         
-        // Upload directly to S3 using presigned URL
-        await axios.put(upload_url, selectedFile, {
-          headers: { 'Content-Type': selectedFile.type },
-          onUploadProgress: (progressEvent) => {
-            const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-            setUploadProgress(percentCompleted);
-          }
-        });
+        // Try presigned POST first (more reliable for browsers)
+        if (upload_post) {
+          const formData = new FormData();
+          
+          // Add all the required fields from presigned POST
+          Object.entries(upload_post.fields).forEach(([key, value]) => {
+            formData.append(key, value);
+          });
+          
+          // Add the file last
+          formData.append('file', selectedFile);
+          
+          await axios.post(upload_post.url, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+            onUploadProgress: (progressEvent) => {
+              const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+              setUploadProgress(percentCompleted);
+            }
+          });
+        } else {
+          // Fallback to presigned PUT
+          await axios.put(upload_url, selectedFile, {
+            headers: { 
+              'Content-Type': content_type || selectedFile.type,
+              'x-amz-acl': 'private'
+            },
+            onUploadProgress: (progressEvent) => {
+              const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+              setUploadProgress(percentCompleted);
+            }
+          });
+        }
         
         setJobId(job_id);
         setVideoInfo({

@@ -31,6 +31,14 @@ def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
         
         logger.info(f"Processing {http_method} request to {path}")
         
+        # Handle CORS preflight requests
+        if http_method == 'OPTIONS':
+            return {
+                'statusCode': 200,
+                'headers': get_cors_headers(),
+                'body': json.dumps({'message': 'CORS preflight'})
+            }
+        
         # Route to appropriate handler
         if path.startswith('/api/upload-video') and http_method == 'POST':
             return handle_upload_video(event, context)
@@ -66,25 +74,49 @@ def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
 def get_cors_headers() -> Dict[str, str]:
     """Return CORS headers for API responses"""
     return {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
-        'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS'
+        'Access-Control-Allow-Origin': 'https://develop.tads-video-splitter.com',
+        'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,Accept,Origin,Referer',
+        'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
+        'Access-Control-Allow-Credentials': 'false'
     }
 
 def handle_upload_video(event: Dict[str, Any], context) -> Dict[str, Any]:
     """Handle video file upload to S3"""
     try:
-        # In a real implementation, you would:
-        # 1. Generate presigned URL for direct S3 upload
-        # 2. Return upload instructions to frontend
-        # 3. Use S3 event triggers for processing
+        # Parse request body
+        body = event.get('body', '{}')
+        if isinstance(body, str):
+            body = json.loads(body)
+        
+        filename = body.get('filename', 'video.mp4')
+        file_type = body.get('fileType', 'video/mp4')
+        file_size = body.get('fileSize', 0)
         
         upload_id = f"job-{context.aws_request_id}"
+        s3_key = f"videos/{upload_id}/{filename}"
         
-        # Generate presigned URL for video upload
+        # Generate presigned URL for PUT operation with proper CORS headers
         presigned_url = s3.generate_presigned_url(
             'put_object',
-            Params={'Bucket': BUCKET_NAME, 'Key': f'videos/{upload_id}.mp4'},
+            Params={
+                'Bucket': BUCKET_NAME, 
+                'Key': s3_key,
+                'ContentType': file_type
+            },
+            ExpiresIn=3600
+        )
+        
+        # Also generate presigned POST for better browser compatibility
+        presigned_post = s3.generate_presigned_post(
+            Bucket=BUCKET_NAME,
+            Key=s3_key,
+            Fields={
+                'Content-Type': file_type
+            },
+            Conditions=[
+                {'Content-Type': file_type},
+                ['content-length-range', 1, file_size + 1000000]  # Allow some buffer
+            ],
             ExpiresIn=3600
         )
         
@@ -94,8 +126,10 @@ def handle_upload_video(event: Dict[str, Any], context) -> Dict[str, Any]:
             'body': json.dumps({
                 'job_id': upload_id,
                 'upload_url': presigned_url,
+                'upload_post': presigned_post,
                 'bucket': BUCKET_NAME,
-                'key': f'videos/{upload_id}.mp4'
+                'key': s3_key,
+                'content_type': file_type
             })
         }
         
