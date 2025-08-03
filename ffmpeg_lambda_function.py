@@ -33,38 +33,87 @@ def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
     """
     
     try:
+        # Add extensive logging for debugging
+        logger.info(f"🚀 FFmpeg Lambda started")
+        logger.info(f"📥 Raw event received: {json.dumps(event)}")
+        logger.info(f"📋 Context: {context}")
+        
         # Parse event
         operation = event.get('operation')
         source_bucket = event.get('source_bucket')
         source_key = event.get('source_key')
         job_id = event.get('job_id')
         
-        logger.info(f"Processing {operation} for job {job_id}: {source_key}")
+        logger.info(f"🔍 Parsed parameters:")
+        logger.info(f"  - operation: {operation}")
+        logger.info(f"  - source_bucket: {source_bucket}")
+        logger.info(f"  - source_key: {source_key}")
+        logger.info(f"  - job_id: {job_id}")
         
         if not all([operation, source_bucket, source_key, job_id]):
-            raise ValueError("Missing required parameters: operation, source_bucket, source_key, job_id")
+            missing = [param for param, value in [
+                ('operation', operation),
+                ('source_bucket', source_bucket), 
+                ('source_key', source_key),
+                ('job_id', job_id)
+            ] if not value]
+            error_msg = f"Missing required parameters: {missing}"
+            logger.error(f"❌ {error_msg}")
+            raise ValueError(error_msg)
+        
+        logger.info(f"✅ All required parameters present")
+        
+        # Test FFmpeg availability
+        logger.info(f"🧪 Testing FFmpeg availability...")
+        try:
+            result = subprocess.run(['ffmpeg', '-version'], capture_output=True, text=True, timeout=10)
+            if result.returncode == 0:
+                logger.info(f"✅ FFmpeg available: {result.stdout.split()[2]}")  # Version info
+            else:
+                logger.error(f"❌ FFmpeg test failed: {result.stderr}")
+        except Exception as ffmpeg_error:
+            logger.error(f"❌ FFmpeg test exception: {str(ffmpeg_error)}")
         
         # Download video file to /tmp
+        logger.info(f"📥 Downloading video from S3: {source_bucket}/{source_key}")
         input_path = f'/tmp/{job_id}_input.mp4'
-        s3.download_file(source_bucket, source_key, input_path)
-        logger.info(f"Downloaded {source_key} to {input_path}")
+        
+        try:
+            s3.download_file(source_bucket, source_key, input_path)
+            logger.info(f"✅ Downloaded to {input_path}")
+            
+            # Check file size
+            import os
+            file_size = os.path.getsize(input_path)
+            logger.info(f"📊 Downloaded file size: {file_size} bytes")
+            
+        except Exception as download_error:
+            logger.error(f"❌ Download failed: {str(download_error)}")
+            raise download_error
         
         if operation == "extract_metadata":
+            logger.info(f"🎬 Starting metadata extraction")
             return extract_video_metadata(input_path, job_id)
         elif operation == "split_video":
+            logger.info(f"✂️ Starting video splitting")
             split_config = event.get('split_config', {})
             return split_video(input_path, source_bucket, job_id, split_config)
         else:
-            raise ValueError(f"Unknown operation: {operation}")
+            error_msg = f"Unknown operation: {operation}"
+            logger.error(f"❌ {error_msg}")
+            raise ValueError(error_msg)
             
     except Exception as e:
-        logger.error(f"FFmpeg Lambda error: {str(e)}")
+        logger.error(f"❌ FFmpeg Lambda error: {str(e)}")
+        logger.error(f"💥 Exception type: {type(e).__name__}")
+        logger.error(f"📍 Error occurred in lambda_handler")
         return {
             'statusCode': 500,
             'body': json.dumps({
                 'error': str(e),
                 'job_id': event.get('job_id'),
-                'operation': event.get('operation')
+                'operation': event.get('operation'),
+                'error_type': type(e).__name__
             })
         }
 
