@@ -254,11 +254,11 @@ backend:
 
   - task: "FFmpeg Lambda integration for real video processing"
     implemented: true
-    working: true
+    working: "partial"
     file: "/app/lambda_function.py, /app/ffmpeg_lambda_function.py, /app/deploy_ffmpeg_lambda.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: false
+    needs_retesting: true
     status_history:
       - working: true
         agent: "main"
@@ -269,6 +269,12 @@ backend:
       - working: true
         agent: "main"
         comment: "RESOLVED: Fixed Lambda permissions issue causing AccessDeniedException when main Lambda tried to invoke FFmpeg Lambda. Added comprehensive IAM policy with correct account ID (756530070939) allowing lambda:InvokeFunction on ffmpeg-converter. CloudWatch logs confirmed the issue - main Lambda was falling back to file size estimation due to permission errors. After fixing permissions, backend testing confirmed FFmpeg Lambda integration is now working correctly. User's 11:33 duration issue should be resolved with next video upload."
+      - working: false
+        agent: "user"
+        comment: "User reports metadata extraction showing all zeros (Duration: 0:00, Format: unknown, Size: 0 Bytes, all stream counts 0) after upload. Video preview works showing correct 10:49 duration, but metadata extraction fails."
+      - working: "partial"
+        agent: "main"
+        comment: "DIAGNOSED AND FIXING: Found root cause - FFmpeg layer includes 'ffmpeg' but missing 'ffprobe' command. CloudWatch logs show 'No such file or directory: ffprobe' error. FFmpeg Lambda successfully calls main Lambda, downloads video from S3, and ffmpeg command works, but fails at ffprobe step. Implemented fallback to use 'ffmpeg -i' for metadata extraction instead of ffprobe. Updated FFmpeg Lambda with detailed logging and error handling. Next test should show real video duration instead of zeros."
 
   - task: "Video duration and metadata extraction fix"
     implemented: true
