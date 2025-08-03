@@ -232,9 +232,9 @@ backend:
         comment: "RECENT FIXES VERIFICATION COMPLETED: Tested the updated AWS Lambda backend functionality with focus on recent fixes. ✅ Fixed hardcoded duration=0 issue - duration estimation now based on file size using formula max(300, int(file_size / (8 * 1024 * 1024))) providing minimum 5 minutes or 1 minute per 8MB. ✅ Video-stream endpoint now returns JSON with stream_url instead of redirect - confirmed in code at lines 274-278 returning {'stream_url': stream_url}. ✅ S3 presigned URLs generated correctly for video streaming with proper AWS signatures. ✅ Metadata extraction shows estimated duration instead of 0. ✅ All CORS headers properly configured across all endpoints. ✅ Backend stability excellent (100% success rate, avg 0.122s response time). All critical fixes from review request are verified and working correctly. The user-reported issues 'duration is showing as 0:00 and the video preview doesn't work' have been resolved in the backend."
 
   - task: "AWS Amplify build dependency conflict resolution"
-    implemented: false
-    working: false
-    file: "/app/package.json, /app/amplify.yml"
+    implemented: true
+    working: true
+    file: "/app/package.json, /app/amplify.yml, /app/vite.config.js"
     stuck_count: 1
     priority: "critical"
     needs_retesting: false
@@ -245,6 +245,9 @@ backend:
       - working: false
         agent: "main"
         comment: "Identified dependency conflict between ajv versions. Multiple attempts made: 1) Added overrides for ajv@8.17.1 + ajv-keywords@5.1.0, 2) Added schema-utils@4.3.2 override, 3) Downgraded to React 18, 4) Tried ajv@6.12.6 + ajv-keywords@3.5.2 + ajv-formats@1.6.1. All approaches still result in module resolution errors with ajv internal structure conflicts. Issue appears to be fundamental incompatibility between react-scripts 5.0.1 webpack configuration and current dependency versions."
+      - working: true
+        agent: "main"
+        comment: "RESOLVED by switching from react-scripts to Vite build system. Created vite.config.js with React plugin, moved index.html to root, renamed .js files to .jsx, updated package.json scripts to use Vite. This completely bypasses the ajv/webpack dependency conflicts. Local build tested successfully (243KB gzipped). Simplified amplify.yml to use Node.js 18 with clean Vite build process. Solution eliminates legacy webpack/ajv issues while maintaining all application functionality."
     implemented: true
     working: true
     file: "/app/lambda_function.py"
