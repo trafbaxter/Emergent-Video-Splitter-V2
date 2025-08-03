@@ -350,6 +350,24 @@ backend:
         agent: "main"
         comment: "Fixed Yarn registry build error by updating amplify.yml to use npm instead of yarn. Removed packageManager field from package.json and deleted yarn.lock file to ensure consistent npm usage. Configuration now uses npm install --legacy-peer-deps and npm run build in amplify.yml. Ready for deployment testing."
 
+frontend:
+  - task: "AWS Amplify build dependency conflict resolution"
+    implemented: false
+    working: false
+    file: "/app/package.json, /app/amplify.yml"
+    stuck_count: 1
+    priority: "critical"
+    needs_retesting: false
+    status_history:
+      - working: false
+        agent: "user"
+        comment: "User reports AWS Amplify build failed with error 'Cannot find module ajv/dist/compile/codegen'. Build was working locally but fails in AWS Amplify environment with Node.js 22."
+      - working: false
+        agent: "main"
+        comment: "Identified dependency conflict between ajv versions. Multiple attempts made: 1) Added overrides for ajv@8.17.1 + ajv-keywords@5.1.0, 2) Added schema-utils@4.3.2 override, 3) Downgraded to React 18, 4) Tried ajv@6.12.6 + ajv-keywords@3.5.2 + ajv-formats@1.6.1. All approaches still result in module resolution errors with ajv internal structure conflicts. Issue appears to be fundamental incompatibility between react-scripts 5.0.1 webpack configuration and current dependency versions."
+
+  - task: "Video duration and metadata extraction fix"
+
 metadata:
   created_by: "main_agent"
   version: "1.0"
