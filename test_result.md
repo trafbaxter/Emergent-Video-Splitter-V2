@@ -441,7 +441,9 @@ test_plan:
     - "AWS Amplify frontend configuration and build"
     - "AWS Lambda backend deployment and API Gateway integration"  
     - "Video file upload handling with S3 presigned URLs"
-  stuck_tasks: []
+    - "FFmpeg Lambda integration for real video processing"
+  stuck_tasks:
+    - "FFmpeg Lambda integration for real video processing"
   test_all: false
   test_priority: "high_first"
 
