@@ -42,6 +42,8 @@ def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
         # Route to appropriate handler
         if path.startswith('/api/upload-video') and http_method == 'POST':
             return handle_upload_video(event, context)
+        elif path.startswith('/api/video-info/') and http_method == 'GET':
+            return handle_video_info(event, context)
         elif path.startswith('/api/split-video/') and http_method == 'POST':
             return handle_split_video(event, context)
         elif path.startswith('/api/job-status/') and http_method == 'GET':
