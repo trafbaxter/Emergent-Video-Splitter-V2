@@ -27,3 +27,4 @@ frontend:
       GENERATE_SOURCEMAP: false
       DISABLE_ESLINT_PLUGIN: true
       CI: false
+      _LIVE_UPDATES: '[{"name":"Node.js version","pkg":"node","type":"internal","version":"18"}]'
