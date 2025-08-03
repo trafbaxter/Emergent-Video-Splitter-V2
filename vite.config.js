@@ -13,7 +13,10 @@ export default defineConfig({
     }
   },
   define: {
-    'process.env': process.env,
+    'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV),
+    'process.env.REACT_APP_API_GATEWAY_URL': JSON.stringify(process.env.REACT_APP_API_GATEWAY_URL),
+    'process.env.REACT_APP_S3_BUCKET': JSON.stringify(process.env.REACT_APP_S3_BUCKET),
+    'process.env.REACT_APP_AWS_REGION': JSON.stringify(process.env.REACT_APP_AWS_REGION),
     global: 'globalThis',
   },
   resolve: {
