@@ -254,15 +254,18 @@ backend:
 
   - task: "FFmpeg Lambda integration for real video processing"
     implemented: true
-    working: true
+    working: false
     file: "/app/lambda_function.py, /app/ffmpeg_lambda_function.py, /app/deploy_ffmpeg_lambda.py"
-    stuck_count: 0
+    stuck_count: 1
     priority: "high"
     needs_retesting: false
     status_history:
       - working: true
         agent: "main"
         comment: "IMPLEMENTED: Created separate ffmpeg-converter Lambda function with ffmpeg-layer for real video processing. Updated main videosplitter-api to call FFmpeg Lambda for metadata extraction and video splitting. FFmpeg function handles actual FFprobe for duration extraction and real video splitting with time-based/interval methods. Main API acts as orchestrator calling dedicated FFmpeg processor. Backend testing confirmed integration working correctly with proper async processing (202 status) and fallback to estimation when FFmpeg unavailable."
+      - working: false
+        agent: "testing"
+        comment: "CRITICAL FINDING: FFmpeg Lambda integration is NOT working for metadata extraction. Testing confirms the user's 11:33 duration (693 seconds) EXACTLY matches file size estimation formula: max(60, int((693MB / 60MB) * 60)) = 693 seconds. This proves the system is falling back to file size estimation instead of calling FFmpeg Lambda for real FFprobe data. The Lambda architecture exists but FFmpeg processing is not being invoked. User issue NOT resolved - still seeing estimated duration instead of actual video duration (10:49). Root cause: FFmpeg Lambda is not being called for video-info requests, likely due to integration or invocation issues."
 
   - task: "Video duration and metadata extraction fix"
     implemented: true
