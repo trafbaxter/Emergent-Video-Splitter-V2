@@ -298,6 +298,8 @@ metadata:
 test_plan:
   current_focus:
     - "AWS Amplify frontend configuration and build"
+    - "AWS Lambda backend deployment and API Gateway integration"  
+    - "Video file upload handling with S3 presigned URLs"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
