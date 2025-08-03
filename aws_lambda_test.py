@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+"""
+AWS Lambda Backend Test Suite for Video Splitter Pro
+Tests the AWS Lambda function deployed at API Gateway endpoint
+"""
+
 import os
 import requests
 import json
@@ -6,6 +11,7 @@ import unittest
 import boto3
 import time
 from pathlib import Path
+from botocore.exceptions import ClientError, NoCredentialsError
 
 # API Gateway URL from deployment info
 API_GATEWAY_URL = "https://2419j971hh.execute-api.us-east-1.amazonaws.com/prod"
@@ -15,6 +21,11 @@ LAMBDA_FUNCTION_ARN = "arn:aws:lambda:us-east-1:756530070939:function:videosplit
 S3_BUCKET_NAME = "videosplitter-storage-1751560247"
 # AWS Region
 AWS_REGION = "us-east-1"
+
+print(f"Testing AWS Lambda Backend for Video Splitter Pro")
+print(f"API Gateway URL: {API_GATEWAY_URL}")
+print(f"S3 Bucket: {S3_BUCKET_NAME}")
+print(f"AWS Region: {AWS_REGION}")
 
 class AWSLambdaBackendTest(unittest.TestCase):
     """Test suite for the Video Splitter AWS Lambda Backend"""

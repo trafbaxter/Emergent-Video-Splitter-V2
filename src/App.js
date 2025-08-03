@@ -79,13 +79,23 @@ function App() {
   // Set video source when jobId changes
   useEffect(() => {
     if (jobId && !jobId.includes('mock')) {
-      const setVideoSource = () => {
+      const setVideoSource = async () => {
         if (videoRef.current) {
-          const timestamp = Date.now();
-          const videoUrl = `${API}/video-stream/${jobId}?t=${timestamp}`;
-          console.log('Setting video src to:', videoUrl);
-          videoRef.current.src = videoUrl;
-          videoRef.current.load();
+          try {
+            const timestamp = Date.now();
+            const response = await fetch(`${API}/video-stream/${jobId}?t=${timestamp}`);
+            const data = await response.json();
+            
+            if (data.stream_url) {
+              console.log('Setting video src to:', data.stream_url);
+              videoRef.current.src = data.stream_url;
+              videoRef.current.load();
+            } else {
+              console.error('No stream URL received:', data);
+            }
+          } catch (error) {
+            console.error('Error fetching video stream:', error);
+          }
         } else {
           setTimeout(setVideoSource, 100);
         }
@@ -503,6 +513,94 @@ function App() {
                     />
                   </div>
                 )}
+
+                {/* Quality and Format Settings */}
+                <div className="space-y-4 mt-6 pt-6 border-t border-white/20">
+                  <h4 className="text-white font-bold mb-4">Output Settings</h4>
+                  
+                  {/* Preserve Quality */}
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      id="preserve_quality"
+                      checked={splitConfig.preserve_quality}
+                      onChange={(e) => setSplitConfig({...splitConfig, preserve_quality: e.target.checked})}
+                      className="mr-3 w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded"
+                    />
+                    <label htmlFor="preserve_quality" className="text-white font-medium">
+                      Preserve Original Quality
+                    </label>
+                  </div>
+
+                  {/* Output Format */}
+                  <div>
+                    <label className="block text-white font-bold mb-2">Output Format</label>
+                    <select
+                      value={splitConfig.output_format}
+                      onChange={(e) => setSplitConfig({...splitConfig, output_format: e.target.value})}
+                      className="w-full bg-black/30 text-white rounded-lg p-3 border border-white/20"
+                    >
+                      <option value="mp4">MP4</option>
+                      <option value="mkv">MKV</option>
+                      <option value="avi">AVI</option>
+                      <option value="mov">MOV</option>
+                      <option value="webm">WebM</option>
+                    </select>
+                  </div>
+
+                  {/* Keyframe Settings */}
+                  <div className="space-y-3">
+                    <div className="flex items-center">
+                      <input
+                        type="checkbox"
+                        id="force_keyframes"
+                        checked={splitConfig.force_keyframes}
+                        onChange={(e) => setSplitConfig({...splitConfig, force_keyframes: e.target.checked})}
+                        className="mr-3 w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded"
+                      />
+                      <label htmlFor="force_keyframes" className="text-white font-medium">
+                        Force Keyframe Insertion (for clean cuts)
+                      </label>
+                    </div>
+
+                    {splitConfig.force_keyframes && (
+                      <div>
+                        <label className="block text-white font-bold mb-2">
+                          Keyframe Interval (seconds)
+                        </label>
+                        <input
+                          type="number"
+                          min="0.1"
+                          max="10"
+                          step="0.1"
+                          value={splitConfig.keyframe_interval}
+                          onChange={(e) => setSplitConfig({...splitConfig, keyframe_interval: parseFloat(e.target.value)})}
+                          className="w-full bg-black/30 text-white rounded-lg p-3 border border-white/20"
+                        />
+                        <p className="text-gray-400 text-sm mt-1">
+                          Lower values create more precise cuts but larger files
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Subtitle Sync Offset */}
+                  <div>
+                    <label className="block text-white font-bold mb-2">
+                      Subtitle Sync Offset (seconds)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={splitConfig.subtitle_sync_offset}
+                      onChange={(e) => setSplitConfig({...splitConfig, subtitle_sync_offset: parseFloat(e.target.value)})}
+                      className="w-full bg-black/30 text-white rounded-lg p-3 border border-white/20"
+                    />
+                    <p className="text-gray-400 text-sm mt-1">
+                      Adjust if subtitles are out of sync (positive = delay, negative = advance)
+                    </p>
+                  </div>
+                </div>
 
                 {/* Start Processing */}
                 <button

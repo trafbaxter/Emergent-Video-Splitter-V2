@@ -3,7 +3,7 @@ frontend:
   phases:
     preBuild:
       commands:
-        - yarn install
+        - npm install --legacy-peer-deps
     build:
       commands:
         - export SKIP_PREFLIGHT_CHECK=true
@@ -11,7 +11,7 @@ frontend:
         - export DISABLE_ESLINT_PLUGIN=true
         - export CI=false
         - export NODE_OPTIONS="--max-old-space-size=4096"
-        - yarn build
+        - npm run build
   artifacts:
     baseDirectory: build
     files:
