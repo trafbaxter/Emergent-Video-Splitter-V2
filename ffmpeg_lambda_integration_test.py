@@ -366,4 +366,24 @@ if __name__ == "__main__":
     print("Key Question: Is the 11:33 duration from real FFmpeg or estimation?")
     print("=" * 80)
     
-    unittest.main(verbosity=2)
+    # Run tests with detailed output
+    import sys
+    
+    # Create test suite
+    suite = unittest.TestLoader().loadTestsFromTestCase(FFmpegLambdaIntegrationTest)
+    
+    # Run with custom result handler to capture output
+    class VerboseTestResult(unittest.TextTestResult):
+        def startTest(self, test):
+            super().startTest(test)
+            print(f"\n{'='*60}")
+            print(f"Running: {test._testMethodName}")
+            print(f"{'='*60}")
+    
+    runner = unittest.TextTestRunner(
+        stream=sys.stdout,
+        verbosity=2,
+        resultclass=VerboseTestResult
+    )
+    
+    result = runner.run(suite)
