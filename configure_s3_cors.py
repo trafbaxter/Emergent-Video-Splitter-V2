@@ -29,7 +29,12 @@ def configure_s3_cors():
                     'X-Amz-Security-Token',
                     'X-Amz-User-Agent',
                     'x-amz-acl',
-                    'x-amz-meta-*'
+                    'x-amz-meta-*',
+                    'key',
+                    'policy',
+                    'x-amz-algorithm',
+                    'x-amz-credential',
+                    'x-amz-signature'
                 ],
                 'AllowedMethods': ['GET', 'POST', 'PUT', 'DELETE', 'HEAD'],
                 'AllowedOrigins': [
