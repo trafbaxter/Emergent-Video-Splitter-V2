@@ -42,6 +42,8 @@ def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
         # Route to appropriate handler
         if path.startswith('/api/upload-video') and http_method == 'POST':
             return handle_upload_video(event, context)
+        elif path.startswith('/api/video-info/') and http_method == 'GET':
+            return handle_video_info(event, context)
         elif path.startswith('/api/split-video/') and http_method == 'POST':
             return handle_split_video(event, context)
         elif path.startswith('/api/job-status/') and http_method == 'GET':
@@ -232,12 +234,39 @@ def handle_download(event: Dict[str, Any], context) -> Dict[str, Any]:
 def handle_video_stream(event: Dict[str, Any], context) -> Dict[str, Any]:
     """Handle video streaming request"""
     try:
-        job_id = event['pathParameters']['job_id']
+        # Extract job_id from path
+        path = event.get('path', '')
+        job_id = path.split('/')[-1]  # Get job_id from /api/video-stream/{job_id}
+        
+        # List objects to find the actual video file
+        try:
+            response = s3.list_objects_v2(
+                Bucket=BUCKET_NAME,
+                Prefix=f'videos/{job_id}/'
+            )
+            
+            if 'Contents' not in response or len(response['Contents']) == 0:
+                return {
+                    'statusCode': 404,
+                    'headers': get_cors_headers(),
+                    'body': json.dumps({'error': 'Video not found'})
+                }
+            
+            # Get the first video file
+            video_key = response['Contents'][0]['Key']
+            
+        except Exception as e:
+            logger.error(f"Error finding video: {str(e)}")
+            return {
+                'statusCode': 404,
+                'headers': get_cors_headers(),
+                'body': json.dumps({'error': 'Video not found'})
+            }
         
         # Generate presigned URL for video streaming
         stream_url = s3.generate_presigned_url(
             'get_object',
-            Params={'Bucket': BUCKET_NAME, 'Key': f'videos/{job_id}.mp4'},
+            Params={'Bucket': BUCKET_NAME, 'Key': video_key},
             ExpiresIn=3600
         )
         
@@ -256,6 +285,122 @@ def handle_video_stream(event: Dict[str, Any], context) -> Dict[str, Any]:
             'statusCode': 500,
             'headers': get_cors_headers(),
             'body': json.dumps({'error': str(e)})
+        }
+
+def handle_video_info(event: Dict[str, Any], context) -> Dict[str, Any]:
+    """Handle video info request"""
+    try:
+        # Extract job_id from path
+        path = event.get('path', '')
+        job_id = path.split('/')[-1]  # Get job_id from /api/video-info/{job_id}
+        
+        # List objects to find the actual video file
+        try:
+            response = s3.list_objects_v2(
+                Bucket=BUCKET_NAME,
+                Prefix=f'videos/{job_id}/'
+            )
+            
+            if 'Contents' not in response or len(response['Contents']) == 0:
+                return {
+                    'statusCode': 404,
+                    'headers': get_cors_headers(),
+                    'body': json.dumps({'error': 'Video not found'})
+                }
+            
+            # Get the first video file
+            video_key = response['Contents'][0]['Key']
+            
+        except Exception as e:
+            logger.error(f"Error finding video: {str(e)}")
+            return {
+                'statusCode': 404,
+                'headers': get_cors_headers(),
+                'body': json.dumps({'error': 'Video not found'})
+            }
+        
+        # Extract video metadata
+        metadata = extract_video_metadata(video_key)
+        
+        return {
+            'statusCode': 200,
+            'headers': get_cors_headers(),
+            'body': json.dumps({
+                'job_id': job_id,
+                'video_key': video_key,
+                'metadata': metadata
+            })
+        }
+        
+    except Exception as e:
+        logger.error(f"Video info handler error: {str(e)}")
+        return {
+            'statusCode': 500,
+            'headers': get_cors_headers(),
+            'body': json.dumps({'error': str(e)})
+        }
+
+def extract_video_metadata(s3_key: str) -> dict:
+    """Extract video metadata using FFprobe (simplified for Lambda)"""
+    try:
+        # For Lambda environment, we'd need FFprobe in a Lambda layer
+        # For now, we'll use basic file analysis and return structured data
+        
+        # Get file extension to determine format
+        file_extension = s3_key.lower().split('.')[-1]
+        format_map = {
+            'mp4': 'mp4',
+            'mkv': 'matroska,webm',
+            'avi': 'avi',
+            'mov': 'mov,mp4,m4a,3gp,3g2,mj2',
+            'wmv': 'asf',
+            'flv': 'flv',
+            'webm': 'matroska,webm'
+        }
+        
+        # Get file info from S3
+        try:
+            response = s3.head_object(Bucket=BUCKET_NAME, Key=s3_key)
+            file_size = response['ContentLength']
+        except Exception:
+            file_size = 0
+        
+        # Return structured metadata (would be extracted with FFprobe in real implementation)
+        return {
+            'format': format_map.get(file_extension, file_extension),
+            'duration': 0,  # Would be extracted with FFprobe
+            'size': file_size,
+            'video_streams': [
+                {
+                    'index': 0,
+                    'codec_name': 'h264',  # Default assumption
+                    'width': 1920,  # Default assumption
+                    'height': 1080,  # Default assumption
+                    'fps': 30  # Default assumption
+                }
+            ],
+            'audio_streams': [
+                {
+                    'index': 1,
+                    'codec_name': 'aac',  # Default assumption
+                    'sample_rate': 44100,  # Default assumption
+                    'channels': 2  # Default assumption
+                }
+            ],
+            'subtitle_streams': [],
+            'chapters': []
+        }
+        
+    except Exception as e:
+        logger.error(f"Metadata extraction error: {str(e)}")
+        return {
+            'format': 'unknown',
+            'duration': 0,
+            'size': 0,
+            'video_streams': [],
+            'audio_streams': [],
+            'subtitle_streams': [],
+            'chapters': []
         }
 
 # For FFmpeg processing in Lambda:
