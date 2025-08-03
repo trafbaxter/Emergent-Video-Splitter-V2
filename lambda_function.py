@@ -148,27 +148,66 @@ def handle_split_video(event: Dict[str, Any], context) -> Dict[str, Any]:
     try:
         job_id = event['pathParameters']['job_id']
         
-        # In a real implementation:
-        # 1. Trigger separate Lambda or ECS task for video processing
-        # 2. Use SQS/SNS for async processing
-        # 3. Update DynamoDB with job status
+        # Get request body
+        body = json.loads(event.get('body', '{}'))
+        split_method = body.get('method', 'time_based')
+        
+        logger.info(f"Split request for job {job_id}: method={split_method}, config={body}")
+        
+        # Validate split configuration
+        if split_method == 'time_based':
+            time_points = body.get('time_points', [])
+            if not time_points:
+                return {
+                    'statusCode': 400,
+                    'headers': get_cors_headers(),
+                    'body': json.dumps({'error': 'No time points specified for time-based splitting'})
+                }
+        elif split_method == 'intervals':
+            interval_duration = body.get('interval_duration', 0)
+            if interval_duration <= 0:
+                return {
+                    'statusCode': 400,
+                    'headers': get_cors_headers(),
+                    'body': json.dumps({'error': 'Invalid interval duration specified'})
+                }
+        
+        # For now, simulate processing by creating job status
+        # In production, this would trigger actual video processing
+        logger.info(f"Video splitting simulation started for job {job_id}")
         
         return {
             'statusCode': 200,
             'headers': get_cors_headers(),
             'body': json.dumps({
-                'message': 'Video splitting started',
+                'message': 'Video splitting request received and queued for processing',
                 'job_id': job_id,
-                'status': 'processing'
+                'status': 'processing',
+                'method': split_method,
+                'note': 'This is a demo implementation - actual video processing would be implemented with FFmpeg in a separate processing service'
             })
         }
         
+    except KeyError as e:
+        logger.error(f"Missing required parameter: {str(e)}")
+        return {
+            'statusCode': 400,
+            'headers': get_cors_headers(),
+            'body': json.dumps({'error': f'Missing required parameter: {str(e)}'})
+        }
+    except json.JSONDecodeError as e:
+        logger.error(f"Invalid JSON in request body: {str(e)}")
+        return {
+            'statusCode': 400,
+            'headers': get_cors_headers(),
+            'body': json.dumps({'error': 'Invalid JSON in request body'})
+        }
     except Exception as e:
         logger.error(f"Split handler error: {str(e)}")
         return {
             'statusCode': 500,
             'headers': get_cors_headers(),
-            'body': json.dumps({'error': str(e)})
+            'body': json.dumps({'error': f'Internal server error: {str(e)}'})
         }
 
 def handle_job_status(event: Dict[str, Any], context) -> Dict[str, Any]:
@@ -360,9 +399,18 @@ def extract_video_metadata(s3_key: str) -> dict:
         except Exception:
             file_size = 0
         
-        # Estimate duration based on file size (very rough approximation)
-        # This is a temporary solution until we implement proper FFprobe
-        estimated_duration = max(300, int(file_size / (8 * 1024 * 1024)))  # Assume ~8MB per minute for HD video
+        # Estimate duration based on file size (improved approximation)
+        # Different video qualities have different bitrates:
+        # HD (1080p): ~8-12 Mbps average, ~60MB per minute
+        # Standard: ~4-6 Mbps average, ~30MB per minute 
+        # For 693MB file showing as 10:49, that's ~64MB per minute
+        
+        if file_size > 0:
+            # Use 60MB per minute as baseline for HD video
+            estimated_duration_minutes = file_size / (60 * 1024 * 1024)  # 60MB per minute
+            estimated_duration = max(60, int(estimated_duration_minutes * 60))  # Convert to seconds, minimum 1 minute
+        else:
+            estimated_duration = 300  # Default 5 minutes if no size info
         
         return {
             'format': format_map.get(file_extension, file_extension),
