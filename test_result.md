@@ -291,7 +291,7 @@ backend:
   - task: "Missing split configuration options UI"
     implemented: true
     working: true
-    file: "/app/src/App.js"
+    file: "/app/src/App.jsx"
     stuck_count: 0
     priority: "high"  
     needs_retesting: false
