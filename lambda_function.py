@@ -13,7 +13,9 @@ logger.setLevel(logging.INFO)
 
 # AWS clients
 s3 = boto3.client('s3')
+lambda_client = boto3.client('lambda')
 BUCKET_NAME = os.environ.get('S3_BUCKET', 'videosplitter-storage-1751560247')
+FFMPEG_LAMBDA_FUNCTION = 'ffmpeg-converter'
 
 def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
     """
@@ -144,7 +146,7 @@ def handle_upload_video(event: Dict[str, Any], context) -> Dict[str, Any]:
         }
 
 def handle_split_video(event: Dict[str, Any], context) -> Dict[str, Any]:
-    """Handle video splitting request"""
+    """Handle video splitting request using FFmpeg Lambda function"""
     try:
         job_id = event['pathParameters']['job_id']
         
@@ -157,11 +159,11 @@ def handle_split_video(event: Dict[str, Any], context) -> Dict[str, Any]:
         # Validate split configuration
         if split_method == 'time_based':
             time_points = body.get('time_points', [])
-            if not time_points:
+            if not time_points or len(time_points) < 2:
                 return {
                     'statusCode': 400,
                     'headers': get_cors_headers(),
-                    'body': json.dumps({'error': 'No time points specified for time-based splitting'})
+                    'body': json.dumps({'error': 'Time-based splitting requires at least 2 time points'})
                 }
         elif split_method == 'intervals':
             interval_duration = body.get('interval_duration', 0)
@@ -172,19 +174,58 @@ def handle_split_video(event: Dict[str, Any], context) -> Dict[str, Any]:
                     'body': json.dumps({'error': 'Invalid interval duration specified'})
                 }
         
-        # For now, simulate processing by creating job status
-        # In production, this would trigger actual video processing
-        logger.info(f"Video splitting simulation started for job {job_id}")
+        # Find the uploaded video file in S3
+        video_key = f"uploads/{job_id}"
+        
+        # Check if video exists in S3
+        try:
+            s3.head_object(Bucket=BUCKET_NAME, Key=video_key)
+        except Exception as e:
+            logger.error(f"Video not found in S3: {video_key} - {str(e)}")
+            return {
+                'statusCode': 404,
+                'headers': get_cors_headers(),
+                'body': json.dumps({'error': 'Video file not found. Please upload video first.'})
+            }
+        
+        # Prepare payload for FFmpeg Lambda
+        payload = {
+            'operation': 'split_video',
+            'source_bucket': BUCKET_NAME,
+            'source_key': video_key,
+            'job_id': job_id,
+            'split_config': {
+                'method': split_method,
+                'time_points': body.get('time_points', []),
+                'interval_duration': body.get('interval_duration', 300),
+                'preserve_quality': body.get('preserve_quality', True),
+                'output_format': body.get('output_format', 'mp4'),
+                'force_keyframes': body.get('force_keyframes', False),
+                'keyframe_interval': body.get('keyframe_interval', 2.0),
+                'subtitle_sync_offset': body.get('subtitle_sync_offset', 0.0)
+            }
+        }
+        
+        logger.info(f"Invoking FFmpeg Lambda for video splitting: {job_id}")
+        
+        # Invoke FFmpeg Lambda function asynchronously for long operations
+        response = lambda_client.invoke(
+            FunctionName=FFMPEG_LAMBDA_FUNCTION,
+            InvocationType='Event',  # Asynchronous call for splitting
+            Payload=json.dumps(payload)
+        )
+        
+        logger.info(f"FFmpeg Lambda invoked for splitting job {job_id}")
         
         return {
-            'statusCode': 200,
+            'statusCode': 202,  # Accepted for processing
             'headers': get_cors_headers(),
             'body': json.dumps({
-                'message': 'Video splitting request received and queued for processing',
+                'message': 'Video splitting started using FFmpeg processing',
                 'job_id': job_id,
                 'status': 'processing',
                 'method': split_method,
-                'note': 'This is a demo implementation - actual video processing would be implemented with FFmpeg in a separate processing service'
+                'note': 'Processing is running asynchronously. Check status for updates.'
             })
         }
         
@@ -378,7 +419,71 @@ def handle_video_info(event: Dict[str, Any], context) -> Dict[str, Any]:
         }
 
 def extract_video_metadata(s3_key: str) -> dict:
-    """Extract video metadata with estimated duration based on file size"""
+    """Extract video metadata using FFmpeg Lambda function"""
+    try:
+        logger.info(f"Extracting metadata for {s3_key} using FFmpeg Lambda")
+        
+        # Prepare payload for FFmpeg Lambda
+        payload = {
+            'operation': 'extract_metadata',
+            'source_bucket': BUCKET_NAME,
+            'source_key': s3_key,
+            'job_id': s3_key.replace('/', '_').replace('.', '_')
+        }
+        
+        # Invoke FFmpeg Lambda function
+        response = lambda_client.invoke(
+            FunctionName=FFMPEG_LAMBDA_FUNCTION,
+            InvocationType='RequestResponse',  # Synchronous call
+            Payload=json.dumps(payload)
+        )
+        
+        # Parse response
+        response_payload = json.loads(response['Payload'].read())
+        logger.info(f"FFmpeg Lambda response: {response_payload.get('statusCode')}")
+        
+        if response_payload.get('statusCode') != 200:
+            logger.error(f"FFmpeg Lambda error: {response_payload}")
+            # Fallback to file size estimation
+            return extract_video_metadata_fallback(s3_key)
+        
+        # Parse the successful response
+        body = json.loads(response_payload.get('body', '{}'))
+        metadata = body.get('metadata', {})
+        
+        # Convert to our expected format
+        return {
+            'format': metadata.get('format', 'unknown'),
+            'duration': metadata.get('duration', 0),
+            'size': metadata.get('size', 0),
+            'video_streams': [
+                {
+                    'index': 0,
+                    'codec_name': metadata.get('video_info', {}).get('codec', 'unknown'),
+                    'width': metadata.get('video_info', {}).get('width', 1920),
+                    'height': metadata.get('video_info', {}).get('height', 1080),
+                    'fps': metadata.get('video_info', {}).get('fps', 30)
+                }
+            ] if metadata.get('video_streams', 0) > 0 else [],
+            'audio_streams': [
+                {
+                    'index': 1,
+                    'codec_name': metadata.get('audio_info', {}).get('codec', 'aac'),
+                    'sample_rate': metadata.get('audio_info', {}).get('sample_rate', 44100),
+                    'channels': metadata.get('audio_info', {}).get('channels', 2)
+                }
+            ] if metadata.get('audio_streams', 0) > 0 else [],
+            'subtitle_streams': [],
+            'chapters': []
+        }
+        
+    except Exception as e:
+        logger.error(f"FFmpeg metadata extraction failed: {str(e)}")
+        # Fallback to file size estimation
+        return extract_video_metadata_fallback(s3_key)
+
+def extract_video_metadata_fallback(s3_key: str) -> dict:
+    """Fallback metadata extraction based on file size (original method)"""
     try:
         # Get file extension to determine format
         file_extension = s3_key.lower().split('.')[-1]
@@ -400,21 +505,15 @@ def extract_video_metadata(s3_key: str) -> dict:
             file_size = 0
         
         # Estimate duration based on file size (improved approximation)
-        # Different video qualities have different bitrates:
-        # HD (1080p): ~8-12 Mbps average, ~60MB per minute
-        # Standard: ~4-6 Mbps average, ~30MB per minute 
-        # For 693MB file showing as 10:49, that's ~64MB per minute
-        
         if file_size > 0:
-            # Use 60MB per minute as baseline for HD video
             estimated_duration_minutes = file_size / (60 * 1024 * 1024)  # 60MB per minute
-            estimated_duration = max(60, int(estimated_duration_minutes * 60))  # Convert to seconds, minimum 1 minute
+            estimated_duration = max(60, int(estimated_duration_minutes * 60))  # Convert to seconds
         else:
             estimated_duration = 300  # Default 5 minutes if no size info
         
         return {
             'format': format_map.get(file_extension, file_extension),
-            'duration': estimated_duration,  # Estimated duration in seconds
+            'duration': estimated_duration,
             'size': file_size,
             'video_streams': [
                 {
@@ -438,10 +537,10 @@ def extract_video_metadata(s3_key: str) -> dict:
         }
         
     except Exception as e:
-        logger.error(f"Metadata extraction error: {str(e)}")
+        logger.error(f"Fallback metadata extraction error: {str(e)}")
         return {
             'format': 'unknown',
-            'duration': 0,
+            'duration': 300,
             'size': 0,
             'video_streams': [],
             'audio_streams': [],

@@ -252,6 +252,18 @@ backend:
         agent: "main"
         comment: "RESOLVED by switching from react-scripts to Vite build system. Created vite.config.js with React plugin, moved index.html to root, renamed .js files to .jsx, updated package.json scripts to use Vite. This completely bypasses the ajv/webpack dependency conflicts. Local build tested successfully (243KB gzipped). Simplified amplify.yml to use Node.js 18 with clean Vite build process. Solution eliminates legacy webpack/ajv issues while maintaining all application functionality."
 
+  - task: "FFmpeg Lambda integration for real video processing"
+    implemented: true
+    working: true
+    file: "/app/lambda_function.py, /app/ffmpeg_lambda_function.py, /app/deploy_ffmpeg_lambda.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "IMPLEMENTED: Created separate ffmpeg-converter Lambda function with ffmpeg-layer for real video processing. Updated main videosplitter-api to call FFmpeg Lambda for metadata extraction and video splitting. FFmpeg function handles actual FFprobe for duration extraction and real video splitting with time-based/interval methods. Main API acts as orchestrator calling dedicated FFmpeg processor. Backend testing confirmed integration working correctly with proper async processing (202 status) and fallback to estimation when FFmpeg unavailable."
+
   - task: "Video duration and metadata extraction fix"
     implemented: true
     working: true
@@ -317,6 +329,21 @@ backend:
       - working: true
         agent: "main"
         comment: "FIXED: Enhanced video splitting endpoint with proper request validation and error handling. Added validation for time_points (time-based) and interval_duration (intervals). Now returns descriptive 400 errors instead of 500 errors for invalid configurations. Added JSON parsing error handling and detailed error messages. Backend testing confirmed 500 errors resolved."
+
+  - task: "AWS Lambda FFmpeg integration testing"
+    implemented: true
+    working: true
+    file: "/app/lambda_function.py, /app/ffmpeg_lambda_function.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Integrated ffmpeg-converter Lambda function for real video processing. Updated videosplitter-api to call ffmpeg-converter for metadata extraction and video splitting. FFmpeg Lambda function has ffmpeg-layer attached for real FFmpeg/FFprobe processing. Main Lambda function now calls separate FFmpeg function instead of using file size estimates."
+      - working: true
+        agent: "testing"
+        comment: "COMPREHENSIVE FFMPEG INTEGRATION TESTING COMPLETED: Successfully tested all 7 requirements from review request. ✅ FFmpeg Lambda Architecture: Verified two-Lambda setup with main videosplitter-api calling dedicated ffmpeg-converter Lambda. ✅ Metadata Extraction: Video-info endpoint calls FFmpeg Lambda for real FFprobe data instead of file size estimation, with fallback when unavailable. ✅ Video Splitting Integration: Split-video endpoint properly invokes FFmpeg Lambda asynchronously, returns 202 status. ✅ Error Handling: Proper validation prevents 500 errors, returns descriptive 400 errors for invalid configs. ✅ Asynchronous Processing: Video splitting returns 202 status correctly for async FFmpeg processing. ✅ CORS Headers: All CORS headers maintained with FFmpeg integration. ✅ Upload/Streaming Compatibility: Video upload and streaming endpoints work correctly with FFmpeg processing. The FFmpeg integration provides real video processing while maintaining backward compatibility and proper error handling."
     implemented: true
     working: true
     file: "/app/frontend/src/App.js"
@@ -447,3 +474,5 @@ agent_communication:
     message: "RECENT FIXES VERIFICATION COMPLETED: Successfully tested the updated AWS Lambda backend functionality with focus on the recent fixes mentioned in review request. ✅ DURATION FIX VERIFIED: Fixed hardcoded duration=0 issue - duration estimation now based on file size using formula max(300, int(file_size / (8 * 1024 * 1024))) providing minimum 5 minutes or 1 minute per 8MB. Code confirmed at line 365 in lambda_function.py. ✅ VIDEO STREAM JSON FIX VERIFIED: Video-stream endpoint now returns JSON with stream_url instead of redirect - confirmed in code at lines 274-278 returning {'stream_url': stream_url}. ✅ S3 PRESIGNED URLS WORKING: Generated correctly for video streaming with proper AWS signatures and CORS headers. ✅ CORS HEADERS VERIFIED: All endpoints properly configured with Access-Control headers for https://develop.tads-video-splitter.com. ✅ BACKEND STABILITY EXCELLENT: 100% success rate, average 0.122s response time across all endpoints. The user-reported issues 'duration is showing as 0:00 and the video preview doesn't work' have been resolved in the backend. All critical fixes are working correctly."
   - agent: "testing"
     message: "USER-REPORTED ISSUES TESTING COMPLETED: Conducted focused testing of the updated AWS Lambda backend with emphasis on the recent fixes for user-reported issues. ✅ DURATION CALCULATION ACCURACY VERIFIED: The improved duration estimation algorithm now uses 60MB per minute instead of 8MB per minute. For the user's 693MB video file, the new formula calculates 11:33 duration (693 seconds) which is much closer to the actual 10:49 than the old formula would have been (86+ minutes). ✅ VIDEO SPLITTING VALIDATION ENHANCED: All video splitting endpoints now have proper validation and error handling. Invalid requests return 400 status codes with descriptive error messages instead of 500 errors. Tested time-based, interval-based, and invalid JSON scenarios - all handled correctly. ✅ CORS HEADERS MAINTAINED: All endpoints continue to have proper CORS headers after the fixes. ✅ NO 500 ERRORS: Confirmed that the previous 500 errors have been resolved and replaced with appropriate 400/404 status codes. ✅ JSON RESPONSE FORMAT: Video streaming endpoint correctly returns JSON with stream_url instead of redirects. All 5/5 critical fixes from the review request have been verified and are working correctly. The backend is ready for production use with the user-reported issues resolved."
+  - agent: "testing"
+    message: "FFMPEG INTEGRATION TESTING COMPLETED: Conducted comprehensive testing of the AWS Lambda backend with FFmpeg integration as requested in review. ✅ FFMPEG LAMBDA ARCHITECTURE VERIFIED: Confirmed two-Lambda architecture with main videosplitter-api Lambda calling dedicated ffmpeg-converter Lambda for video processing. ✅ METADATA EXTRACTION INTEGRATION: Video-info endpoint calls FFmpeg Lambda for real video metadata extraction using FFprobe instead of file size estimation. Fallback to estimation when FFmpeg Lambda unavailable. ✅ VIDEO SPLITTING INTEGRATION: Split-video endpoint properly calls FFmpeg Lambda asynchronously, returns 202 status for processing. Proper validation prevents 500 errors, returns descriptive 400 errors for invalid configurations. ✅ CORS HEADERS MAINTAINED: All CORS headers working correctly with FFmpeg integration across all endpoints. ✅ UPLOAD/STREAMING COMPATIBILITY: Video upload generates proper S3 presigned URLs, streaming returns JSON with stream_url format compatible with FFmpeg processing. ✅ ERROR HANDLING: Proper fallback behavior when FFmpeg Lambda unavailable, graceful degradation to file size estimation. ✅ ASYNCHRONOUS PROCESSING: Video splitting returns 202 status correctly for async FFmpeg processing. All 7 test requirements from review request verified successfully. The FFmpeg integration provides real video processing capabilities while maintaining backward compatibility and proper error handling."
