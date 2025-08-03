@@ -13,7 +13,9 @@ logger.setLevel(logging.INFO)
 
 # AWS clients
 s3 = boto3.client('s3')
+lambda_client = boto3.client('lambda')
 BUCKET_NAME = os.environ.get('S3_BUCKET', 'videosplitter-storage-1751560247')
+FFMPEG_LAMBDA_FUNCTION = 'ffmpeg-converter'
 
 def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
     """
