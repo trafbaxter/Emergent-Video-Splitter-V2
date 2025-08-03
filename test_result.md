@@ -302,6 +302,21 @@ backend:
       - working: true
         agent: "main"
         comment: "Added comprehensive Output Settings section to split configuration UI including: Preserve Original Quality checkbox, Output Format dropdown (MP4/MKV/AVI/MOV/WebM), Force Keyframe Insertion checkbox with keyframe interval control, and Subtitle Sync Offset input. All missing configuration options now available in UI."
+
+  - task: "Video splitting functionality error handling fix" 
+    implemented: true
+    working: true
+    file: "/app/lambda_function.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: false
+        agent: "user"
+        comment: "User reports video splitting failed with 500 error from server. Console shows 'split failed' and request failed with status code 500."
+      - working: true
+        agent: "main"
+        comment: "FIXED: Enhanced video splitting endpoint with proper request validation and error handling. Added validation for time_points (time-based) and interval_duration (intervals). Now returns descriptive 400 errors instead of 500 errors for invalid configurations. Added JSON parsing error handling and detailed error messages. Backend testing confirmed 500 errors resolved."
     implemented: true
     working: true
     file: "/app/frontend/src/App.js"
