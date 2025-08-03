@@ -228,8 +228,41 @@ backend:
         agent: "testing"
         comment: "COMPREHENSIVE AWS LAMBDA BACKEND TESTING COMPLETED: All 8 test requirements from review request passed successfully. ✅ Basic connectivity to Lambda via API Gateway working (200 response, correct message). ✅ Health endpoint /api/ responds correctly with expected format. ✅ S3 bucket accessible with proper CORS configuration for Amplify domains. ✅ Lambda environment variables correct (S3_BUCKET=videosplitter-storage-1751560247). ✅ Presigned URL generation working (generates valid S3 URLs with AWS signatures). ✅ Video metadata extraction endpoint responds appropriately (404 for non-existent jobs). ✅ Video streaming endpoint functional with proper CORS headers. ✅ Backend stability excellent (100% success rate, <0.2s response times). The AWS Lambda backend infrastructure is fully functional and ready to handle upload requests from the Amplify frontend."
 
-frontend:
-  - task: "Video file upload interface"
+  - task: "Video duration and metadata extraction fix"
+    implemented: false
+    working: false
+    file: "/app/lambda_function.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: false
+        agent: "user"
+        comment: "User reports duration shows 0:00 instead of actual video duration. Lambda function returns hardcoded duration=0 instead of extracting actual video metadata using FFprobe."
+
+  - task: "Video preview and streaming functionality fix"
+    implemented: false
+    working: false  
+    file: "/app/lambda_function.py, /app/src/App.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: false
+        agent: "user"
+        comment: "User reports video preview doesn't work - video player shows black screen instead of playing uploaded video. Video streaming endpoint may not be providing correct video URLs or CORS headers."
+
+  - task: "Missing split configuration options UI"
+    implemented: false
+    working: false
+    file: "/app/src/App.js"
+    stuck_count: 0
+    priority: "high"  
+    needs_retesting: false
+    status_history:
+      - working: false
+        agent: "user"
+        comment: "User reports missing options that were previously available: file type selection and keyframes configuration options. These settings exist in state but are not rendered in the UI."
     implemented: true
     working: true
     file: "/app/frontend/src/App.js"
