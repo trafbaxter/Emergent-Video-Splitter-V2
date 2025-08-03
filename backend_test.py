@@ -8,15 +8,8 @@ from pathlib import Path
 import tempfile
 import shutil
 
-# Get the backend URL from the frontend .env file
-with open('/app/frontend/.env', 'r') as f:
-    for line in f:
-        if line.startswith('REACT_APP_BACKEND_URL='):
-            BACKEND_URL = line.strip().split('=')[1].strip('"\'')
-            break
-
-# Ensure the URL has no trailing slash
-BACKEND_URL = BACKEND_URL.rstrip('/')
+# Use AWS API Gateway URL for testing
+BACKEND_URL = "https://2419j971hh.execute-api.us-east-1.amazonaws.com/prod"
 API_URL = f"{BACKEND_URL}/api"
 
 print(f"Using API URL: {API_URL}")
