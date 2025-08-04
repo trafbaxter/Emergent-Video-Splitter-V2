@@ -78,10 +78,12 @@ def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
 def get_cors_headers() -> Dict[str, str]:
     """Return CORS headers for API responses"""
     return {
-        'Access-Control-Allow-Origin': 'https://develop.tads-video-splitter.com',
-        'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,Accept,Origin,Referer',
-        'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
-        'Access-Control-Allow-Credentials': 'false'
+        'Access-Control-Allow-Origin': '*',  # Allow all origins for now - more permissive
+        'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,Accept,Origin,Referer,User-Agent,Cache-Control,X-Requested-With',
+        'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS,HEAD',
+        'Access-Control-Allow-Credentials': 'false',
+        'Access-Control-Expose-Headers': 'Content-Length,Content-Type,Date,Server,x-amzn-RequestId',
+        'Access-Control-Max-Age': '3600'
     }
 
 def handle_upload_video(event: Dict[str, Any], context) -> Dict[str, Any]:
