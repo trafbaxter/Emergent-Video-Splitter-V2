@@ -150,7 +150,39 @@ def handle_upload_video(event: Dict[str, Any], context) -> Dict[str, Any]:
 def handle_split_video(event: Dict[str, Any], context) -> Dict[str, Any]:
     """Handle video splitting request using FFmpeg Lambda function"""
     try:
-        job_id = event['pathParameters']['job_id']
+        # Debug the event structure to understand the issue
+        logger.info(f"🔍 Split video event debug: {json.dumps(event, indent=2)}")
+        
+        # Extract job_id from path parameters with better error handling
+        path_params = event.get('pathParameters') or {}
+        job_id = path_params.get('job_id')
+        
+        # If pathParameters is None or job_id is missing, try to extract from path
+        if not job_id:
+            path = event.get('path', '')
+            logger.info(f"🔍 PathParameters missing, trying to extract from path: {path}")
+            
+            # Extract job_id from path like: /api/split-video/{job_id}
+            if '/api/split-video/' in path:
+                path_parts = path.split('/api/split-video/')
+                if len(path_parts) > 1:
+                    job_id = path_parts[1].strip('/')
+                    logger.info(f"✅ Extracted job_id from path: {job_id}")
+        
+        if not job_id:
+            logger.error(f"❌ Could not extract job_id. Event pathParameters: {path_params}, path: {event.get('path', 'N/A')}")
+            return {
+                'statusCode': 400,
+                'headers': get_cors_headers(),
+                'body': json.dumps({
+                    'error': 'Missing job_id in path parameters',
+                    'debug_info': {
+                        'pathParameters': path_params,
+                        'path': event.get('path', 'N/A'),
+                        'available_keys': list(event.keys())
+                    }
+                })
+            }
         
         # Get request body
         body = json.loads(event.get('body', '{}'))
@@ -177,18 +209,42 @@ def handle_split_video(event: Dict[str, Any], context) -> Dict[str, Any]:
                 }
         
         # Find the uploaded video file in S3
-        video_key = f"uploads/{job_id}"
+        # Try different possible S3 key patterns
+        possible_keys = [
+            f"uploads/{job_id}",
+            f"videos/{job_id}",
+            f"videos/{job_id}/"
+        ]
         
-        # Check if video exists in S3
-        try:
-            s3.head_object(Bucket=BUCKET_NAME, Key=video_key)
-        except Exception as e:
-            logger.error(f"Video not found in S3: {video_key} - {str(e)}")
+        video_key = None
+        for key_pattern in possible_keys:
+            try:
+                if key_pattern.endswith('/'):
+                    # List objects with prefix to find the actual file
+                    response = s3.list_objects_v2(Bucket=BUCKET_NAME, Prefix=key_pattern, MaxKeys=1)
+                    if 'Contents' in response and response['Contents']:
+                        video_key = response['Contents'][0]['Key']
+                        logger.info(f"✅ Found video at: {video_key}")
+                        break
+                else:
+                    # Direct key check
+                    s3.head_object(Bucket=BUCKET_NAME, Key=key_pattern)
+                    video_key = key_pattern
+                    logger.info(f"✅ Found video at: {video_key}")
+                    break
+            except Exception:
+                logger.info(f"❌ Video not found at: {key_pattern}")
+                continue
+        
+        if not video_key:
+            logger.error(f"Video not found for job {job_id} in any expected location")
             return {
                 'statusCode': 404,
                 'headers': get_cors_headers(),
                 'body': json.dumps({'error': 'Video file not found. Please upload video first.'})
             }
+        
+        logger.info(f"🎬 Using video file: {video_key}")
         
         # Prepare payload for FFmpeg Lambda
         payload = {
@@ -208,7 +264,7 @@ def handle_split_video(event: Dict[str, Any], context) -> Dict[str, Any]:
             }
         }
         
-        logger.info(f"Invoking FFmpeg Lambda for video splitting: {job_id}")
+        logger.info(f"🚀 Invoking FFmpeg Lambda for video splitting: {job_id}")
         
         # Invoke FFmpeg Lambda function asynchronously for long operations
         response = lambda_client.invoke(
@@ -217,7 +273,7 @@ def handle_split_video(event: Dict[str, Any], context) -> Dict[str, Any]:
             Payload=json.dumps(payload)
         )
         
-        logger.info(f"FFmpeg Lambda invoked for splitting job {job_id}")
+        logger.info(f"✅ FFmpeg Lambda invoked successfully for splitting job {job_id}")
         
         return {
             'statusCode': 202,  # Accepted for processing
@@ -227,6 +283,7 @@ def handle_split_video(event: Dict[str, Any], context) -> Dict[str, Any]:
                 'job_id': job_id,
                 'status': 'processing',
                 'method': split_method,
+                'video_file': video_key,
                 'note': 'Processing is running asynchronously. Check status for updates.'
             })
         }
