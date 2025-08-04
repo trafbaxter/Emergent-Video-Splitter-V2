@@ -14,7 +14,7 @@ from datetime import datetime
 import sys
 
 # Configuration
-BACKEND_URL = "https://ztu91dvx96.execute-api.us-east-1.amazonaws.com/prod"
+BACKEND_URL = "https://2419j971hh.execute-api.us-east-1.amazonaws.com/prod"
 API_BASE = f"{BACKEND_URL}/api"
 
 # Test data
