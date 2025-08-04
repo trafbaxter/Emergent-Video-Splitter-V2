@@ -36,10 +36,9 @@ def create_lambda_package():
             result = subprocess.run([
                 sys.executable, '-m', 'pip', 'install', 
                 '--target', package_dir,
-                '--no-deps',  # Don't install sub-dependencies
                 '--platform', 'linux_x86_64',
                 '--implementation', 'cp',
-                '--python-version', '3.11',
+                '--python-version', '3.9',
                 '--only-binary=:all:',
                 dep
             ], capture_output=True, text=True)
