@@ -171,7 +171,6 @@ def deploy_lambda_with_compatible_auth(zip_path):
             env_vars = {
                 'JWT_SECRET': 'production-jwt-secret-change-this',
                 'JWT_REFRESH_SECRET': 'production-refresh-secret-change-this', 
-                'AWS_REGION': 'us-east-1',
                 'FRONTEND_URL': 'https://develop.tads-video-splitter.com',
                 'S3_BUCKET': 'videosplitter-uploads'
             }
