@@ -54,11 +54,16 @@ def check_for_hardcoded_secrets():
                                     if isinstance(match, tuple):
                                         match = match[0] if match else ''
                                     
-                                    # Skip example/placeholder values
+                                    # Skip example/placeholder values and false positives
                                     skip_patterns = [
                                         'your-', 'example', 'placeholder', 'change-this',
                                         'test@example.com', 'user@example.com',
-                                        'localhost', '127.0.0.1'
+                                        'localhost', '127.0.0.1', 'reactInternalMemoized',
+                                        'dangerouslyConnectToHttpEndpointForTesti',
+                                        'usefieldnameforprimarykeyconnectionfield',
+                                        'respectprimarykeyattributesonconnectionf',
+                                        'generatemodelsforlazyloadandcustomselect',
+                                        'mongodb://[^:]+:[^@', 'r\'mongodb://', 'mongodb URI pattern'
                                     ]
                                     
                                     if any(skip in str(match).lower() for skip in skip_patterns):
