@@ -251,7 +251,6 @@ def test_authentication_endpoints():
             if status_code == 200:
                 # Parse response
                 try:
-                    import json
                     response_data = json.loads(payload)
                     http_status = response_data.get('statusCode', 'unknown')
                     
