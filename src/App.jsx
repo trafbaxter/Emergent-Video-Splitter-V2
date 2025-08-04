@@ -24,9 +24,16 @@ const awsConfig = {
 
 Amplify.configure(awsConfig);
 
-// Use API Gateway URL if available, otherwise fallback to current backend
-const BACKEND_URL = process.env.REACT_APP_API_GATEWAY_URL || process.env.REACT_APP_BACKEND_URL;
+// Use API Gateway URL exclusively for AWS mode
+const BACKEND_URL = process.env.REACT_APP_API_GATEWAY_URL || 'https://2419j971hh.execute-api.us-east-1.amazonaws.com/prod';
 const API = `${BACKEND_URL}/api`;
+
+console.log('🔧 API Configuration:', {
+  BACKEND_URL,
+  API,
+  REACT_APP_API_GATEWAY_URL: process.env.REACT_APP_API_GATEWAY_URL,
+  mode: 'AWS Lambda'
+});
 
 function App() {
   const [selectedFile, setSelectedFile] = useState(null);
@@ -79,13 +86,23 @@ function App() {
   // Set video source when jobId changes
   useEffect(() => {
     if (jobId && !jobId.includes('mock')) {
-      const setVideoSource = () => {
+      const setVideoSource = async () => {
         if (videoRef.current) {
-          const timestamp = Date.now();
-          const videoUrl = `${API}/video-stream/${jobId}?t=${timestamp}`;
-          console.log('Setting video src to:', videoUrl);
-          videoRef.current.src = videoUrl;
-          videoRef.current.load();
+          try {
+            const timestamp = Date.now();
+            const response = await fetch(`${API}/video-stream/${jobId}?t=${timestamp}`);
+            const data = await response.json();
+            
+            if (data.stream_url) {
+              console.log('Setting video src to:', data.stream_url);
+              videoRef.current.src = data.stream_url;
+              videoRef.current.load();
+            } else {
+              console.error('No stream URL received:', data);
+            }
+          } catch (error) {
+            console.error('Error fetching video stream:', error);
+          }
         } else {
           setTimeout(setVideoSource, 100);
         }
@@ -162,27 +179,61 @@ function App() {
           fileSize: selectedFile.size
         });
         
-        const { upload_url, job_id } = response.data;
+        const { upload_url, upload_post, job_id, content_type } = response.data;
         
-        // Upload directly to S3 using presigned URL
-        await axios.put(upload_url, selectedFile, {
-          headers: { 'Content-Type': selectedFile.type },
-          onUploadProgress: (progressEvent) => {
-            const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-            setUploadProgress(percentCompleted);
-          }
-        });
+        // Try presigned POST first (more reliable for browsers)
+        if (upload_post) {
+          const formData = new FormData();
+          
+          // Add all the required fields from presigned POST
+          Object.entries(upload_post.fields).forEach(([key, value]) => {
+            formData.append(key, value);
+          });
+          
+          // Add the file last
+          formData.append('file', selectedFile);
+          
+          await axios.post(upload_post.url, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+            onUploadProgress: (progressEvent) => {
+              const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+              setUploadProgress(percentCompleted);
+            }
+          });
+        } else {
+          // Fallback to presigned PUT
+          await axios.put(upload_url, selectedFile, {
+            headers: { 
+              'Content-Type': content_type || selectedFile.type,
+              'x-amz-acl': 'private'
+            },
+            onUploadProgress: (progressEvent) => {
+              const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+              setUploadProgress(percentCompleted);
+            }
+          });
+        }
         
         setJobId(job_id);
-        setVideoInfo({
-          duration: 120, // Placeholder - would be extracted by Lambda
-          format: 'mp4',
-          size: selectedFile.size,
-          video_streams: [],
-          audio_streams: [],
-          subtitle_streams: [],
-          chapters: []
-        });
+        
+        // Fetch actual video metadata from the API
+        try {
+          const infoResponse = await axios.get(`${API}/video-info/${job_id}`);
+          const { metadata } = infoResponse.data;
+          setVideoInfo(metadata);
+        } catch (infoError) {
+          console.warn('Could not fetch video metadata:', infoError);
+          // Fallback to basic info
+          setVideoInfo({
+            duration: 0,
+            format: selectedFile.name.split('.').pop() || 'unknown',
+            size: selectedFile.size,
+            video_streams: [],
+            audio_streams: [],
+            subtitle_streams: [],
+            chapters: []
+          });
+        }
         
       } else {
         // Local mode: Direct upload to FastAPI
@@ -243,7 +294,27 @@ function App() {
       setProcessing(true);
       setProgress(0);
       
-      await axios.post(`${API}/split-video/${jobId}`, splitConfig);
+      // Create a copy of splitConfig with the correct time_points for the API
+      const apiSplitConfig = { ...splitConfig };
+      
+      // For time-based splitting, ensure we have the end time point
+      if (splitConfig.method === 'time_based' && splitConfig.time_points.length > 0) {
+        // Add the video duration as the final time point if not already present
+        const timePoints = [...splitConfig.time_points];
+        const videoDuration = videoInfo?.duration || 0;
+        
+        // Only add end time if it's not already the last point and we have a valid duration
+        if (videoDuration > 0 && timePoints[timePoints.length - 1] !== videoDuration) {
+          timePoints.push(videoDuration);
+        }
+        
+        apiSplitConfig.time_points = timePoints.sort((a, b) => a - b);
+        
+        console.log('🎬 Sending time-based split with time points:', apiSplitConfig.time_points);
+        console.log(`   This will create ${apiSplitConfig.time_points.length - 1} segments`);
+      }
+      
+      await axios.post(`${API}/split-video/${jobId}`, apiSplitConfig);
       
       // Poll for progress
       const pollProgress = setInterval(async () => {
@@ -469,6 +540,94 @@ function App() {
                     />
                   </div>
                 )}
+
+                {/* Quality and Format Settings */}
+                <div className="space-y-4 mt-6 pt-6 border-t border-white/20">
+                  <h4 className="text-white font-bold mb-4">Output Settings</h4>
+                  
+                  {/* Preserve Quality */}
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      id="preserve_quality"
+                      checked={splitConfig.preserve_quality}
+                      onChange={(e) => setSplitConfig({...splitConfig, preserve_quality: e.target.checked})}
+                      className="mr-3 w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded"
+                    />
+                    <label htmlFor="preserve_quality" className="text-white font-medium">
+                      Preserve Original Quality
+                    </label>
+                  </div>
+
+                  {/* Output Format */}
+                  <div>
+                    <label className="block text-white font-bold mb-2">Output Format</label>
+                    <select
+                      value={splitConfig.output_format}
+                      onChange={(e) => setSplitConfig({...splitConfig, output_format: e.target.value})}
+                      className="w-full bg-black/30 text-white rounded-lg p-3 border border-white/20"
+                    >
+                      <option value="mp4">MP4</option>
+                      <option value="mkv">MKV</option>
+                      <option value="avi">AVI</option>
+                      <option value="mov">MOV</option>
+                      <option value="webm">WebM</option>
+                    </select>
+                  </div>
+
+                  {/* Keyframe Settings */}
+                  <div className="space-y-3">
+                    <div className="flex items-center">
+                      <input
+                        type="checkbox"
+                        id="force_keyframes"
+                        checked={splitConfig.force_keyframes}
+                        onChange={(e) => setSplitConfig({...splitConfig, force_keyframes: e.target.checked})}
+                        className="mr-3 w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded"
+                      />
+                      <label htmlFor="force_keyframes" className="text-white font-medium">
+                        Force Keyframe Insertion (for clean cuts)
+                      </label>
+                    </div>
+
+                    {splitConfig.force_keyframes && (
+                      <div>
+                        <label className="block text-white font-bold mb-2">
+                          Keyframe Interval (seconds)
+                        </label>
+                        <input
+                          type="number"
+                          min="0.1"
+                          max="10"
+                          step="0.1"
+                          value={splitConfig.keyframe_interval}
+                          onChange={(e) => setSplitConfig({...splitConfig, keyframe_interval: parseFloat(e.target.value)})}
+                          className="w-full bg-black/30 text-white rounded-lg p-3 border border-white/20"
+                        />
+                        <p className="text-gray-400 text-sm mt-1">
+                          Lower values create more precise cuts but larger files
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Subtitle Sync Offset */}
+                  <div>
+                    <label className="block text-white font-bold mb-2">
+                      Subtitle Sync Offset (seconds)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={splitConfig.subtitle_sync_offset}
+                      onChange={(e) => setSplitConfig({...splitConfig, subtitle_sync_offset: parseFloat(e.target.value)})}
+                      className="w-full bg-black/30 text-white rounded-lg p-3 border border-white/20"
+                    />
+                    <p className="text-gray-400 text-sm mt-1">
+                      Adjust if subtitles are out of sync (positive = delay, negative = advance)
+                    </p>
+                  </div>
+                </div>
 
                 {/* Start Processing */}
                 <button
