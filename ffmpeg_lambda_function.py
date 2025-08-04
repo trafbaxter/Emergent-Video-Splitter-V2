@@ -304,6 +304,21 @@ def extract_with_ffprobe(input_path: str, job_id: str) -> Dict[str, Any]:
         audio_streams = [s for s in streams if s.get('codec_type') == 'audio']
         subtitle_streams = [s for s in streams if s.get('codec_type') == 'subtitle']
         
+        # Debug subtitle detection
+        logger.info(f"🔍 Stream analysis for {job_id}:")
+        logger.info(f"  - Total streams found: {len(streams)}")
+        logger.info(f"  - Video streams: {len(video_streams)}")
+        logger.info(f"  - Audio streams: {len(audio_streams)}")
+        logger.info(f"  - Subtitle streams: {len(subtitle_streams)}")
+        
+        # Log all stream types for debugging
+        for i, stream in enumerate(streams):
+            stream_type = stream.get('codec_type', 'unknown')
+            codec_name = stream.get('codec_name', 'unknown')
+            logger.info(f"  - Stream {i}: type={stream_type}, codec={codec_name}")
+            if stream_type == 'subtitle':
+                logger.info(f"    ✅ Found subtitle stream: {stream}")
+        
         # Get actual duration
         duration = float(format_info.get('duration', 0))
         
