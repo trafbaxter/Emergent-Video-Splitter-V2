@@ -452,17 +452,26 @@ def handle_download(event: Dict[str, Any], context) -> Dict[str, Any]:
         try:
             s3.head_object(Bucket=BUCKET_NAME, Key=s3_key)
             logger.info(f"✅ File exists in S3: {s3_key}")
-        except s3.exceptions.NoSuchKey:
-            logger.error(f"❌ File not found in S3: {s3_key}")
-            return {
-                'statusCode': 404,
-                'headers': get_cors_headers(),
-                'body': json.dumps({
-                    'error': f'File not found: {filename}',
-                    'job_id': job_id,
-                    'expected_location': s3_key
-                })
-            }
+        except ClientError as e:
+            error_code = e.response['Error']['Code']
+            if error_code == '404' or error_code == 'NoSuchKey':
+                logger.error(f"❌ File not found in S3: {s3_key}")
+                return {
+                    'statusCode': 404,
+                    'headers': get_cors_headers(),
+                    'body': json.dumps({
+                        'error': f'File not found: {filename}',
+                        'job_id': job_id,
+                        'expected_location': s3_key
+                    })
+                }
+            else:
+                logger.error(f"❌ S3 error checking file existence: {str(e)}")
+                return {
+                    'statusCode': 500,
+                    'headers': get_cors_headers(),
+                    'body': json.dumps({'error': f'Error accessing file: {str(e)}'})
+                }
         except Exception as s3_error:
             logger.error(f"❌ S3 error checking file existence: {str(s3_error)}")
             return {
