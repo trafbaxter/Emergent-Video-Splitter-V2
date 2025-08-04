@@ -11,7 +11,11 @@
     "cra-template": "1.2.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+<<<<<<< HEAD
     "react-router-dom": "^7.5.1",
+=======
+    "react-router-dom": "^7.7.1",
+>>>>>>> 3c1a9381a2bbf306e9e3761b31de97962165c8fc
     "react-scripts": "5.0.1"
   },
   "scripts": {
@@ -52,4 +56,8 @@
     "ajv": "6.12.6",
     "ajv-keywords": "3.5.2"
   }
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> 3c1a9381a2bbf306e9e3761b31de97962165c8fc

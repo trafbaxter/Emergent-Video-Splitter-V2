@@ -1,7 +1,12 @@
+<<<<<<< HEAD
 from fastapi import FastAPI, APIRouter, UploadFile, File, HTTPException, BackgroundTasks, Form, Request, Depends, status, Security
 from fastapi.responses import FileResponse, StreamingResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+=======
+from fastapi import FastAPI, APIRouter, UploadFile, File, HTTPException, BackgroundTasks, Form, Request
+from fastapi.responses import FileResponse, StreamingResponse, JSONResponse
+>>>>>>> 3c1a9381a2bbf306e9e3761b31de97962165c8fc
 from dotenv import load_dotenv
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
@@ -47,8 +52,13 @@ db = client[os.environ['DB_NAME']]
 # Create the main app without a prefix
 app = FastAPI(
     title="Video Splitter API",
+<<<<<<< HEAD
     description="API for splitting video files while preserving subtitles - with authentication",
     version="2.0.0"
+=======
+    description="API for splitting video files while preserving subtitles",
+    version="1.0.0"
+>>>>>>> 3c1a9381a2bbf306e9e3761b31de97962165c8fc
 )
 
 # Configure app for large file uploads
@@ -59,6 +69,7 @@ app.router.route_class = type('CustomRoute', (app.router.route_class,), {
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
 
+<<<<<<< HEAD
 # Database dependency
 def get_db():
     """Get database connection"""
@@ -123,6 +134,14 @@ UPLOAD_DIR = TEMP_BASE / "uploads"
 PROCESS_DIR = TEMP_BASE / "processing"
 OUTPUT_DIR = TEMP_BASE / "outputs"
 
+=======
+# Create temp directories for video processing (Windows compatible)
+TEMP_BASE = Path(tempfile.gettempdir()) / "video_splitter"
+UPLOAD_DIR = TEMP_BASE / "uploads"
+PROCESS_DIR = TEMP_BASE / "processing"
+OUTPUT_DIR = TEMP_BASE / "outputs"
+
+>>>>>>> 3c1a9381a2bbf306e9e3761b31de97962165c8fc
 # Create directories if they don't exist
 for dir_path in [UPLOAD_DIR, PROCESS_DIR, OUTPUT_DIR]:
     dir_path.mkdir(parents=True, exist_ok=True)
@@ -398,6 +417,7 @@ async def process_video_job(job_id: str, file_path: str, config: SplitConfig):
 
 # API Endpoints
 # Add your routes to the router instead of directly to app
+<<<<<<< HEAD
 # Authentication Routes with explicit CORS
 @app.get("/auth/me")
 async def get_current_user_info_direct(
@@ -464,6 +484,10 @@ async def test_cors():
 @api_router.get("/")
 async def hello_world():
     """Basic hello world endpoint"""
+=======
+@api_router.get("/")
+async def root():
+>>>>>>> 3c1a9381a2bbf306e9e3761b31de97962165c8fc
     return {"message": "Hello World"}
 
 @api_router.get("/debug/test-video-preview")
@@ -670,12 +694,18 @@ async def create_mock_job():
     return {"message": "Mock job created", "job_id": job_id, "streaming_url": f"/api/video-stream/{job_id}"}
 
 @api_router.post("/upload-video")
+<<<<<<< HEAD
 async def upload_video(
     file: UploadFile = File(...),
     current_user: UserResponse = Depends(get_current_verified_user)
 ):
     """Upload video file with support for large files (requires authentication)"""
     logger.info(f"Upload attempt by user {current_user.username} - filename: {file.filename}, content_type: {file.content_type}")
+=======
+async def upload_video(file: UploadFile = File(...)):
+    """Upload video file with support for large files"""
+    logger.info(f"Upload attempt - filename: {file.filename}, content_type: {file.content_type}")
+>>>>>>> 3c1a9381a2bbf306e9e3761b31de97962165c8fc
     
     if not file.filename.lower().endswith(('.mp4', '.mkv', '.avi', '.mov', '.wmv', '.flv', '.webm')):
         logger.error(f"Unsupported format: {file.filename}")
@@ -720,6 +750,8 @@ async def upload_video(
         await db.video_jobs.insert_one(job_dict)
         
         logger.info(f"Successfully uploaded video by {current_user.username}: {file.filename}, size: {total_size / 1024 / 1024:.1f} MB")
+        
+        logger.info(f"Successfully uploaded video: {file.filename}, size: {total_size / 1024 / 1024:.1f} MB")
         
         return {
             "job_id": job_id,
@@ -866,21 +898,29 @@ async def video_stream_options(job_id: str):
     )
 
 @api_router.get("/video-stream/{job_id}")
+<<<<<<< HEAD
 async def stream_video(
     job_id: str, 
     request: Request,
     current_user: UserResponse = Depends(get_current_verified_user)
 ):
     """Stream video file for preview with proper headers (requires authentication)"""
+=======
+async def stream_video(job_id: str, request: Request):
+    """Stream video file for preview with proper headers"""
+>>>>>>> 3c1a9381a2bbf306e9e3761b31de97962165c8fc
     job = await db.video_jobs.find_one({"id": job_id})
     
     if not job or not job.get('file_path'):
         raise HTTPException(status_code=404, detail="Video not found")
     
+<<<<<<< HEAD
     # Check if user owns this job (admins can access any job)
     if current_user.role != "admin" and job.get("user_id") != current_user.id:
         raise HTTPException(status_code=403, detail="Access denied")
     
+=======
+>>>>>>> 3c1a9381a2bbf306e9e3761b31de97962165c8fc
     file_path = Path(job['file_path'])
     
     if not file_path.exists():
@@ -1020,6 +1060,7 @@ async def cleanup_job(
         logger.error(f"Cleanup error: {e}")
         raise HTTPException(status_code=500, detail=f"Cleanup failed: {str(e)}")
 
+<<<<<<< HEAD
 # Add a global OPTIONS handler for CORS preflight
 @app.options("/{path:path}")
 async def options_handler(path: str):
@@ -1054,6 +1095,9 @@ origins = [
     "*"  # Allow all origins for development
 ]
 
+=======
+# Add CORS middleware before including routes
+>>>>>>> 3c1a9381a2bbf306e9e3761b31de97962165c8fc
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -1063,6 +1107,7 @@ app.add_middleware(
     expose_headers=["*"],
 )
 
+<<<<<<< HEAD
 # Custom response class with CORS headers
 class CORSResponse(JSONResponse):
     def __init__(self, *args, **kwargs):
@@ -1077,6 +1122,9 @@ app.include_router(auth_router)
 app.include_router(admin_router)
 
 # Include the API router in the main app
+=======
+# Include the router in the main app
+>>>>>>> 3c1a9381a2bbf306e9e3761b31de97962165c8fc
 app.include_router(api_router)
 
 # Configure logging
