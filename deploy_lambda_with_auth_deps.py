@@ -26,9 +26,9 @@ def create_lambda_package():
         # Install dependencies
         print("📥 Installing Python dependencies...")
         dependencies = [
-            'PyJWT==2.8.0',  # JWT library
-            'bcrypt==4.1.2',  # Password hashing
-            'pymongo==4.6.1',  # MongoDB client
+            'PyJWT',  # JWT library (latest compatible)
+            'bcrypt',  # Password hashing (latest compatible)  
+            'pymongo',  # MongoDB client (latest compatible)
         ]
         
         for dep in dependencies:
