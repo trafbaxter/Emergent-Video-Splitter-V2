@@ -478,10 +478,8 @@ metadata:
 
 test_plan:
   current_focus:
-    - "AWS Lambda backend deployment and API Gateway integration"
     - "Phase 1 user authentication system"
   stuck_tasks:
-    - "AWS Lambda backend deployment and API Gateway integration"
     - "Phase 1 user authentication system"
   test_all: false
   test_priority: "critical_first"
