@@ -407,15 +407,79 @@ def handle_job_status(event: Dict[str, Any], context) -> Dict[str, Any]:
 def handle_download(event: Dict[str, Any], context) -> Dict[str, Any]:
     """Handle file download request"""
     try:
-        job_id = event['pathParameters']['job_id']
-        filename = event['pathParameters']['filename']
+        # Extract path parameters with robust error handling (same pattern as other functions)
+        path_params = event.get('pathParameters') or {}
+        job_id = path_params.get('job_id')
+        filename = path_params.get('filename')
+        
+        # If pathParameters is None, try to extract from path
+        if not job_id or not filename:
+            path = event.get('path', '')
+            logger.info(f"🔍 PathParameters missing in download request, extracting from path: {path}")
+            
+            # Extract from path like: /api/download/{job_id}/{filename}
+            if '/api/download/' in path:
+                path_parts = path.split('/api/download/')
+                if len(path_parts) > 1:
+                    remaining_path = path_parts[1].strip('/')
+                    path_segments = remaining_path.split('/')
+                    if len(path_segments) >= 2:
+                        job_id = path_segments[0]
+                        filename = path_segments[1]
+                        logger.info(f"✅ Extracted from path - job_id: {job_id}, filename: {filename}")
+        
+        if not job_id or not filename:
+            logger.error(f"❌ Could not extract job_id or filename from download request")
+            logger.error(f"   pathParameters: {path_params}")
+            logger.error(f"   path: {event.get('path', 'N/A')}")
+            return {
+                'statusCode': 400,
+                'headers': get_cors_headers(),
+                'body': json.dumps({
+                    'error': 'Missing job_id or filename in path parameters',
+                    'debug_info': {
+                        'pathParameters': path_params,
+                        'path': event.get('path', 'N/A'),
+                        'required_format': '/api/download/{job_id}/{filename}'
+                    }
+                })
+            }
+        
+        logger.info(f"📥 Download request for job: {job_id}, file: {filename}")
+        
+        # Check if the file exists in S3 before generating presigned URL
+        s3_key = f'outputs/{job_id}/{filename}'
+        try:
+            s3.head_object(Bucket=BUCKET_NAME, Key=s3_key)
+            logger.info(f"✅ File exists in S3: {s3_key}")
+        except s3.exceptions.NoSuchKey:
+            logger.error(f"❌ File not found in S3: {s3_key}")
+            return {
+                'statusCode': 404,
+                'headers': get_cors_headers(),
+                'body': json.dumps({
+                    'error': f'File not found: {filename}',
+                    'job_id': job_id,
+                    'expected_location': s3_key
+                })
+            }
+        except Exception as s3_error:
+            logger.error(f"❌ S3 error checking file existence: {str(s3_error)}")
+            return {
+                'statusCode': 500,
+                'headers': get_cors_headers(),
+                'body': json.dumps({'error': f'Error accessing file: {str(s3_error)}'})
+            }
         
         # Generate presigned URL for download
+        logger.info(f"🔗 Generating presigned URL for download: {s3_key}")
         download_url = s3.generate_presigned_url(
             'get_object',
-            Params={'Bucket': BUCKET_NAME, 'Key': f'outputs/{job_id}/{filename}'},
+            Params={'Bucket': BUCKET_NAME, 'Key': s3_key},
             ExpiresIn=3600
         )
+        
+        logger.info(f"✅ Download URL generated successfully for {filename}")
         
         return {
             'statusCode': 302,
@@ -426,12 +490,19 @@ def handle_download(event: Dict[str, Any], context) -> Dict[str, Any]:
             'body': ''
         }
         
+    except KeyError as e:
+        logger.error(f"❌ Missing required parameter in download request: {str(e)}")
+        return {
+            'statusCode': 400,
+            'headers': get_cors_headers(),
+            'body': json.dumps({'error': f'Missing required parameter: {str(e)}'})
+        }
     except Exception as e:
-        logger.error(f"Download handler error: {str(e)}")
+        logger.error(f"❌ Download handler error: {str(e)}")
         return {
             'statusCode': 500,
             'headers': get_cors_headers(),
-            'body': json.dumps({'error': str(e)})
+            'body': json.dumps({'error': f'Download failed: {str(e)}'})
         }
 
 def handle_video_stream(event: Dict[str, Any], context) -> Dict[str, Any]:
