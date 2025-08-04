@@ -219,8 +219,22 @@ def extract_with_ffmpeg(input_path: str, job_id: str) -> Dict[str, Any]:
                 }
                 logger.info(f"✅ Extracted audio info: {audio_info}")
         
-        # Count subtitle streams
-        subtitle_streams_count = metadata_output.count("Subtitle:")
+        # Count subtitle streams - improved detection
+        subtitle_streams_count = 0
+        if "Subtitle:" in metadata_output:
+            import re
+            # Look for stream lines that contain "Subtitle:"
+            # Format is typically: "Stream #0:2(eng): Subtitle: subrip" or similar
+            subtitle_matches = re.findall(r'Stream #\d+:\d+(?:\([^)]*\))?: Subtitle:', metadata_output)
+            subtitle_streams_count = len(subtitle_matches)
+            logger.info(f"✅ Found {subtitle_streams_count} subtitle streams using regex pattern")
+            
+            # If regex fails, fall back to simple count but with better logging
+            if subtitle_streams_count == 0:
+                subtitle_streams_count = metadata_output.count("Subtitle:")
+                logger.info(f"✅ Fallback subtitle count: {subtitle_streams_count}")
+        else:
+            logger.info("ℹ️ No subtitle streams detected in FFmpeg output")
         
         # Get file size
         import os
@@ -289,6 +303,21 @@ def extract_with_ffprobe(input_path: str, job_id: str) -> Dict[str, Any]:
         video_streams = [s for s in streams if s.get('codec_type') == 'video']
         audio_streams = [s for s in streams if s.get('codec_type') == 'audio']
         subtitle_streams = [s for s in streams if s.get('codec_type') == 'subtitle']
+        
+        # Debug subtitle detection
+        logger.info(f"🔍 Stream analysis for {job_id}:")
+        logger.info(f"  - Total streams found: {len(streams)}")
+        logger.info(f"  - Video streams: {len(video_streams)}")
+        logger.info(f"  - Audio streams: {len(audio_streams)}")
+        logger.info(f"  - Subtitle streams: {len(subtitle_streams)}")
+        
+        # Log all stream types for debugging
+        for i, stream in enumerate(streams):
+            stream_type = stream.get('codec_type', 'unknown')
+            codec_name = stream.get('codec_name', 'unknown')
+            logger.info(f"  - Stream {i}: type={stream_type}, codec={codec_name}")
+            if stream_type == 'subtitle':
+                logger.info(f"    ✅ Found subtitle stream: {stream}")
         
         # Get actual duration
         duration = float(format_info.get('duration', 0))
