@@ -741,7 +741,7 @@ def extract_video_metadata_fallback(s3_key: str) -> dict:
                     'channels': 2
                 }
             ],
-            'subtitle_streams': [],
+            'subtitle_streams': [],  # Fallback doesn't detect subtitles
             'chapters': []
         }
         
