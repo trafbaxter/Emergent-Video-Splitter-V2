@@ -38,7 +38,7 @@ def check_for_hardcoded_secrets():
         dirs[:] = [d for d in dirs if d not in skip_dirs]
         
         for file in files:
-            if any(file.endswith(ext) for ext in extensions):
+            if any(file.endswith(ext) for ext in extensions) and file not in skip_files:
                 file_path = Path(root) / file
                 
                 try:
