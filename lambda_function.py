@@ -676,7 +676,13 @@ def extract_video_metadata(s3_key: str) -> dict:
                     'channels': metadata.get('audio_info', {}).get('channels', 2)
                 }
             ] if metadata.get('audio_streams', 0) > 0 else [],
-            'subtitle_streams': [],
+            'subtitle_streams': [
+                {
+                    'index': i + 2,  # Usually after video and audio streams
+                    'codec_name': 'unknown',  # FFmpeg Lambda doesn't provide codec details yet
+                    'language': 'unknown'
+                } for i in range(metadata.get('subtitle_streams', 0))
+            ],
             'chapters': []
         }
         
