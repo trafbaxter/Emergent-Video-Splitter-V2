@@ -30,6 +30,8 @@ def create_dependency_layer():
             sys.executable, '-m', 'pip', 'install',
             '-r', 'requirements.txt',
             '--target', layer_dir,
+            '--platform', 'linux_x86_64',
+            '--only-binary=:all:',
             '--no-cache-dir'
         ], capture_output=True, text=True)
         
