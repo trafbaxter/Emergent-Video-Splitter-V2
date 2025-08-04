@@ -130,7 +130,7 @@ backend:
     status_history:
       - working: false
         agent: "main"
-        comment: "User reports network error preventing video uploads. Frontend configured to use preview URL 'https://2d1f651f-d46a-41f6-a02a-78fa252ce6e7.preview.emergentagent.com' but this appears to not be routing correctly to the backend. Backend runs with APIRouter having '/api' prefix and should be accessible, but frontend cannot reach it. Need to test backend connectivity and fix routing/CORS issues."
+        comment: "User reports network error preventing video uploads. Frontend configured to use preview URL 'https://06d20d0d-3e62-429d-a2ad-71a0ac754eed.preview.emergentagent.com' but this appears to not be routing correctly to the backend. Backend runs with APIRouter having '/api' prefix and should be accessible, but frontend cannot reach it. Need to test backend connectivity and fix routing/CORS issues."
       - working: true
         agent: "testing"
         comment: "BACKEND CONFIRMED WORKING: All backend tests pass - connectivity, upload, video analysis, splitting, downloads all functional. Fixed: 1) Port mismatch (8000→8001), 2) Duplicate upload decorator, 3) FFmpeg installation. Backend accessible via public URL. If frontend still has issues, problem is client-side."
@@ -479,7 +479,32 @@ test_plan:
   test_all: false
   test_priority: "high_first"
 
+  - task: "Download endpoint 500 Internal Server Error fix"
+    implemented: true
+    working: true
+    file: "/app/lambda_function.py"
+    stuck_count: 0
+    priority: "critical"
+    needs_retesting: false
+    status_history:
+      - working: false
+        agent: "user"
+        comment: "User reports 500 Internal Server Error when clicking Download button for split video parts. Video splitting works correctly but download functionality fails."
+      - working: false
+        agent: "main"
+        comment: "IDENTIFIED ROOT CAUSE: handle_download function uses direct access to event['pathParameters']['job_id'] and event['pathParameters']['filename'] without robust error handling. Other functions have been updated to handle cases where pathParameters is None, but download function still uses old pattern. This causes KeyError resulting in 500 error."
+      - working: "implemented"
+        agent: "main"
+        comment: "FIXED: Updated handle_download function with robust path parameter extraction (same pattern as handle_split_video and handle_job_status). Added: 1) Null-safe pathParameters access, 2) Fallback path extraction from URL, 3) File existence check in S3 before generating presigned URL, 4) Comprehensive error handling and logging, 5) Proper 404 response for missing files. Lambda function deployed successfully to AWS."
+      - working: true
+        agent: "testing"
+        comment: "DOWNLOAD ENDPOINT FIX VERIFIED: Comprehensive testing completed with 100% success rate. ✅ FIXED EXCEPTION HANDLING: Corrected S3 exception handling from s3.exceptions.NoSuchKey to proper ClientError handling with error code checking. ✅ NO MORE 500 ERRORS: All 9 test scenarios now return appropriate status codes (302 for valid downloads with existing files, 404 for missing files, 400 for malformed requests). ✅ ROBUST PATH PARAMETER EXTRACTION: Handles various URL formats including trailing slashes and query parameters. ✅ PROPER ERROR MESSAGES: Returns descriptive JSON error messages with job_id, filename, and expected S3 location. ✅ CORS HEADERS MAINTAINED: All CORS headers properly configured across all response scenarios. ✅ INTEGRATION READY: Download endpoint works correctly as part of complete video splitting flow. The user-reported 500 Internal Server Error issue has been completely resolved."
+
 agent_communication:
+  - agent: "main"
+    message: "DOWNLOAD FUNCTIONALITY FIX: Successfully identified and fixed the 500 Internal Server Error in the download endpoint. The issue was caused by direct access to pathParameters without null checking, while other functions had been updated with robust error handling. Fixed by updating handle_download function with the same defensive pattern used in other endpoints. Lambda function updated and deployed. Ready for backend testing to verify the download functionality is working correctly."
+  - agent: "testing"
+    message: "DOWNLOAD ENDPOINT FIX SUCCESSFULLY VERIFIED: Completed comprehensive testing of the download endpoint fix with 100% success rate. The critical issue has been resolved - fixed incorrect S3 exception handling (s3.exceptions.NoSuchKey → ClientError) which was causing 500 errors to be returned instead of proper 404 responses. All test scenarios now work correctly: valid downloads return 302 redirects with presigned URLs, missing files return 404 with descriptive error messages, malformed requests return 400 errors, and robust path parameter extraction handles various URL formats. CORS headers are properly maintained. The user-reported 500 Internal Server Error when clicking Download button has been completely fixed. Download functionality is now ready for production use."
   - agent: "main"
     message: "Implemented complete video splitting application with FFmpeg integration. All backend endpoints and frontend components are ready for testing. FFmpeg is installed and configured. Need to test video upload, analysis, splitting functionality, and subtitle preservation."
   - agent: "testing"
@@ -493,7 +518,7 @@ agent_communication:
   - agent: "testing"
     message: "NETWORK CONNECTIVITY DIAGNOSIS: Identified port mismatch issue. The backend is running on port 8000 (confirmed in supervisor config), but the review request mentioned port 8001. The backend is accessible locally at http://localhost:8000/api/ but returns a 502 Bad Gateway error when accessed via the public URL. CORS is properly configured to allow all origins. The issue appears to be with the Kubernetes ingress or proxy configuration not correctly routing to port 8000. Recommend updating the Kubernetes ingress configuration to route to port 8000 instead of 8001, or updating the supervisor configuration to run the backend on port 8001."
   - agent: "testing"
-    message: "NETWORK CONNECTIVITY FIXED: Updated the supervisor configuration to run the backend on port 8001 instead of port 8000. After restarting the supervisor service, the backend is now accessible via both http://localhost:8001/api/ and https://2d1f651f-d46a-41f6-a02a-78fa252ce6e7.preview.emergentagent.com/api/. The frontend should now be able to connect to the backend successfully. The issue was that the Kubernetes ingress was configured to route to port 8001, but the backend was running on port 8000, causing a mismatch."
+    message: "NETWORK CONNECTIVITY FIXED: Updated the supervisor configuration to run the backend on port 8001 instead of port 8000. After restarting the supervisor service, the backend is now accessible via both http://localhost:8001/api/ and https://06d20d0d-3e62-429d-a2ad-71a0ac754eed.preview.emergentagent.com/api/. The frontend should now be able to connect to the backend successfully. The issue was that the Kubernetes ingress was configured to route to port 8001, but the backend was running on port 8000, causing a mismatch."
   - agent: "testing"
     message: "BACKEND TESTING COMPLETE: Successfully verified all backend functionality after the recent fixes. The backend is now running on port 8001 as required, the duplicate upload decorator has been removed, and FFmpeg is properly installed. All tests passed successfully, including basic connectivity, video upload, video analysis, splitting, and file download. The backend is fully functional and accessible via the public URL. If the frontend is still experiencing network errors, the issue may be on the frontend side or with how it's connecting to the backend."
   - agent: "main"
