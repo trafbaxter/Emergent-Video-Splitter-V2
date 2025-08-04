@@ -83,40 +83,50 @@ def deploy_lambda_function(zip_path):
     lambda_client = boto3.client('lambda')
     
     try:
-        # Update function code
+        # First, just update the function code
         with open(zip_path, 'rb') as zip_file:
             response = lambda_client.update_function_code(
                 FunctionName='videosplitter-api',
                 ZipFile=zip_file.read()
             )
         
-        print(f"✅ Lambda function deployed successfully!")
+        print(f"✅ Lambda function code updated successfully!")
         print(f"Function ARN: {response.get('FunctionArn')}")
         print(f"Last Modified: {response.get('LastModified')}")
         print(f"Runtime: {response.get('Runtime')}")
         print(f"Code Size: {response.get('CodeSize')} bytes")
         
+        # Wait a moment for the update to complete before updating configuration
+        print("⏳ Waiting for code update to complete...")
+        import time
+        time.sleep(10)
+        
         # Update function configuration for better performance
         print("⚙️  Updating function configuration...")
-        config_response = lambda_client.update_function_configuration(
-            FunctionName='videosplitter-api',
-            Timeout=30,  # 30 seconds timeout
-            MemorySize=512,  # 512 MB memory
-            Environment={
-                'Variables': {
-                    'JWT_SECRET': os.environ.get('JWT_SECRET', 'change-this-in-production'),
-                    'JWT_REFRESH_SECRET': os.environ.get('JWT_REFRESH_SECRET', 'change-this-in-production-refresh'),
-                    'AWS_REGION': os.environ.get('AWS_REGION', 'us-east-1'),
-                    'FRONTEND_URL': os.environ.get('FRONTEND_URL', 'https://develop.tads-video-splitter.com'),
-                    'MONGO_URL': os.environ.get('MONGO_URL', ''),
-                    'SES_SENDER_EMAIL': os.environ.get('SES_SENDER_EMAIL', '')
+        try:
+            config_response = lambda_client.update_function_configuration(
+                FunctionName='videosplitter-api',
+                Timeout=30,  # 30 seconds timeout
+                MemorySize=512,  # 512 MB memory
+                Environment={
+                    'Variables': {
+                        'JWT_SECRET': os.environ.get('JWT_SECRET', 'change-this-in-production'),
+                        'JWT_REFRESH_SECRET': os.environ.get('JWT_REFRESH_SECRET', 'change-this-in-production-refresh'),
+                        'AWS_REGION': os.environ.get('AWS_REGION', 'us-east-1'),
+                        'FRONTEND_URL': os.environ.get('FRONTEND_URL', 'https://develop.tads-video-splitter.com'),
+                        'MONGO_URL': os.environ.get('MONGO_URL', ''),
+                        'SES_SENDER_EMAIL': os.environ.get('SES_SENDER_EMAIL', '')
+                    }
                 }
-            }
-        )
-        
-        print(f"✅ Function configuration updated!")
-        print(f"Timeout: {config_response.get('Timeout')} seconds")
-        print(f"Memory: {config_response.get('MemorySize')} MB")
+            )
+            
+            print(f"✅ Function configuration updated!")
+            print(f"Timeout: {config_response.get('Timeout')} seconds")
+            print(f"Memory: {config_response.get('MemorySize')} MB")
+            
+        except Exception as config_error:
+            print(f"⚠️  Warning: Could not update configuration: {str(config_error)}")
+            print("Function code was updated successfully, but configuration update failed.")
         
         return True
         
