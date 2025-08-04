@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome to Video Splitter Pro</title>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background: linear-gradient(135deg, #28a745 0%, #20c997 100%); color: white; padding: 20px; text-align: center; border-radius: 10px 10px 0 0; }
+        .content { padding: 30px; background-color: #f8f9fa; border-radius: 0 0 10px 10px; }
+        .button { display: inline-block; padding: 12px 24px; background: linear-gradient(135deg, #28a745 0%, #20c997 100%); color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; }
+        .footer { text-align: center; padding: 20px; font-size: 12px; color: #666; }
+        .logo { font-size: 24px; font-weight: bold; }
+        .feature { background-color: #e9ecef; padding: 15px; border-radius: 5px; margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">🎬 Video Splitter Pro</div>
+            <h1>Welcome to Video Splitter Pro!</h1>
+        </div>
+        <div class="content">
+            <p>Hello {{ user_name }},</p>
+            <p>Welcome to Video Splitter Pro! Your account has been successfully created and verified.</p>
+            <div class="feature">
+                <h3>🎯 What you can do:</h3>
+                <ul>
+                    <li>Split videos by time points, intervals, or chapters</li>
+                    <li>Preserve subtitles and audio tracks</li>
+                    <li>Choose output quality and format</li>
+                    <li>Track your upload history</li>
+                    <li>Secure account with 2FA</li>
+                </ul>
+            </div>
+            <p style="text-align: center;">
+                <a href="{{ login_link }}" class="button">Start Using Video Splitter Pro</a>
+            </p>
+            <p>If you have any questions, feel free to contact our support team.</p>
+            <p>Best regards,<br>The Video Splitter Pro Team</p>
+        </div>
+        <div class="footer">
+            <p>&copy; 2024 Video Splitter Pro. All rights reserved.</p>
+        </div>
+    </div>
+</body>
+</html>
