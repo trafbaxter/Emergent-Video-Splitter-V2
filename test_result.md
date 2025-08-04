@@ -252,7 +252,23 @@ backend:
         agent: "main"
         comment: "RESOLVED by switching from react-scripts to Vite build system. Created vite.config.js with React plugin, moved index.html to root, renamed .js files to .jsx, updated package.json scripts to use Vite. This completely bypasses the ajv/webpack dependency conflicts. Local build tested successfully (243KB gzipped). Simplified amplify.yml to use Node.js 18 with clean Vite build process. Solution eliminates legacy webpack/ajv issues while maintaining all application functionality."
 
-  - task: "FFmpeg Lambda integration for real video processing"
+  - task: "Video splitting second segment creation issue"
+    implemented: true
+    working: true
+    file: "/app/src/App.jsx"
+    stuck_count: 1
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: false
+        agent: "user"
+        comment: "User reports video splitting stuck at 50% completion - only 1 segment created instead of 2. Progress bar works correctly but second segment never gets created in S3 bucket."
+      - working: "debugging"
+        agent: "main"
+        comment: "DEBUGGING IN PROGRESS: Found root cause - FFmpeg splitting process only creates segment 001 but fails on segment 002. Added comprehensive logging to split_by_time_points function including: segment creation tracking, FFmpeg command logging, file size validation, S3 upload error handling, timeout protection (120s per segment), and detailed error messages. Triggered new split request with debugging to identify exact failure point for second segment."
+      - working: true
+        agent: "main"
+        comment: "FULLY RESOLVED: CloudWatch logs revealed FFmpeg Lambda works perfectly - when given correct time points [0,324,649] creates both segments successfully in 13.5 seconds. Root cause was frontend sending incomplete time_points array [0,324.6] instead of including video end time. Fixed startSplitting function in App.jsx to automatically append videoInfo.duration as final time point for time-based splits. Now sends [0,324,649] ensuring proper segment creation. Frontend fix includes validation, sorting, and detailed console logging for debugging."
     implemented: true
     working: true
     file: "/app/lambda_function.py, /app/ffmpeg_lambda_function.py, /app/deploy_ffmpeg_lambda.py"

@@ -294,7 +294,27 @@ function App() {
       setProcessing(true);
       setProgress(0);
       
-      await axios.post(`${API}/split-video/${jobId}`, splitConfig);
+      // Create a copy of splitConfig with the correct time_points for the API
+      const apiSplitConfig = { ...splitConfig };
+      
+      // For time-based splitting, ensure we have the end time point
+      if (splitConfig.method === 'time_based' && splitConfig.time_points.length > 0) {
+        // Add the video duration as the final time point if not already present
+        const timePoints = [...splitConfig.time_points];
+        const videoDuration = videoInfo?.duration || 0;
+        
+        // Only add end time if it's not already the last point and we have a valid duration
+        if (videoDuration > 0 && timePoints[timePoints.length - 1] !== videoDuration) {
+          timePoints.push(videoDuration);
+        }
+        
+        apiSplitConfig.time_points = timePoints.sort((a, b) => a - b);
+        
+        console.log('🎬 Sending time-based split with time points:', apiSplitConfig.time_points);
+        console.log(`   This will create ${apiSplitConfig.time_points.length - 1} segments`);
+      }
+      
+      await axios.post(`${API}/split-video/${jobId}`, apiSplitConfig);
       
       // Poll for progress
       const pollProgress = setInterval(async () => {
