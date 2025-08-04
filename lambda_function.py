@@ -313,31 +313,95 @@ def handle_split_video(event: Dict[str, Any], context) -> Dict[str, Any]:
 def handle_job_status(event: Dict[str, Any], context) -> Dict[str, Any]:
     """Handle job status request"""
     try:
-        job_id = event['pathParameters']['job_id']
+        # Extract job_id with robust error handling (same as split function)
+        path_params = event.get('pathParameters') or {}
+        job_id = path_params.get('job_id')
         
-        # In a real implementation:
-        # Query DynamoDB for job status
+        # If pathParameters is None, try to extract from path
+        if not job_id:
+            path = event.get('path', '')
+            logger.info(f"🔍 PathParameters missing in status request, extracting from path: {path}")
+            
+            # Extract job_id from path like: /api/job-status/{job_id}
+            if '/api/job-status/' in path:
+                path_parts = path.split('/api/job-status/')
+                if len(path_parts) > 1:
+                    job_id = path_parts[1].strip('/')
+                    logger.info(f"✅ Extracted job_id from path: {job_id}")
         
-        return {
-            'statusCode': 200,
-            'headers': get_cors_headers(),
-            'body': json.dumps({
-                'id': job_id,
-                'status': 'completed',
-                'progress': 100,
-                'splits': [
-                    {'file': f'{job_id}_part_001.mp4'},
-                    {'file': f'{job_id}_part_002.mp4'}
-                ]
-            })
-        }
+        if not job_id:
+            logger.error(f"❌ Could not extract job_id for status check")
+            return {
+                'statusCode': 400,
+                'headers': get_cors_headers(),
+                'body': json.dumps({'error': 'Missing job_id in path'})
+            }
+        
+        logger.info(f"📊 Checking status for job: {job_id}")
+        
+        # Check if there are any output files in S3 for this job
+        try:
+            output_prefix = f"outputs/{job_id}/"
+            response = s3.list_objects_v2(Bucket=BUCKET_NAME, Prefix=output_prefix)
+            
+            output_files = []
+            if 'Contents' in response:
+                for obj in response['Contents']:
+                    if obj['Key'].endswith(('.mp4', '.mkv', '.avi', '.mov')):  # Video files only
+                        filename = obj['Key'].split('/')[-1]  # Get just the filename
+                        output_files.append({
+                            'file': filename,
+                            'size': obj['Size'],
+                            'url': f"https://{BUCKET_NAME}.s3.us-east-1.amazonaws.com/{obj['Key']}"
+                        })
+                        
+            # Determine status based on output files
+            if len(output_files) >= 2:
+                status = 'completed'
+                progress = 100
+                logger.info(f"✅ Job {job_id} completed with {len(output_files)} output files")
+            elif len(output_files) == 1:
+                status = 'processing'
+                progress = 50  # Partial completion
+                logger.info(f"🔄 Job {job_id} in progress with {len(output_files)} output files")
+            else:
+                status = 'processing'
+                progress = 0
+                logger.info(f"🔄 Job {job_id} starting - no output files yet")
+            
+            return {
+                'statusCode': 200,
+                'headers': get_cors_headers(),
+                'body': json.dumps({
+                    'id': job_id,
+                    'status': status,
+                    'progress': progress,
+                    'splits': output_files,
+                    'output_count': len(output_files)
+                })
+            }
+                
+        except Exception as s3_error:
+            logger.error(f"S3 error checking output files: {str(s3_error)}")
+            # Return a default processing status if S3 check fails
+            return {
+                'statusCode': 200,
+                'headers': get_cors_headers(),
+                'body': json.dumps({
+                    'id': job_id,
+                    'status': 'processing',
+                    'progress': 25,
+                    'splits': [],
+                    'note': 'Status check in progress'
+                })
+            }
         
     except Exception as e:
         logger.error(f"Status handler error: {str(e)}")
         return {
             'statusCode': 500,
             'headers': get_cors_headers(),
-            'body': json.dumps({'error': str(e)})
+            'body': json.dumps({'error': f'Status check failed: {str(e)}'})
         }
 
 def handle_download(event: Dict[str, Any], context) -> Dict[str, Any]:
