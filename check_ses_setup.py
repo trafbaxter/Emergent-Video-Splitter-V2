@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
 Check AWS SES setup and domain verification status
+Note: This script now uses environment variables or AWS IAM roles for authentication
 """
 import boto3
 import os
@@ -9,22 +10,16 @@ from botocore.exceptions import ClientError
 def check_ses_setup():
     """Check current SES configuration and setup"""
     
-    # AWS credentials
-    aws_access_key = 'REDACTED_AWS_KEY'
-    aws_secret_key = 'kSLXhxXDBZjgxZF9nHZHG8cZKrHM6KrNKv4gCXBE'
-    region = 'us-east-1'  # SES is typically in us-east-1 for global sending
-    
-    # Initialize SES client
-    ses_client = boto3.client(
-        'ses',
-        region_name=region,
-        aws_access_key_id=aws_access_key,
-        aws_secret_access_key=aws_secret_key
-    )
+    # Use environment variables or AWS IAM roles for credentials
+    region = os.environ.get('AWS_REGION', 'us-east-1')
     
     print("🔍 Checking AWS SES Configuration...")
+    print(f"Region: {region}")
     
     try:
+        # Initialize SES client (uses IAM role or environment credentials)
+        ses_client = boto3.client('ses', region_name=region)
+        
         # Check verified email addresses
         print("\n📧 Verified Email Addresses:")
         verified_emails = ses_client.list_verified_email_addresses()
@@ -100,6 +95,10 @@ def setup_domain_verification():
     print("\nOnce verified, you can send emails from any address @tads-video-splitter.com")
 
 if __name__ == "__main__":
+    print("🔐 Security Note: This script uses environment variables or IAM roles for AWS authentication")
+    print("Set AWS_REGION environment variable if needed (defaults to us-east-1)")
+    print()
+    
     success = check_ses_setup()
     
     if success:

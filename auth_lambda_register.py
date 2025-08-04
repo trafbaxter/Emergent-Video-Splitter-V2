@@ -2,6 +2,7 @@
 """
 User Registration Lambda Function
 Handles user registration with email verification
+NOTE: This file is now deprecated in favor of integrated authentication in main lambda_function.py
 """
 import json
 import bcrypt
@@ -13,12 +14,11 @@ from pymongo import MongoClient
 import boto3
 from botocore.exceptions import ClientError
 
-# Environment variables (will be set in Lambda)
+# Environment variables (secure configuration)
 MONGODB_URI = os.environ.get('MONGO_URL', 'mongodb://localhost:27017')
-DB_NAME = 'videosplitter'  # Use existing database
-AWS_ACCESS_KEY = 'REDACTED_AWS_KEY'
-AWS_SECRET_KEY = 'kSLXhxXDBZjgxZF9nHZHG8cZKrHM6KrNKv4gCXBE'
-FRONTEND_URL = 'https://develop.tads-video-splitter.com'
+DB_NAME = 'videosplitter'
+AWS_REGION = os.environ.get('AWS_REGION', 'us-east-1')
+FRONTEND_URL = os.environ.get('FRONTEND_URL', 'https://develop.tads-video-splitter.com')
 
 def lambda_handler(event, context):
     """Handle user registration requests"""
@@ -173,14 +173,10 @@ def validate_registration_data(email, password, first_name, last_name):
     return errors
 
 def send_verification_email(email, first_name, verification_token):
-    """Send email verification using AWS SES"""
+    """Send email verification using AWS SES with IAM role"""
     try:
-        ses_client = boto3.client(
-            'ses',
-            region_name='us-east-1',
-            aws_access_key_id=AWS_ACCESS_KEY,
-            aws_secret_access_key=AWS_SECRET_KEY
-        )
+        # Use IAM role for SES authentication
+        ses_client = boto3.client('ses', region_name=AWS_REGION)
         
         verification_url = f"{FRONTEND_URL}/verify-email?token={verification_token}"
         
@@ -251,7 +247,7 @@ Best regards,
 Tad's Video Splitter Team
         """
         
-        # Send email
+        # Send email using IAM role
         response = ses_client.send_email(
             Source="Tad's Video Splitter <noreply@tads-video-splitter.com>",
             Destination={'ToAddresses': [email]},
@@ -284,16 +280,5 @@ def get_cors_headers():
     }
 
 if __name__ == "__main__":
-    # Test locally
-    test_event = {
-        'httpMethod': 'POST',
-        'body': json.dumps({
-            'email': 'test@example.com',
-            'password': 'TestPassword123!',
-            'firstName': 'Test',
-            'lastName': 'User'
-        })
-    }
-    
-    result = lambda_handler(test_event, None)
-    print(f"Test result: {result}")
+    print("⚠️  This file is deprecated. Authentication is now integrated into main lambda_function.py")
+    print("🔐 Security: Now uses environment variables and IAM roles for AWS authentication")
