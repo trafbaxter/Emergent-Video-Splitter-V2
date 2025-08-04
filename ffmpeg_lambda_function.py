@@ -152,10 +152,10 @@ def extract_with_ffmpeg(input_path: str, job_id: str) -> Dict[str, Any]:
     try:
         logger.info(f"🔍 Using ffmpeg -i for metadata extraction")
         
-        # Use ffmpeg -i to get file info (outputs to stderr)
-        cmd = ['ffmpeg', '-i', input_path, '-f', 'null', '-']
+        # Use faster ffmpeg command for metadata only (no processing)
+        cmd = ['ffmpeg', '-i', input_path, '-t', '1', '-f', 'null', '-']
         
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)  # Increased to 2 minutes
         
         # ffmpeg -i outputs info to stderr, and returns non-zero when no output file
         metadata_output = result.stderr
@@ -164,6 +164,8 @@ def extract_with_ffmpeg(input_path: str, job_id: str) -> Dict[str, Any]:
         
         if not metadata_output:
             raise Exception("No metadata output from ffmpeg")
+        
+        logger.info(f"🔍 Parsing FFmpeg output for metadata...")
         
         # Parse duration from ffmpeg output
         duration = 0
@@ -188,7 +190,9 @@ def extract_with_ffmpeg(input_path: str, job_id: str) -> Dict[str, Any]:
         
         # Parse video stream info
         video_info = {}
+        video_streams_count = 0
         if "Video:" in metadata_output:
+            video_streams_count = 1
             import re
             video_match = re.search(r'Video: (\w+).*?(\d+)x(\d+)', metadata_output)
             if video_match:
@@ -202,7 +206,9 @@ def extract_with_ffmpeg(input_path: str, job_id: str) -> Dict[str, Any]:
         
         # Parse audio stream info  
         audio_info = {}
+        audio_streams_count = 0
         if "Audio:" in metadata_output:
+            audio_streams_count = 1
             import re
             audio_match = re.search(r'Audio: (\w+).*?(\d+) Hz', metadata_output)
             if audio_match:
@@ -212,6 +218,9 @@ def extract_with_ffmpeg(input_path: str, job_id: str) -> Dict[str, Any]:
                     'channels': 2  # Default
                 }
                 logger.info(f"✅ Extracted audio info: {audio_info}")
+        
+        # Count subtitle streams
+        subtitle_streams_count = metadata_output.count("Subtitle:")
         
         # Get file size
         import os
@@ -223,14 +232,14 @@ def extract_with_ffmpeg(input_path: str, job_id: str) -> Dict[str, Any]:
             'duration': duration,
             'size': file_size,
             'bitrate': 0,  # Not easily extractable from ffmpeg -i
-            'video_streams': 1 if video_info else 0,
-            'audio_streams': 1 if audio_info else 0,
-            'subtitle_streams': 0,  # Would need more parsing
+            'video_streams': video_streams_count,
+            'audio_streams': audio_streams_count,
+            'subtitle_streams': subtitle_streams_count,
             'video_info': video_info,
             'audio_info': audio_info
         }
         
-        logger.info(f"🎉 Metadata extraction successful: duration={duration}s, format={format_name}")
+        logger.info(f"🎉 Metadata extraction successful: duration={duration}s, format={format_name}, video_streams={video_streams_count}, audio_streams={audio_streams_count}")
         
         return {
             'statusCode': 200,
@@ -242,7 +251,7 @@ def extract_with_ffmpeg(input_path: str, job_id: str) -> Dict[str, Any]:
         }
         
     except subprocess.TimeoutExpired:
-        error_msg = "FFmpeg metadata extraction timed out (30s)"
+        error_msg = "FFmpeg metadata extraction timed out (120s)"
         logger.error(f"❌ {error_msg}")
         return {
             'statusCode': 500,
