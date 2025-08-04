@@ -390,6 +390,8 @@ def split_by_time_points(input_path: str, output_bucket: str, job_id: str,
     
     # Sort time points and create segments
     sorted_points = sorted(set(time_points))
+    logger.info(f"🎬 Time-based splitting with points: {sorted_points}")
+    logger.info(f"📊 Will create {len(sorted_points) - 1} segments")
     
     for i in range(len(sorted_points) - 1):
         start_time = sorted_points[i]
@@ -397,11 +399,14 @@ def split_by_time_points(input_path: str, output_bucket: str, job_id: str,
         duration = end_time - start_time
         
         if duration <= 0:
+            logger.warning(f"⚠️ Skipping invalid segment {i+1}: duration={duration}s")
             continue
             
         part_num = f"{i+1:03d}"
         output_filename = f"{job_id}_part_{part_num}.{output_format}"
         output_path = f"/tmp/{output_filename}"
+        
+        logger.info(f"🎬 Creating segment {part_num}: {start_time}s to {end_time}s (duration: {duration}s)")
         
         # FFmpeg command for segment
         cmd = ['ffmpeg', '-i', input_path, '-ss', str(start_time), '-t', str(duration)]
@@ -411,30 +416,72 @@ def split_by_time_points(input_path: str, output_bucket: str, job_id: str,
         else:
             cmd.extend(['-c:v', 'libx264', '-c:a', 'aac'])  # Re-encode
             
-        cmd.extend(['-avoid_negative_ts', 'make_zero', output_path])
+        cmd.extend(['-avoid_negative_ts', 'make_zero', '-y', output_path])  # Added -y to overwrite
         
-        logger.info(f"Creating segment {part_num}: {start_time}s to {end_time}s")
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        logger.info(f"🔧 FFmpeg command: {' '.join(cmd)}")
         
-        if result.returncode != 0:
-            logger.error(f"FFmpeg error for segment {part_num}: {result.stderr}")
+        try:
+            # Add timeout to prevent Lambda from hanging
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+            
+            if result.returncode != 0:
+                logger.error(f"❌ FFmpeg error for segment {part_num} (exit code {result.returncode}):")
+                logger.error(f"   stdout: {result.stdout}")
+                logger.error(f"   stderr: {result.stderr}")
+                continue
+            else:
+                logger.info(f"✅ Segment {part_num} created successfully")
+            
+            # Check if output file was created and has reasonable size
+            if not os.path.exists(output_path):
+                logger.error(f"❌ Output file not created: {output_path}")
+                continue
+            
+            file_size = os.path.getsize(output_path)
+            if file_size < 1024:  # Less than 1KB is suspicious
+                logger.error(f"❌ Output file too small ({file_size} bytes): {output_path}")
+                continue
+            
+            logger.info(f"📊 Segment {part_num} file size: {file_size/1024/1024:.1f} MB")
+            
+            # Upload to S3
+            logger.info(f"☁️ Uploading segment {part_num} to S3...")
+            s3_key = f"outputs/{job_id}/{output_filename}"
+            
+            try:
+                s3.upload_file(output_path, output_bucket, s3_key)
+                logger.info(f"✅ Uploaded {s3_key} to S3")
+            except Exception as upload_error:
+                logger.error(f"❌ S3 upload failed for segment {part_num}: {str(upload_error)}")
+                # Clean up local file even if upload fails
+                if os.path.exists(output_path):
+                    os.remove(output_path)
+                continue
+            
+            # Add to output files list
+            output_files.append({
+                'filename': output_filename,
+                's3_key': s3_key,
+                'start_time': start_time,
+                'end_time': end_time,
+                'duration': duration
+            })
+            
+            logger.info(f"🎉 Segment {part_num} completed successfully!")
+            
+        except subprocess.TimeoutExpired:
+            logger.error(f"❌ FFmpeg timeout (120s) for segment {part_num}")
             continue
-        
-        # Upload to S3
-        s3_key = f"outputs/{job_id}/{output_filename}"
-        s3.upload_file(output_path, output_bucket, s3_key)
-        
-        output_files.append({
-            'filename': output_filename,
-            's3_key': s3_key,
-            'start_time': start_time,
-            'end_time': end_time,
-            'duration': duration
-        })
-        
-        # Clean up local file
-        os.remove(output_path)
+        except Exception as segment_error:
+            logger.error(f"❌ Unexpected error creating segment {part_num}: {str(segment_error)}")
+            continue
+        finally:
+            # Always clean up local file
+            if os.path.exists(output_path):
+                os.remove(output_path)
+                logger.info(f"🧹 Cleaned up local file: {output_path}")
     
+    logger.info(f"🏁 Splitting completed: {len(output_files)} segments successfully created")
     return output_files
 
 def split_by_intervals(input_path: str, output_bucket: str, job_id: str,
