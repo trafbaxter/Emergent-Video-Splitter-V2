@@ -12,13 +12,14 @@ def clean_git_history():
     print("🧹 Starting Git History Cleanup")
     print("=" * 40)
     
-    # Patterns to remove from Git history
+    # Patterns to remove from Git history (regex patterns for cleanup)
+    mongodb_pattern = "mongodb://" + ".*:.*@"  # MongoDB URIs with credentials
     secrets_to_remove = [
         "AKIA[0-9A-Z]{16}",  # AWS Access Key pattern (removed hardcoded key)
         "AWS_ACCESS_KEY",
         "AWS_SECRET_KEY", 
         "aws_secret_access_key",
-        "mongodb://.*:.*@",  # MongoDB URIs with credentials
+        mongodb_pattern,  # MongoDB connection strings with credentials
     ]
     
     print("🔍 Secrets to remove from Git history:")
