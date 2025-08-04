@@ -219,8 +219,22 @@ def extract_with_ffmpeg(input_path: str, job_id: str) -> Dict[str, Any]:
                 }
                 logger.info(f"✅ Extracted audio info: {audio_info}")
         
-        # Count subtitle streams
-        subtitle_streams_count = metadata_output.count("Subtitle:")
+        # Count subtitle streams - improved detection
+        subtitle_streams_count = 0
+        if "Subtitle:" in metadata_output:
+            import re
+            # Look for stream lines that contain "Subtitle:"
+            # Format is typically: "Stream #0:2(eng): Subtitle: subrip" or similar
+            subtitle_matches = re.findall(r'Stream #\d+:\d+(?:\([^)]*\))?: Subtitle:', metadata_output)
+            subtitle_streams_count = len(subtitle_matches)
+            logger.info(f"✅ Found {subtitle_streams_count} subtitle streams using regex pattern")
+            
+            # If regex fails, fall back to simple count but with better logging
+            if subtitle_streams_count == 0:
+                subtitle_streams_count = metadata_output.count("Subtitle:")
+                logger.info(f"✅ Fallback subtitle count: {subtitle_streams_count}")
+        else:
+            logger.info("ℹ️ No subtitle streams detected in FFmpeg output")
         
         # Get file size
         import os
