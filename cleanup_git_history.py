@@ -14,7 +14,7 @@ def clean_git_history():
     
     # Patterns to remove from Git history
     secrets_to_remove = [
-        "REDACTED_AWS_KEY",  # AWS Access Key found in history
+        "AKIA[0-9A-Z]{16}",  # AWS Access Key pattern (removed hardcoded key)
         "AWS_ACCESS_KEY",
         "AWS_SECRET_KEY", 
         "aws_secret_access_key",
