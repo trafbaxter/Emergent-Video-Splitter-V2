@@ -23,7 +23,10 @@ def check_for_hardcoded_secrets():
     extensions = ['.py', '.js', '.jsx', '.ts', '.tsx', '.json', '.yaml', '.yml', '.env']
     
     # Directories to skip
-    skip_dirs = {'node_modules', '.git', '__pycache__', 'lambda_deps', 'python_deps', 'final_lambda'}
+    skip_dirs = {'node_modules', '.git', '__pycache__', 'lambda_deps', 'python_deps', 'final_lambda', 'build', 'dist', 'amplify'}
+    
+    # Files to skip (contain only package metadata, not secrets)
+    skip_files = {'package-lock.json', 'yarn.lock', 'cli.json'}
     
     findings = []
     
