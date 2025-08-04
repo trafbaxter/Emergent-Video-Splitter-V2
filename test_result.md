@@ -479,7 +479,27 @@ test_plan:
   test_all: false
   test_priority: "high_first"
 
+  - task: "Download endpoint 500 Internal Server Error fix"
+    implemented: true
+    working: false
+    file: "/app/lambda_function.py"
+    stuck_count: 0
+    priority: "critical"
+    needs_retesting: true
+    status_history:
+      - working: false
+        agent: "user"
+        comment: "User reports 500 Internal Server Error when clicking Download button for split video parts. Video splitting works correctly but download functionality fails."
+      - working: false
+        agent: "main"
+        comment: "IDENTIFIED ROOT CAUSE: handle_download function uses direct access to event['pathParameters']['job_id'] and event['pathParameters']['filename'] without robust error handling. Other functions have been updated to handle cases where pathParameters is None, but download function still uses old pattern. This causes KeyError resulting in 500 error."
+      - working: "implemented"
+        agent: "main"
+        comment: "FIXED: Updated handle_download function with robust path parameter extraction (same pattern as handle_split_video and handle_job_status). Added: 1) Null-safe pathParameters access, 2) Fallback path extraction from URL, 3) File existence check in S3 before generating presigned URL, 4) Comprehensive error handling and logging, 5) Proper 404 response for missing files. Lambda function deployed successfully to AWS."
+
 agent_communication:
+  - agent: "main"
+    message: "DOWNLOAD FUNCTIONALITY FIX: Successfully identified and fixed the 500 Internal Server Error in the download endpoint. The issue was caused by direct access to pathParameters without null checking, while other functions had been updated with robust error handling. Fixed by updating handle_download function with the same defensive pattern used in other endpoints. Lambda function updated and deployed. Ready for backend testing to verify the download functionality is working correctly."
   - agent: "main"
     message: "Implemented complete video splitting application with FFmpeg integration. All backend endpoints and frontend components are ready for testing. FFmpeg is installed and configured. Need to test video upload, analysis, splitting functionality, and subtitle preservation."
   - agent: "testing"
