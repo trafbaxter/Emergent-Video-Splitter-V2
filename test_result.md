@@ -502,11 +502,11 @@ test_plan:
 
   - task: "Subtitle stream detection accuracy fix"
     implemented: true
-    working: false
-    file: "/app/ffmpeg_lambda_function.py"
+    working: true
+    file: "/app/lambda_function.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: false
         agent: "user"
@@ -520,6 +520,9 @@ test_plan:
       - working: "fixed"
         agent: "main"
         comment: "CRITICAL BUG FIXED: Found root cause - main Lambda was hardcoding 'subtitle_streams': [] instead of using data from FFmpeg Lambda. Enhanced logging revealed FFmpeg Lambda correctly detects subtitles (Found 1 subtitle streams using regex pattern) but main Lambda ignored this. Fixed by properly mapping subtitle_streams count from FFmpeg Lambda response. Both main and FFmpeg Lambda functions deployed. The subtitle detection is now working end-to-end."
+      - working: true
+        agent: "user"
+        comment: "User confirmed: 'It works! The splitting worked as well and kept the subtitles.' Subtitle detection now shows correct count and video splitting preserves subtitles successfully. Complete end-to-end functionality verified."
 
 agent_communication:
   - agent: "main"
