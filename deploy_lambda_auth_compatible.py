@@ -200,6 +200,8 @@ def deploy_lambda_with_compatible_auth(zip_path):
 def test_authentication_endpoints():
     """Test authentication endpoints to verify deployment"""
     
+    import json  # Import json at the top of the function
+    
     print("\n🧪 Testing authentication endpoints...")
     
     lambda_client = boto3.client('lambda')
