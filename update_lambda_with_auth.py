@@ -30,9 +30,9 @@ def update_lambda_function():
         print("🔧 Updating Lambda function configuration...")
         
         env_vars = {
-            'MONGO_URL': 'mongodb://3.235.150.62:27017',
-            'JWT_SECRET': 'tads-video-splitter-jwt-secret-2025-change-in-production',
-            'JWT_REFRESH_SECRET': 'tads-video-splitter-refresh-secret-2025-change-in-production'
+            'MONGO_URL': os.environ.get('MONGO_URL', 'mongodb://localhost:27017'),
+            'JWT_SECRET': os.environ.get('JWT_SECRET', 'generate-secure-secret-key'),
+            'JWT_REFRESH_SECRET': os.environ.get('JWT_REFRESH_SECRET', 'generate-secure-refresh-key')
         }
         
         config_response = lambda_client.update_function_configuration(
