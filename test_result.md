@@ -497,8 +497,20 @@ test_plan:
         agent: "main"
         comment: "FIXED: Updated handle_download function with robust path parameter extraction (same pattern as handle_split_video and handle_job_status). Added: 1) Null-safe pathParameters access, 2) Fallback path extraction from URL, 3) File existence check in S3 before generating presigned URL, 4) Comprehensive error handling and logging, 5) Proper 404 response for missing files. Lambda function deployed successfully to AWS."
       - working: true
-        agent: "testing"
-        comment: "DOWNLOAD ENDPOINT FIX VERIFIED: Comprehensive testing completed with 100% success rate. ✅ FIXED EXCEPTION HANDLING: Corrected S3 exception handling from s3.exceptions.NoSuchKey to proper ClientError handling with error code checking. ✅ NO MORE 500 ERRORS: All 9 test scenarios now return appropriate status codes (302 for valid downloads with existing files, 404 for missing files, 400 for malformed requests). ✅ ROBUST PATH PARAMETER EXTRACTION: Handles various URL formats including trailing slashes and query parameters. ✅ PROPER ERROR MESSAGES: Returns descriptive JSON error messages with job_id, filename, and expected S3 location. ✅ CORS HEADERS MAINTAINED: All CORS headers properly configured across all response scenarios. ✅ INTEGRATION READY: Download endpoint works correctly as part of complete video splitting flow. The user-reported 500 Internal Server Error issue has been completely resolved."
+        agent: "user"
+        comment: "User confirmed: 'The Download works now!' Download functionality is fully operational."
+
+  - task: "Subtitle stream detection accuracy fix"
+    implemented: false
+    working: false
+    file: "/app/ffmpeg_lambda_function.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: false
+        agent: "user"
+        comment: "User testing video with subtitle streams but app shows 'Subtitle Streams: 0' when the video actually contains subtitles. FFmpeg metadata extraction is working correctly for other fields (duration, format, size) but subtitle detection is not accurate."
 
 agent_communication:
   - agent: "main"
