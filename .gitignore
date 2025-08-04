@@ -10,6 +10,7 @@ lambda_package/
 .env.local
 .env.production
 .env.staging
+.env.*
 
 # AWS credentials (NEVER commit these)
 .aws/
