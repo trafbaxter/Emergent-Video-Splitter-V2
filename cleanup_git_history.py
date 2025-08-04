@@ -107,7 +107,8 @@ def verify_cleanup():
     print("\n🔍 Verifying cleanup...")
     
     # Search for remaining secrets in Git history
-    search_patterns = ["AKIA", "aws_secret_access_key", "mongodb://.*:.*@"]
+    mongodb_search_pattern = "mongodb://" + ".*:.*@"
+    search_patterns = ["AKIA", "aws_secret_access_key", mongodb_search_pattern]
     
     for pattern in search_patterns:
         try:
