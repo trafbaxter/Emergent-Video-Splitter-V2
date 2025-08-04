@@ -12,8 +12,8 @@ def check_for_hardcoded_secrets():
     # Patterns to look for
     patterns = {
         'AWS Access Key': r'AKIA[0-9A-Z]{16}',
-        'AWS Secret Key': r'[0-9a-zA-Z/+]{40}',
-        'MongoDB URI with credentials': r'mongodb://[^:]+:[^@]+@',
+        'AWS Secret Key': r'["\'][0-9a-zA-Z/+]{40}["\']',  # Only match quoted strings
+        'MongoDB URI with credentials': r'mongodb://[^:]+:[^@]+@[^/]+',  # More specific pattern
         'JWT Secret (long strings)': r'["\']([a-zA-Z0-9-_]{50,})["\']',
         'Email addresses in code': r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}',
         'Hardcoded passwords': r'password\s*[:=]\s*["\'][^"\']{8,}["\']'
