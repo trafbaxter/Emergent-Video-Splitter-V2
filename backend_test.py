@@ -17,14 +17,18 @@ print(f"Testing AWS Lambda Backend at: {API_URL}")
 class AWSLambdaBackendTest(unittest.TestCase):
     """Test suite for the AWS Lambda Video Splitter Backend API
     
-    Focus on testing recent fixes:
-    1. Fixed hardcoded duration=0 issue - now estimates duration based on file size
-    2. Changed video-stream endpoint to return JSON with stream_url instead of redirect
-    3. Test video-info endpoint to verify duration is no longer 0
-    4. Test video-stream endpoint to verify it returns JSON with stream_url
-    5. Verify S3 presigned URLs are being generated correctly
-    6. Test metadata extraction shows estimated duration instead of 0
-    7. Ensure all CORS headers are still properly configured
+    Focus on testing core video processing functionality now that basic Lambda execution is working:
+    1. Health Check: Test basic API endpoint functionality
+    2. Video Upload: Test S3 presigned URL generation (core S3/AWS functionality)
+    3. Video Info: Test metadata extraction endpoint 
+    4. Video Streaming: Test video streaming capability
+    5. Core Processing: Test splitting functionality if possible
+    
+    Expected Behavior:
+    - Should NOT get 502 Internal Server Errors anymore
+    - May get 404 for non-existent videos (expected behavior)
+    - S3 presigned URL generation should work (doesn't need auth dependencies)
+    - Video metadata endpoints should respond appropriately
     """
     
     @classmethod
