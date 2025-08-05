@@ -808,6 +808,16 @@ def lambda_handler(event, context):
             return handle_user_profile(event)
         elif path == '/api/generate-presigned-url':
             return handle_generate_presigned_url(event)
+        elif path.startswith('/api/video-stream/'):
+            return handle_video_stream(event)
+        elif path == '/api/get-video-info':
+            return handle_get_video_info(event)
+        elif path == '/api/split-video':
+            return handle_split_video(event)
+        elif path.startswith('/api/job-status/'):
+            return handle_job_status(event)
+        elif path.startswith('/api/download/'):
+            return handle_download_file(event)
         else:
             # Return 404 for unknown paths
             return {
