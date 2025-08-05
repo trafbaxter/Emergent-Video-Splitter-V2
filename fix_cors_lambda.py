@@ -666,6 +666,62 @@ def handle_get_video_info(event):
             'body': json.dumps({'message': 'Failed to get video info', 'error': str(e)})
         }
 
+def handle_check_metadata(event):
+    """Handle metadata check requests - check if cached metadata exists"""
+    origin = event.get('headers', {}).get('origin') or event.get('headers', {}).get('Origin')
+    
+    try:
+        # Extract S3 key from path
+        path = event.get('path', '')
+        s3_key = None
+        
+        if '/api/check-metadata/' in path:
+            s3_key = path.split('/api/check-metadata/')[-1]
+        
+        if not s3_key:
+            return {
+                'statusCode': 400,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'S3 key is required'})
+            }
+        
+        logger.info(f"Checking metadata for key: {s3_key}")
+        
+        # Check if cached metadata exists in S3
+        metadata_key = f"metadata/{s3_key.replace('/', '_')}.json"
+        try:
+            response = s3.get_object(Bucket=BUCKET_NAME, Key=metadata_key)
+            cached_metadata = json.loads(response['Body'].read())
+            logger.info(f"Found cached metadata: {cached_metadata}")
+            
+            return {
+                'statusCode': 200,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({
+                    'metadata_available': True,
+                    'metadata': cached_metadata
+                })
+            }
+            
+        except s3.exceptions.NoSuchKey:
+            logger.info("No cached metadata found")
+            return {
+                'statusCode': 200,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({
+                    'metadata_available': False,
+                    'message': 'Metadata not yet processed'
+                })
+            }
+            
+    except Exception as e:
+        logger.error(f"Check metadata error: {str(e)}")
+        return {
+            'statusCode': 500,
+            'headers': get_cors_headers(origin),
+            'body': json.dumps({'message': 'Failed to check metadata', 'error': str(e)})
+        }
+
 def get_immediate_fallback_metadata(s3_key):
     """Get immediate fallback metadata for instant response"""
     try:
