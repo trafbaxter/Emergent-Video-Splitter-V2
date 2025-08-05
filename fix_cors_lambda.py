@@ -848,18 +848,83 @@ def handle_job_status(event):
         }
 
 def handle_download_file(event):
-    """Handle file download requests - placeholder implementation"""
+    """Handle file download requests"""
     origin = event.get('headers', {}).get('origin') or event.get('headers', {}).get('Origin')
     
-    return {
-        'statusCode': 501,
-        'headers': get_cors_headers(origin),
-        'body': json.dumps({
-            'message': 'File download not yet implemented',
-            'note': 'This feature requires processed file management',
-            'status': 'coming_soon'
-        })
-    }
+    try:
+        # Extract job_id and filename from path
+        path = event.get('path', '')
+        
+        if '/api/download/' not in path:
+            return {
+                'statusCode': 400,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'Invalid download path'})
+            }
+        
+        # Parse path: /api/download/{job_id}/{filename}
+        path_parts = path.split('/api/download/')[-1].split('/')
+        if len(path_parts) < 2:
+            return {
+                'statusCode': 400,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'Job ID and filename are required'})
+            }
+        
+        job_id = path_parts[0]
+        filename = '/'.join(path_parts[1:])  # Handle filenames with slashes
+        
+        logger.info(f"Download request - Job ID: {job_id}, Filename: {filename}")
+        
+        # Generate download URL for the processed file
+        s3_key = f"results/{job_id}/{filename}"
+        
+        try:
+            # Check if file exists
+            s3.head_object(Bucket=BUCKET_NAME, Key=s3_key)
+            
+            # Generate presigned URL for download
+            download_url = s3.generate_presigned_url(
+                'get_object',
+                Params={
+                    'Bucket': BUCKET_NAME,
+                    'Key': s3_key,
+                    'ResponseContentDisposition': f'attachment; filename="{filename}"'
+                },
+                ExpiresIn=3600  # 1 hour for downloads
+            )
+            
+            return {
+                'statusCode': 200,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({
+                    'download_url': download_url,
+                    'filename': filename,
+                    'expires_in': 3600
+                })
+            }
+            
+        except s3.exceptions.NoSuchKey:
+            return {
+                'statusCode': 404,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'File not found or processing not completed'})
+            }
+        except Exception as s3_error:
+            logger.error(f"S3 error for download: {str(s3_error)}")
+            return {
+                'statusCode': 500,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'Failed to generate download URL', 'error': str(s3_error)})
+            }
+        
+    except Exception as e:
+        logger.error(f"Download error: {str(e)}")
+        return {
+            'statusCode': 500,
+            'headers': get_cors_headers(origin),
+            'body': json.dumps({'message': 'Failed to process download request', 'error': str(e)})
+        }
 
 def handle_generate_presigned_url(event):
     """Handle presigned URL generation for S3 uploads"""
