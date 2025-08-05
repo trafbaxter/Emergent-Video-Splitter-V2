@@ -81,21 +81,13 @@ FFMPEG_LAMBDA_FUNCTION = 'ffmpeg-converter'
 FFMPEG_LAMBDA_FUNCTION = 'ffmpeg-converter'
 
 def get_cors_headers(origin=None):
-    """Get CORS headers for API responses with origin checking"""
-    # Check if the origin is in our allowed list
-    allowed_origin = '*'  # Default fallback
-    
-    if origin:
-        for allowed in ALLOWED_ORIGINS:
-            if origin == allowed or origin.endswith(allowed.replace('https://', '').replace('http://', '')):
-                allowed_origin = origin
-                break
+    """Get CORS headers for API responses - temporary wildcard fix"""
     
     return {
-        'Access-Control-Allow-Origin': allowed_origin,
+        'Access-Control-Allow-Origin': '*',  # Temporary fix for CORS issues
         'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
         'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
-        'Access-Control-Allow-Credentials': 'true'
+        'Access-Control-Allow-Credentials': 'false'  # Must be false when using '*'
     }
 
 def get_mongo_client():
