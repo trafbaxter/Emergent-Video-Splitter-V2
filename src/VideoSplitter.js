@@ -484,7 +484,8 @@ const VideoSplitter = () => {
                 Choose Video File
               </h3>
               <p style={{ color: 'rgba(255,255,255,0.7)', margin: 0 }}>
-                Drag & drop or click to browse
+                Drag & drop or click to browse<br/>
+                <small>Supports: MP4, AVI, MOV, MKV, WebM, FLV, WMV, M4V</small>
               </p>
             </div>
           ) : (
