@@ -13,7 +13,7 @@ frontend:
       - '**/*'
   cache:
     paths:
-      - node_modules/**/*
+      - ~/.npm/**/*
   customHeaders:
     - pattern: '**/*'
       headers:
