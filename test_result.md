@@ -84,7 +84,7 @@ backend:
     implemented: true
     working: false
     file: "fix_cors_lambda.py"
-    stuck_count: 3
+    stuck_count: 4
     priority: "high"
     needs_retesting: false
     status_history:
@@ -103,6 +103,9 @@ backend:
       - working: false
         agent: "testing"
         comment: "❌ FFMPEG LAMBDA TIMEOUT CONFIRMED: Comprehensive testing shows POST /api/get-video-info endpoint is now RESTORED and calling real FFmpeg Lambda function, but FFmpeg Lambda consistently times out after ~29s with HTTP 504 'Endpoint request timed out'. The endpoint is no longer returning 404/501 placeholders - it's properly implemented and making FFmpeg calls. The issue is FFmpeg Lambda execution timeout, not endpoint implementation. This confirms the restoration was successful but FFmpeg processing needs timeout optimization."
+      - working: false
+        agent: "testing"
+        comment: "❌ MAIN LAMBDA TIMEOUT FIX FAILED: URGENT timeout fix testing shows that increasing main Lambda timeout from 30s→900s did NOT resolve the issue. POST /api/get-video-info still times out after 29.16s with HTTP 504. The timeout is NOT coming from the main Lambda function but from another component (likely FFmpeg Lambda, API Gateway, or other service). The 29-second timeout pattern suggests a 30-second limit elsewhere in the chain. Further investigation needed to identify the actual timeout source."
 
   - task: "Video Processing Endpoints"
     implemented: true
