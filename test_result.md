@@ -111,7 +111,7 @@ backend:
     implemented: true
     working: false
     file: "fix_cors_lambda.py"
-    stuck_count: 1
+    stuck_count: 2
     priority: "high"
     needs_retesting: false
     status_history:
@@ -124,6 +124,9 @@ backend:
       - working: false
         agent: "testing"
         comment: "❌ FFMPEG LAMBDA TIMEOUT: All video processing endpoints (POST /api/split-video, GET /api/job-status/{job_id}, GET /api/download/{job_id}/{filename}) are now RESTORED and calling real FFmpeg Lambda function, but consistently timeout after ~29s with HTTP 504 'Endpoint request timed out'. The endpoints are no longer returning 501 placeholders - they're properly implemented and making FFmpeg calls. The restoration was successful but FFmpeg Lambda execution needs timeout optimization. All endpoints now attempt real video processing instead of returning 'Not Implemented'."
+      - working: false
+        agent: "testing"
+        comment: "❌ MAIN LAMBDA TIMEOUT FIX FAILED: URGENT timeout fix testing shows that increasing main Lambda timeout from 30s→900s did NOT resolve the issue. POST /api/split-video still times out after 29.04s with HTTP 504. The timeout is NOT coming from the main Lambda function but from another component (likely FFmpeg Lambda, API Gateway, or other service). The consistent 29-second timeout pattern indicates a 30-second limit elsewhere in the architecture that needs to be identified and increased."
 
   - task: "S3 Presigned URL Generation"
     implemented: true
