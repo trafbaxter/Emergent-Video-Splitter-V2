@@ -2,7 +2,94 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useAuth } from './AuthContext';
 import './VideoSplitter.css';
 
-const VideoSplitter = () => {
+const VideoPlayer = ({ videoUrl, videoRef, currentTime, setCurrentTime, formatTime, filename }) => {
+  const [videoError, setVideoError] = useState(null);
+  const [canPlay, setCanPlay] = useState(false);
+  
+  const handleVideoError = (e) => {
+    console.error('Video error:', e);
+    console.error('Video error details:', e.target.error);
+    
+    if (e.target.error) {
+      const errorCode = e.target.error.code;
+      const errorMessage = e.target.error.message;
+      
+      let userFriendlyMessage = '';
+      if (errorCode === 4) {
+        userFriendlyMessage = `Format not supported: Your ${filename.split('.').pop().toUpperCase()} file cannot be previewed in the browser, but it can still be processed for splitting.`;
+      } else {
+        userFriendlyMessage = `Playback error (Code ${errorCode}): ${errorMessage}`;
+      }
+      
+      setVideoError(userFriendlyMessage);
+    }
+  };
+
+  if (videoError) {
+    return (
+      <div style={{
+        background: 'rgba(255, 165, 0, 0.2)',
+        border: '1px solid rgba(255, 165, 0, 0.4)',
+        borderRadius: '10px',
+        padding: '20px',
+        textAlign: 'center'
+      }}>
+        <div style={{ fontSize: '2rem', marginBottom: '10px' }}>⚠️</div>
+        <h4 style={{ color: '#ffa500', margin: '0 0 10px 0' }}>Video Preview Not Available</h4>
+        <p style={{ color: 'rgba(255,255,255,0.9)', margin: '0 0 15px 0', fontSize: '14px' }}>
+          {videoError}
+        </p>
+        <p style={{ color: 'rgba(255,255,255,0.7)', margin: 0, fontSize: '12px' }}>
+          You can still configure split points manually or use equal intervals for processing.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <video
+        ref={videoRef}
+        src={videoUrl}
+        controls
+        onTimeUpdate={(e) => setCurrentTime(e.target.currentTime)}
+        onLoadStart={() => {
+          console.log('Video loading started');
+          setVideoError(null);
+          setCanPlay(false);
+        }}
+        onLoadedData={() => console.log('Video data loaded')}
+        onError={handleVideoError}
+        onCanPlay={() => {
+          console.log('Video can play');
+          setCanPlay(true);
+        }}
+        style={{ 
+          width: '100%', 
+          borderRadius: '10px',
+          maxHeight: '300px'
+        }}
+        crossOrigin="anonymous"
+      />
+      <div style={{ 
+        marginTop: '15px', 
+        color: 'rgba(255,255,255,0.8)',
+        textAlign: 'center'
+      }}>
+        Current Time: {formatTime(currentTime)}
+        {canPlay && <span style={{ color: '#4ade80', marginLeft: '15px' }}>✓ Ready to play</span>}
+      </div>
+      <div style={{ 
+        marginTop: '5px', 
+        color: 'rgba(255,255,255,0.6)',
+        textAlign: 'center',
+        fontSize: '12px'
+      }}>
+        Stream URL: {videoUrl.substring(0, 50)}...
+      </div>
+    </div>
+  );
+};
   const { accessToken, API_BASE } = useAuth();
   
   // File handling
