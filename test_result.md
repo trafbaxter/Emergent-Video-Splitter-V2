@@ -84,7 +84,7 @@ backend:
     implemented: true
     working: false
     file: "fix_cors_lambda.py"
-    stuck_count: 1
+    stuck_count: 2
     priority: "high"
     needs_retesting: true
     status_history:
@@ -97,6 +97,9 @@ backend:
       - working: false
         agent: "testing"
         comment: "❌ CRITICAL REGRESSION: Video metadata extraction endpoint is now timing out (HTTP 504) after ~29 seconds. Cannot test enhanced MKV subtitle detection due to Lambda function timeout. Endpoint is listed in health check but not responding. This is a deployment/execution issue affecting video processing functionality."
+      - working: false
+        agent: "testing"
+        comment: "❌ TIMEOUT PERSISTS: S3 head_object() removal did NOT resolve the video metadata endpoint timeout. POST /api/get-video-info still times out after 29.07s with HTTP 504 Gateway Timeout. While video streaming endpoint was fixed, the metadata extraction endpoint continues to have timeout issues. This suggests the timeout problem is specifically in the video metadata processing logic, not the S3 head_object() call."
 
   - task: "Video Processing Endpoints"
     implemented: true
