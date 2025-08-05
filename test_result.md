@@ -106,9 +106,9 @@ backend:
 
   - task: "Video Processing Endpoints"
     implemented: true
-    working: true
+    working: false
     file: "fix_cors_lambda.py"
-    stuck_count: 0
+    stuck_count: 1
     priority: "high"
     needs_retesting: false
     status_history:
@@ -118,6 +118,9 @@ backend:
       - working: true
         agent: "testing"
         comment: "✅ RESOLVED: All video processing placeholder endpoints are now properly implemented and working as expected. POST /api/split-video, GET /api/job-status/{job_id}, and GET /api/download/{job_id}/{filename} all correctly return HTTP 501 'Not Implemented' with appropriate messages indicating they are coming soon. This is the expected behavior for placeholder endpoints and resolves the previous 404 errors."
+      - working: false
+        agent: "testing"
+        comment: "❌ FFMPEG LAMBDA TIMEOUT: All video processing endpoints (POST /api/split-video, GET /api/job-status/{job_id}, GET /api/download/{job_id}/{filename}) are now RESTORED and calling real FFmpeg Lambda function, but consistently timeout after ~29s with HTTP 504 'Endpoint request timed out'. The endpoints are no longer returning 501 placeholders - they're properly implemented and making FFmpeg calls. The restoration was successful but FFmpeg Lambda execution needs timeout optimization. All endpoints now attempt real video processing instead of returning 'Not Implemented'."
 
   - task: "S3 Presigned URL Generation"
     implemented: true
