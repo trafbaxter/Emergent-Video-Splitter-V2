@@ -737,34 +737,34 @@ class VideoSplitterTester:
         except Exception as e:
             self.log_test("S3 Bucket Access", False, f"Error: {str(e)}")
 
-    def run_all_tests(self):
-        """Run all tests focusing on newly restored video processing functionality"""
+    def run_timeout_fix_tests(self):
+        """Run focused tests on the timeout fix - main Lambda timeout increased from 30s to 900s"""
         print("=" * 80)
-        print("🚀 VIDEO PROCESSING RESTORATION TESTING")
+        print("🚨 URGENT: TIMEOUT FIX TESTING")
         print("=" * 80)
         print(f"Testing API Gateway URL: {self.base_url}")
         print(f"Expected S3 Bucket: {S3_BUCKET}")
         print()
-        print("🎯 FOCUS: Testing newly restored video processing functionality")
-        print("   1. Video metadata extraction - Now calls FFmpeg Lambda for real duration/metadata")
-        print("   2. Video splitting - Now calls FFmpeg Lambda (should return 202, not 501)")
-        print("   3. Job status tracking - Now checks S3 for completed results")
-        print("   4. Download functionality - Now generates presigned URLs for processed files")
+        print("🎯 CRITICAL TIMEOUT FIX TESTING:")
+        print("   Main Lambda timeout increased from 30 seconds → 900 seconds (15 minutes)")
+        print("   This should resolve the critical 29-second timeout issue blocking video processing")
+        print()
+        print("📋 TESTING FOCUS:")
+        print("   1. POST /api/get-video-info - Should return REAL video duration from FFmpeg")
+        print("   2. POST /api/split-video - Should return 202 and start processing (no timeout)")
+        print("   3. Response times - Should exceed 30 seconds without 504 errors")
         print()
         
-        # Run focused tests on restored functionality
-        self.test_video_metadata_extraction_real_ffmpeg()
-        self.test_video_splitting_real_processing()
-        self.test_job_status_tracking()
-        self.test_download_functionality_presigned_urls()
-        self.test_video_streaming_endpoint()
+        # Run focused timeout fix tests
+        self.test_timeout_fix_video_metadata()
+        self.test_timeout_fix_video_splitting()
         
         # Quick connectivity check
         self.test_basic_connectivity()
         
         # Summary
         print("=" * 80)
-        print("📊 VIDEO PROCESSING RESTORATION TEST SUMMARY")
+        print("📊 TIMEOUT FIX TEST SUMMARY")
         print("=" * 80)
         
         total_tests = len(self.test_results)
@@ -777,83 +777,83 @@ class VideoSplitterTester:
         print(f"Success Rate: {(passed_tests/total_tests)*100:.1f}%")
         print()
         
-        # Analyze restoration status
-        restoration_status = {
-            'metadata_extraction': False,
-            'video_splitting': False, 
-            'job_status': False,
-            'download_urls': False
+        # Analyze timeout fix status
+        timeout_fix_status = {
+            'metadata_no_timeout': False,
+            'splitting_no_timeout': False,
+            'real_ffmpeg_working': False
         }
         
         for result in self.test_results:
             if result['success']:
-                if 'metadata extraction' in result['test'].lower() and 'real ffmpeg' in result['details'].lower():
-                    restoration_status['metadata_extraction'] = True
-                elif 'video splitting' in result['test'].lower() and '202' in result['details']:
-                    restoration_status['video_splitting'] = True
-                elif 'job status' in result['test'].lower() and 'restored' in result['details'].lower():
-                    restoration_status['job_status'] = True
-                elif 'download functionality' in result['test'].lower() and 'restored' in result['details'].lower():
-                    restoration_status['download_urls'] = True
+                if 'timeout fix success' in result['test'].lower():
+                    if 'metadata' in result['test'].lower():
+                        timeout_fix_status['metadata_no_timeout'] = True
+                        if 'real ffmpeg' in result['details'].lower():
+                            timeout_fix_status['real_ffmpeg_working'] = True
+                    elif 'splitting' in result['test'].lower():
+                        timeout_fix_status['splitting_no_timeout'] = True
+                elif 'no timeout' in result['details'].lower():
+                    if 'metadata' in result['test'].lower():
+                        timeout_fix_status['metadata_no_timeout'] = True
+                    elif 'splitting' in result['test'].lower():
+                        timeout_fix_status['splitting_no_timeout'] = True
         
-        print("🔍 RESTORATION STATUS:")
-        print(f"   ✅ Video Metadata Extraction (Real FFmpeg): {'RESTORED' if restoration_status['metadata_extraction'] else 'NOT RESTORED'}")
-        print(f"   ✅ Video Splitting (202 Response): {'RESTORED' if restoration_status['video_splitting'] else 'NOT RESTORED'}")
-        print(f"   ✅ Job Status Tracking (S3 Check): {'RESTORED' if restoration_status['job_status'] else 'NOT RESTORED'}")
-        print(f"   ✅ Download URLs (Presigned): {'RESTORED' if restoration_status['download_urls'] else 'NOT RESTORED'}")
+        print("🔍 TIMEOUT FIX STATUS:")
+        print(f"   ✅ Video Metadata No Timeout: {'FIXED' if timeout_fix_status['metadata_no_timeout'] else 'STILL TIMING OUT'}")
+        print(f"   ✅ Video Splitting No Timeout: {'FIXED' if timeout_fix_status['splitting_no_timeout'] else 'STILL TIMING OUT'}")
+        print(f"   ✅ Real FFmpeg Processing: {'WORKING' if timeout_fix_status['real_ffmpeg_working'] else 'NOT CONFIRMED'}")
         print()
         
         # Failed tests details
-        if failed_tests > 0:
-            print("❌ FAILED TESTS:")
-            for result in self.test_results:
-                if not result['success']:
-                    print(f"   • {result['test']}: {result['details']}")
-            print()
-        
-        # Critical issues
-        timeout_issues = []
-        placeholder_issues = []
+        timeout_failures = []
+        other_failures = []
         
         for result in self.test_results:
             if not result['success']:
                 if '504' in result['details'] or 'timeout' in result['details'].lower():
-                    timeout_issues.append(result['test'])
-                elif '501' in result['details'] or 'placeholder' in result['details'].lower():
-                    placeholder_issues.append(result['test'])
+                    timeout_failures.append(result)
+                else:
+                    other_failures.append(result)
         
-        if timeout_issues:
-            print("🚨 TIMEOUT ISSUES (FFmpeg Lambda may be timing out):")
-            for issue in timeout_issues:
-                print(f"   • {issue}")
+        if timeout_failures:
+            print("🚨 TIMEOUT ISSUES STILL PRESENT:")
+            for result in timeout_failures:
+                print(f"   • {result['test']}: {result['details']}")
             print()
         
-        if placeholder_issues:
-            print("🚨 PLACEHOLDER ENDPOINTS (Not yet restored):")
-            for issue in placeholder_issues:
-                print(f"   • {issue}")
+        if other_failures:
+            print("❌ OTHER ISSUES:")
+            for result in other_failures:
+                print(f"   • {result['test']}: {result['details']}")
             print()
         
-        # Recommendations
-        print("💡 RECOMMENDATIONS:")
+        # Final assessment
+        print("💡 TIMEOUT FIX ASSESSMENT:")
         
-        restored_count = sum(restoration_status.values())
-        if restored_count == 4:
-            print("   🎉 ALL VIDEO PROCESSING FUNCTIONALITY SUCCESSFULLY RESTORED!")
-            print("   • Real FFmpeg Lambda integration is working")
-            print("   • Video splitting now processes instead of returning 501")
-            print("   • Job status tracking checks S3 for real results")
-            print("   • Download functionality generates proper presigned URLs")
-        elif restored_count >= 2:
-            print(f"   ✅ PARTIAL SUCCESS: {restored_count}/4 functionalities restored")
-            print("   • Continue working on remaining endpoints")
+        fixed_count = sum(timeout_fix_status.values())
+        if fixed_count == 3:
+            print("   🎉 TIMEOUT FIX COMPLETELY SUCCESSFUL!")
+            print("   • Video processing endpoints no longer timeout after 29 seconds")
+            print("   • Real FFmpeg processing is working")
+            print("   • Lambda timeout increase from 30s→900s resolved the issue")
+        elif fixed_count >= 1:
+            print(f"   ✅ PARTIAL SUCCESS: {fixed_count}/3 timeout issues resolved")
+            if not timeout_fix_status['metadata_no_timeout']:
+                print("   • Video metadata extraction still timing out")
+            if not timeout_fix_status['splitting_no_timeout']:
+                print("   • Video splitting still timing out")
+            if not timeout_fix_status['real_ffmpeg_working']:
+                print("   • Real FFmpeg processing not confirmed")
         else:
-            print("   ❌ RESTORATION INCOMPLETE: Most functionality still using placeholders")
-            print("   • Check Lambda deployment and FFmpeg integration")
+            print("   ❌ TIMEOUT FIX FAILED: All endpoints still timing out")
+            print("   • Lambda timeout increase from 30s→900s did NOT resolve the issue")
+            print("   • Further investigation needed - may be FFmpeg Lambda timeout, not main Lambda")
         
-        if timeout_issues:
-            print("   • Investigate FFmpeg Lambda timeout issues")
-            print("   • Consider increasing Lambda timeout or optimizing FFmpeg processing")
+        if timeout_failures:
+            print("   • Consider checking FFmpeg Lambda timeout settings")
+            print("   • Verify Lambda function configuration and deployment")
+            print("   • Check CloudWatch logs for detailed error information")
         
         print()
         print("=" * 80)
