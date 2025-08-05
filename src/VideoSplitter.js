@@ -809,7 +809,10 @@ const VideoSplitter = () => {
                   <select
                     value={outputFormat}
                     onChange={(e) => setOutputFormat(e.target.value)}
-                    style={inputStyle}
+                    style={{
+                      ...inputStyle,
+                      height: '45px'
+                    }}
                   >
                     <option value="mp4">MP4</option>
                     <option value="mkv">MKV</option>
