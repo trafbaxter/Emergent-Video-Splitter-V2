@@ -128,6 +128,21 @@ backend:
         agent: "testing"
         comment: "❌ MAIN LAMBDA TIMEOUT FIX FAILED: URGENT timeout fix testing shows that increasing main Lambda timeout from 30s→900s did NOT resolve the issue. POST /api/split-video still times out after 29.04s with HTTP 504. The timeout is NOT coming from the main Lambda function but from another component (likely FFmpeg Lambda, API Gateway, or other service). The consistent 29-second timeout pattern indicates a 30-second limit elsewhere in the architecture that needs to be identified and increased."
 
+  - task: "CORS Configuration Fix for working.tads-video-splitter.com"
+    implemented: true
+    working: true
+    file: "fix_cors_lambda.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "testing"
+        comment: "Need to test CORS configuration fix for working.tads-video-splitter.com domain after syntax error fix (missing comma in ALLOWED_ORIGINS)"
+      - working: true
+        agent: "testing"
+        comment: "✅ CORS FIX VERIFIED: working.tads-video-splitter.com domain now properly supported! Comprehensive testing shows: 1) Health check endpoint returns correct Access-Control-Allow-Origin header 2) CORS preflight requests (OPTIONS) work perfectly for all endpoints 3) Domain comparison confirms working domain behaves identically to develop/main domains 4) Unauthorized origins properly rejected 5) Missing comma syntax error successfully resolved. Success rate: 81.8% (9/11 tests passed). The 2 failures were due to unrelated FFmpeg Lambda timeout issues (504 errors), not CORS problems. User's CORS policy errors are now completely resolved."
+
   - task: "S3 Presigned URL Generation"
     implemented: true
     working: true
