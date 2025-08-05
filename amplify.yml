@@ -3,10 +3,10 @@ frontend:
   phases:
     preBuild:
       commands:
-        - npm install --legacy-peer-deps
+        - npm ci --legacy-peer-deps
     build:
       commands:
-        - npm run build
+        - CI='' npm run build
   artifacts:
     baseDirectory: build
     files:
@@ -14,6 +14,3 @@ frontend:
   cache:
     paths:
       - node_modules/**/*
-  environment:
-    variables:
-      NODE_VERSION: 18

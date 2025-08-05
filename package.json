@@ -19,10 +19,9 @@
     "react-scripts": "5.0.1"
   },
   "scripts": {
-    "start": "vite",
-    "build": "vite build",
-    "preview": "vite preview",
-    "test": "craco test",
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
     "eject": "react-scripts eject"
   },
   "browserslist": {
@@ -40,7 +39,6 @@
   "devDependencies": {
     "@craco/craco": "^7.1.0",
     "@eslint/js": "9.23.0",
-    "@vitejs/plugin-react": "^4.7.0",
     "autoprefixer": "^10.4.20",
     "eslint": "9.23.0",
     "eslint-plugin-import": "2.31.0",
@@ -48,6 +46,7 @@
     "eslint-plugin-react": "7.37.4",
     "globals": "15.15.0",
     "postcss": "^8.4.49",
+<<<<<<< HEAD
     "tailwindcss": "^3.4.17",
     "vite": "^7.0.6",
     "vite-plugin-eslint": "^1.8.1"
@@ -57,6 +56,9 @@
     "ajv-keywords": "3.5.2"
   }
 <<<<<<< HEAD
+=======
+    "tailwindcss": "^3.4.17"
+>>>>>>> ecb97bd5c580c887c9683178c55b93531e9c7a09
 }
 =======
 }
