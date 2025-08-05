@@ -79,11 +79,11 @@ backend:
 
   - task: "Video Metadata Extraction"
     implemented: true
-    working: true
+    working: false
     file: "fix_cors_lambda.py"
-    stuck_count: 0
+    stuck_count: 1
     priority: "high"
-    needs_retesting: false
+    needs_retesting: true
     status_history:
       - working: false
         agent: "testing"
@@ -91,6 +91,9 @@ backend:
       - working: true
         agent: "testing"
         comment: "✅ RESOLVED: POST /api/get-video-info endpoint is now fully implemented and working. Includes proper request validation (returns 400 for missing s3_key), enhanced metadata estimation based on file type (MKV files show 1 subtitle stream, MP4/AVI show 0), and returns comprehensive video metadata including duration, format, video_streams, audio_streams, and subtitle_streams. This resolves the user's issue with MKV files showing 0 subtitle streams."
+      - working: false
+        agent: "testing"
+        comment: "❌ CRITICAL REGRESSION: Video metadata extraction endpoint is now timing out (HTTP 504) after ~29 seconds. Cannot test enhanced MKV subtitle detection due to Lambda function timeout. Endpoint is listed in health check but not responding. This is a deployment/execution issue affecting video processing functionality."
 
   - task: "Video Processing Endpoints"
     implemented: true
