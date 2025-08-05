@@ -1,18 +1,17 @@
 {
-  "name": "video-splitter-pro",
+  "name": "frontend",
   "version": "0.1.0",
   "private": true,
   "dependencies": {
+    "@aws-amplify/api": "^6.3.15",
+    "@aws-amplify/storage": "^6.9.3",
+    "@aws-amplify/ui-react": "^6.11.2",
+    "aws-amplify": "^6.15.3",
+    "axios": "^1.8.4",
+    "cra-template": "1.2.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-<<<<<<< HEAD
-<<<<<<< HEAD
-    "react-router-dom": "^7.5.1",
-=======
     "react-router-dom": "^7.7.1",
->>>>>>> 3c1a9381a2bbf306e9e3761b31de97962165c8fc
-=======
->>>>>>> 6bebed3bb6b61fa244e776e02a84a540dcfabb90
     "react-scripts": "5.0.1"
   },
   "scripts": {
@@ -32,7 +31,6 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
-<<<<<<< HEAD
   },
   "devDependencies": {
     "@craco/craco": "^7.1.0",
@@ -44,28 +42,6 @@
     "eslint-plugin-react": "7.37.4",
     "globals": "15.15.0",
     "postcss": "^8.4.49",
-<<<<<<< HEAD
-    "tailwindcss": "^3.4.17",
-    "vite": "^7.0.6",
-    "vite-plugin-eslint": "^1.8.1"
-  },
-  "resolutions": {
-    "ajv": "6.12.6",
-    "ajv-keywords": "3.5.2"
-  }
-<<<<<<< HEAD
-=======
     "tailwindcss": "^3.4.17"
-<<<<<<< HEAD
->>>>>>> ecb97bd5c580c887c9683178c55b93531e9c7a09
-=======
-  }
->>>>>>> 603b81ff2c065eff99d7cc65f3ae2b68d510abe8
-}
-=======
-}
->>>>>>> 3c1a9381a2bbf306e9e3761b31de97962165c8fc
-=======
   }
 }
->>>>>>> 6bebed3bb6b61fa244e776e02a84a540dcfabb90

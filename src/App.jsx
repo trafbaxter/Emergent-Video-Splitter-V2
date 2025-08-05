@@ -725,11 +725,10 @@ function App() {
       <AppContent />
 =======
 import React from 'react';
-import VideoSplitter from './components/VideoSplitter';
-import './App.css';
 
 function App() {
   return (
+<<<<<<< HEAD
     <div className="App">
       <header className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -750,6 +749,33 @@ function App() {
       <main>
         <VideoSplitter />
       </main>
+=======
+    <div style={{ padding: '20px', fontFamily: 'Arial, sans-serif' }}>
+      <h1>Video Splitter Pro</h1>
+      <p>Your video processing application is working!</p>
+      <div style={{ 
+        border: '2px dashed #007bff', 
+        padding: '40px', 
+        margin: '20px 0',
+        borderRadius: '8px',
+        textAlign: 'center'
+      }}>
+        <h3>Upload Video</h3>
+        <input type="file" accept="video/*" />
+        <br /><br />
+        <button style={{
+          backgroundColor: '#007bff',
+          color: 'white',
+          padding: '10px 20px',
+          border: 'none',
+          borderRadius: '4px',
+          cursor: 'pointer'
+        }}>
+          Process Video
+        </button>
+      </div>
+      <p>Backend API: Connected to AWS Lambda with Authentication</p>
+>>>>>>> 6bebed3bb6b61fa244e776e02a84a540dcfabb90
     </div>
 >>>>>>> ecb97bd5c580c887c9683178c55b93531e9c7a09
   );
