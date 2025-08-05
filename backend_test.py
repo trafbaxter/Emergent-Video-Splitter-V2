@@ -659,55 +659,79 @@ class VideoSplitterTester:
                     f"Error: {str(e)}"
                 )
 
-    def test_ffmpeg_integration(self):
-        """Test 7: FFmpeg Lambda integration"""
-        print("🔍 Testing FFmpeg Lambda Integration...")
+    def test_video_streaming_endpoint(self):
+        """Test 5: Video streaming endpoint (should work as before)"""
+        print("🔍 Testing Video Streaming Endpoint...")
         
-        # This is tested indirectly through video metadata extraction
-        # The lambda_function_with_fallback.py calls the ffmpeg-converter Lambda function
+        test_keys = [
+            "uploads/test-video.mp4",
+            "test/sample-mkv-file.mkv",
+            "demo/example-video.mp4"
+        ]
         
-        try:
-            # Test with a realistic object key to see if FFmpeg Lambda is called
-            metadata_data = {
-                "objectKey": "uploads/test-video-for-ffmpeg.mp4"
-            }
-            
-            response = self.session.post(f"{self.base_url}/api/get-video-info", json=metadata_data)
-            
-            # Check response time to infer if FFmpeg processing is attempted
-            response_time = response.elapsed.total_seconds()
-            
-            if response.status_code == 404:
-                # Expected for non-existent file, but should be fast if FFmpeg integration works
-                if response_time < 5:
+        for test_key in test_keys:
+            try:
+                start_time = time.time()
+                response = self.session.get(f"{self.base_url}/api/video-stream/{test_key}")
+                response_time = time.time() - start_time
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    expected_fields = ['stream_url', 's3_key', 'expires_in']
+                    
+                    if all(field in data for field in expected_fields):
+                        stream_url = data['stream_url']
+                        
+                        if 'amazonaws.com' in stream_url and 'Signature' in stream_url:
+                            self.log_test(
+                                f"Video Streaming - {test_key.split('/')[-1]}",
+                                True,
+                                f"Valid streaming URL generated. Response time={response_time:.2f}s"
+                            )
+                        else:
+                            self.log_test(
+                                f"Video Streaming - {test_key.split('/')[-1]}",
+                                False,
+                                f"Invalid streaming URL format"
+                            )
+                    else:
+                        missing_fields = [f for f in expected_fields if f not in data]
+                        self.log_test(
+                            f"Video Streaming - {test_key.split('/')[-1]}",
+                            False,
+                            f"Missing expected fields: {missing_fields}",
+                            data
+                        )
+                        
+                elif response.status_code == 404:
+                    # Expected for non-existent files
                     self.log_test(
-                        "FFmpeg Lambda Integration",
+                        f"Video Streaming - {test_key.split('/')[-1]}",
                         True,
-                        f"FFmpeg integration appears functional (fast 404 response: {response_time:.2f}s)"
+                        f"Endpoint working (404 for non-existent file is expected). Response time={response_time:.2f}s"
                     )
+                    
+                elif response.status_code == 504:
+                    self.log_test(
+                        f"Video Streaming - {test_key.split('/')[-1]}",
+                        False,
+                        f"Gateway timeout (504) after {response_time:.2f}s"
+                    )
+                    
                 else:
                     self.log_test(
-                        "FFmpeg Lambda Integration",
+                        f"Video Streaming - {test_key.split('/')[-1]}",
                         False,
-                        f"Slow response suggests FFmpeg timeout issues ({response_time:.2f}s)"
+                        f"HTTP {response.status_code}. Response time={response_time:.2f}s",
+                        response.json() if response.content else {}
                     )
-            elif response.status_code == 500:
-                error_data = response.json() if response.content else {}
-                error_msg = error_data.get('error', 'Unknown error')
-                
-                if 'ffmpeg' in error_msg.lower() or 'lambda' in error_msg.lower():
-                    self.log_test("FFmpeg Lambda Integration", False, f"FFmpeg Lambda error: {error_msg}")
-                else:
-                    self.log_test("FFmpeg Lambda Integration", False, f"Server error: {error_msg}")
-            else:
+                    
+            except Exception as e:
                 self.log_test(
-                    "FFmpeg Lambda Integration",
-                    True,
-                    f"FFmpeg integration accessible (HTTP {response.status_code}, {response_time:.2f}s)"
+                    f"Video Streaming - {test_key.split('/')[-1]}",
+                    False,
+                    f"Error: {str(e)}"
                 )
-                
-        except Exception as e:
-            self.log_test("FFmpeg Lambda Integration", False, f"Error: {str(e)}")
 
     def test_s3_bucket_access(self):
         """Test 8: S3 bucket configuration and access"""
