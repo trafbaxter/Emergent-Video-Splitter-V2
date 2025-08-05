@@ -59,6 +59,54 @@ backend:
         agent: "testing"
         comment: "✅ End-to-end user registration working perfectly - tested with realistic user data (Sarah Johnson, Mike Chen), complete registration → login → profile access flow successful with demo mode fallback"
 
+  - task: "Video Streaming Endpoint"
+    implemented: false
+    working: false
+    file: "fix_cors_lambda.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: false
+        agent: "testing"
+        comment: "❌ CRITICAL: GET /api/video-stream/{key} endpoint is advertised in health check but NOT implemented in Lambda function. Returns 404 for all requests, causing video preview to show 'loading...' indefinitely. This directly explains user's reported issue."
+
+  - task: "Video Metadata Extraction"
+    implemented: false
+    working: false
+    file: "fix_cors_lambda.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: false
+        agent: "testing"
+        comment: "❌ CRITICAL: POST /api/get-video-info endpoint is advertised in health check but NOT implemented in Lambda function. Returns 404 for all requests, causing incorrect subtitle stream count (0 instead of detecting actual subtitles). This directly explains user's reported issue with MKV files showing 0 subtitle streams."
+
+  - task: "Video Processing Endpoints"
+    implemented: false
+    working: false
+    file: "fix_cors_lambda.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: false
+        agent: "testing"
+        comment: "❌ CRITICAL: Video processing endpoints (split-video, job-status, download) are advertised in health check but NOT implemented. Lambda function only handles authentication and presigned URLs. Complete video processing functionality is missing."
+
+  - task: "S3 Presigned URL Generation"
+    implemented: true
+    working: true
+    file: "fix_cors_lambda.py"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "✅ S3 presigned URL generation working correctly - users can upload files to S3 successfully. Upload workflow tested and confirmed working."
+
 frontend:
   - task: "Frontend Integration"
     implemented: true
