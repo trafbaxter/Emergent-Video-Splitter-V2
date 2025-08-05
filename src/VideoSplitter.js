@@ -1,5 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useAuth } from './AuthContext';
+import './VideoSplitter.css';
 
 const VideoSplitter = () => {
   const { accessToken, API_BASE } = useAuth();
@@ -444,8 +445,19 @@ const VideoSplitter = () => {
     boxSizing: 'border-box'
   };
 
+  const selectStyle = {
+    background: 'rgba(255, 255, 255, 0.1)',
+    border: '1px solid rgba(255, 255, 255, 0.3)',
+    borderRadius: '10px',
+    padding: '10px 15px',
+    color: 'white',
+    fontSize: '14px',
+    width: '100%',
+    boxSizing: 'border-box'
+  };
+
   return (
-    <div style={{ 
+    <div className="video-splitter" style={{ 
       minHeight: '100vh',
       background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
       padding: '40px 20px'
@@ -581,11 +593,19 @@ const VideoSplitter = () => {
                     src={videoUrl}
                     controls
                     onTimeUpdate={(e) => setCurrentTime(e.target.currentTime)}
+                    onLoadStart={() => console.log('Video loading started')}
+                    onLoadedData={() => console.log('Video data loaded')}
+                    onError={(e) => {
+                      console.error('Video error:', e);
+                      console.error('Video error details:', e.target.error);
+                    }}
+                    onCanPlay={() => console.log('Video can play')}
                     style={{ 
                       width: '100%', 
                       borderRadius: '10px',
                       maxHeight: '300px'
                     }}
+                    crossOrigin="anonymous"
                   />
                   <div style={{ 
                     marginTop: '15px', 
@@ -593,6 +613,14 @@ const VideoSplitter = () => {
                     textAlign: 'center'
                   }}>
                     Current Time: {formatTime(currentTime)}
+                  </div>
+                  <div style={{ 
+                    marginTop: '5px', 
+                    color: 'rgba(255,255,255,0.6)',
+                    textAlign: 'center',
+                    fontSize: '12px'
+                  }}>
+                    Stream URL: {videoUrl.substring(0, 50)}...
                   </div>
                 </div>
               ) : (
@@ -667,13 +695,13 @@ const VideoSplitter = () => {
                   value={splitMethod}
                   onChange={(e) => setSplitMethod(e.target.value)}
                   style={{
-                    ...inputStyle,
+                    ...selectStyle,
                     marginBottom: '20px',
                     height: '45px'
                   }}
                 >
-                  <option value="time">Time-based (Manual Points)</option>
-                  <option value="intervals">Equal Intervals</option>
+                  <option value="time" style={{backgroundColor: '#2d3748', color: 'white'}}>Time-based (Manual Points)</option>
+                  <option value="intervals" style={{backgroundColor: '#2d3748', color: 'white'}}>Equal Intervals</option>
                 </select>
 
                 {splitMethod === 'time' && (
@@ -810,15 +838,15 @@ const VideoSplitter = () => {
                     value={outputFormat}
                     onChange={(e) => setOutputFormat(e.target.value)}
                     style={{
-                      ...inputStyle,
+                      ...selectStyle,
                       height: '45px'
                     }}
                   >
-                    <option value="mp4">MP4</option>
-                    <option value="mkv">MKV</option>
-                    <option value="avi">AVI</option>
-                    <option value="mov">MOV</option>
-                    <option value="webm">WebM</option>
+                    <option value="mp4" style={{backgroundColor: '#2d3748', color: 'white'}}>MP4</option>
+                    <option value="mkv" style={{backgroundColor: '#2d3748', color: 'white'}}>MKV</option>
+                    <option value="avi" style={{backgroundColor: '#2d3748', color: 'white'}}>AVI</option>
+                    <option value="mov" style={{backgroundColor: '#2d3748', color: 'white'}}>MOV</option>
+                    <option value="webm" style={{backgroundColor: '#2d3748', color: 'white'}}>WebM</option>
                   </select>
                 </div>
 
