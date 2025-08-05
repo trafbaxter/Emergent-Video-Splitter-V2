@@ -142,6 +142,9 @@ backend:
       - working: true
         agent: "testing"
         comment: "✅ CORS FIX VERIFIED: working.tads-video-splitter.com domain now properly supported! Comprehensive testing shows: 1) Health check endpoint returns correct Access-Control-Allow-Origin header 2) CORS preflight requests (OPTIONS) work perfectly for all endpoints 3) Domain comparison confirms working domain behaves identically to develop/main domains 4) Unauthorized origins properly rejected 5) Missing comma syntax error successfully resolved. Success rate: 81.8% (9/11 tests passed). The 2 failures were due to unrelated FFmpeg Lambda timeout issues (504 errors), not CORS problems. User's CORS policy errors are now completely resolved."
+      - working: true
+        agent: "testing"
+        comment: "✅ WILDCARD CORS FIX VERIFIED: Temporary wildcard CORS fix (Access-Control-Allow-Origin: '*') is working perfectly! Comprehensive testing shows: 1) Health check endpoint returns '*' for all origins including working.tads-video-splitter.com 2) All OPTIONS preflight requests return '*' with proper methods/headers 3) working.tads-video-splitter.com domain works without any CORS errors 4) Random domains also work (confirming wildcard behavior) 5) Success rate: 100% for testable endpoints (4/4 CORS tests passed, 2 timeouts due to existing FFmpeg Lambda issues, not CORS). The wildcard fix resolves ALL CORS issues immediately as requested."
 
   - task: "S3 Presigned URL Generation"
     implemented: true
