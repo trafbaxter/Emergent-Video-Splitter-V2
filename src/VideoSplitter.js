@@ -1,5 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useAuth } from './AuthContext';
+import './VideoSplitter.css';
 
 const VideoSplitter = () => {
   const { accessToken, API_BASE } = useAuth();
