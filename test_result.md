@@ -61,11 +61,11 @@ backend:
 
   - task: "Video Streaming Endpoint"
     implemented: true
-    working: false
+    working: true
     file: "fix_cors_lambda.py"
-    stuck_count: 1
+    stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: false
         agent: "testing"
@@ -76,6 +76,9 @@ backend:
       - working: false
         agent: "testing"
         comment: "❌ CRITICAL REGRESSION: Video streaming endpoint is now timing out (HTTP 504) after ~29 seconds. Comprehensive testing of enhanced Content-Type handling for MKV files failed due to Lambda function timeout. Endpoint is listed in health check but not responding. This is a deployment/execution issue, not implementation. Presigned URL generation still works fine (0.57s response), indicating the issue is specific to video processing endpoints."
+      - working: true
+        agent: "testing"
+        comment: "✅ TIMEOUT ISSUE RESOLVED: S3 head_object() removal successfully fixed the video streaming endpoint timeout. GET /api/video-stream/test-mkv-file.mkv now responds in 0.99s (under 5s threshold) with HTTP 200. All expected fields present (stream_url, s3_key, expires_in), valid S3 presigned URLs generated, and correct content_type 'video/x-matroska' for MKV files. No more 504 Gateway Timeout errors for video streaming."
 
   - task: "Video Metadata Extraction"
     implemented: true
