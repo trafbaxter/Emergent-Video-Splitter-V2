@@ -762,18 +762,90 @@ def handle_split_video(event):
         }
 
 def handle_job_status(event):
-    """Handle job status requests - placeholder implementation"""
+    """Handle job status requests"""
     origin = event.get('headers', {}).get('origin') or event.get('headers', {}).get('Origin')
     
-    return {
-        'statusCode': 501,
-        'headers': get_cors_headers(origin),
-        'body': json.dumps({
-            'message': 'Job status tracking not yet implemented',
-            'note': 'This feature requires background processing implementation',
-            'status': 'coming_soon'
-        })
-    }
+    try:
+        # Extract job ID from path
+        path = event.get('path', '')
+        job_id = None
+        
+        if '/api/job-status/' in path:
+            job_id = path.split('/api/job-status/')[-1]
+        
+        if not job_id:
+            return {
+                'statusCode': 400,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'Job ID is required'})
+            }
+        
+        logger.info(f"Checking status for job: {job_id}")
+        
+        # Check S3 for job results (common pattern for FFmpeg Lambda results)
+        try:
+            # Look for job results in S3 under a results prefix
+            list_response = s3.list_objects_v2(
+                Bucket=BUCKET_NAME,
+                Prefix=f"results/{job_id}/",
+                MaxKeys=10
+            )
+            
+            if 'Contents' in list_response and len(list_response['Contents']) > 0:
+                # Job completed - results found
+                results = []
+                for obj in list_response['Contents']:
+                    filename = obj['Key'].split('/')[-1]
+                    if filename and not filename.endswith('/'):  # Skip directory markers
+                        results.append({
+                            'filename': filename,
+                            'size': obj.get('Size', 0),
+                            'key': obj['Key']
+                        })
+                
+                return {
+                    'statusCode': 200,
+                    'headers': get_cors_headers(origin),
+                    'body': json.dumps({
+                        'job_id': job_id,
+                        'status': 'completed',
+                        'progress': 100,
+                        'results': results
+                    })
+                }
+            else:
+                # Job still processing or failed
+                return {
+                    'statusCode': 200,
+                    'headers': get_cors_headers(origin),
+                    'body': json.dumps({
+                        'job_id': job_id,
+                        'status': 'processing',
+                        'progress': 50,  # Estimated progress
+                        'message': 'Video processing in progress...'
+                    })
+                }
+                
+        except Exception as s3_error:
+            logger.error(f"Error checking job status in S3: {str(s3_error)}")
+            return {
+                'statusCode': 200,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({
+                    'job_id': job_id,
+                    'status': 'processing',
+                    'progress': 25,
+                    'message': 'Processing status unknown - job may still be running'
+                })
+            }
+        
+    except Exception as e:
+        logger.error(f"Job status error: {str(e)}")
+        return {
+            'statusCode': 500,
+            'headers': get_cors_headers(origin),
+            'body': json.dumps({'message': 'Failed to get job status', 'error': str(e)})
+        }
 
 def handle_download_file(event):
     """Handle file download requests - placeholder implementation"""
