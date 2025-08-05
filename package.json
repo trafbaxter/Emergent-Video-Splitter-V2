@@ -1,5 +1,5 @@
 {
-  "name": "video-splitter-pro",
+  "name": "video-splitter-clean",
   "version": "0.1.0",
   "private": true,
   "dependencies": {
@@ -17,11 +17,10 @@
   },
   "scripts": {
     "start": "react-scripts start",
-    "build": "react-scripts build",
-    "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "build": "react-scripts build"
   },
   "browserslist": {
+<<<<<<< HEAD
     "production": [
       ">0.2%",
       "not dead",
@@ -52,6 +51,10 @@
   "resolutions": {
     "ajv": "6.12.6",
     "ajv-keywords": "3.5.2"
+=======
+    "production": [">0.2%", "not dead", "not op_mini all"],
+    "development": ["last 1 chrome version", "last 1 firefox version", "last 1 safari version"]
+>>>>>>> 1cb84d70f952a5961dde0f729fc366e868f55157
   }
 <<<<<<< HEAD
 =======
