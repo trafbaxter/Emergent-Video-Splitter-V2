@@ -674,18 +674,92 @@ def get_fallback_metadata(s3_key, origin):
         }
 
 def handle_split_video(event):
-    """Handle video splitting requests - placeholder implementation"""
+    """Handle video splitting requests using FFmpeg Lambda"""
     origin = event.get('headers', {}).get('origin') or event.get('headers', {}).get('Origin')
     
-    return {
-        'statusCode': 501,
-        'headers': get_cors_headers(origin),
-        'body': json.dumps({
-            'message': 'Video splitting not yet implemented',
-            'note': 'This feature requires FFmpeg Lambda layer implementation',
-            'status': 'coming_soon'
-        })
-    }
+    try:
+        body = json.loads(event['body'])
+        s3_key = body.get('s3_key')
+        
+        if not s3_key:
+            return {
+                'statusCode': 400,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'S3 key is required'})
+            }
+        
+        logger.info(f"Starting video split for key: {s3_key}")
+        logger.info(f"Split config: {json.dumps(body)}")
+        
+        # Generate job ID for tracking
+        job_id = str(uuid.uuid4())
+        
+        # Prepare FFmpeg Lambda payload
+        ffmpeg_payload = {
+            'operation': 'split_video',
+            'source_bucket': BUCKET_NAME,
+            'source_key': s3_key,
+            'job_id': job_id,
+            'split_config': {
+                'method': body.get('method', 'intervals'),
+                'time_points': body.get('time_points', []),
+                'interval_duration': body.get('interval_duration', 300),
+                'preserve_quality': body.get('preserve_quality', True),
+                'output_format': body.get('output_format', 'mp4'),
+                'keyframe_interval': body.get('keyframe_interval', 2),
+                'subtitle_offset': body.get('subtitle_offset', 0)
+            }
+        }
+        
+        logger.info(f"Calling FFmpeg Lambda for video splitting")
+        logger.info(f"FFmpeg payload: {json.dumps(ffmpeg_payload)}")
+        
+        try:
+            # Call FFmpeg Lambda asynchronously for long-running video processing
+            response = lambda_client.invoke(
+                FunctionName=FFMPEG_LAMBDA_FUNCTION,
+                InvocationType='Event',  # Async invocation
+                Payload=json.dumps(ffmpeg_payload)
+            )
+            
+            logger.info(f"FFmpeg Lambda invoked successfully, job_id: {job_id}")
+            
+            return {
+                'statusCode': 202,  # Accepted - processing started
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({
+                    'job_id': job_id,
+                    'status': 'processing',
+                    'message': 'Video splitting started',
+                    'estimated_time': 'Processing may take several minutes depending on video length'
+                })
+            }
+            
+        except Exception as ffmpeg_error:
+            logger.error(f"Failed to call FFmpeg Lambda: {str(ffmpeg_error)}")
+            return {
+                'statusCode': 500,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({
+                    'message': 'Failed to start video processing', 
+                    'error': str(ffmpeg_error),
+                    'note': 'FFmpeg Lambda function may not be available'
+                })
+            }
+        
+    except json.JSONDecodeError:
+        return {
+            'statusCode': 400,
+            'headers': get_cors_headers(origin),
+            'body': json.dumps({'message': 'Invalid JSON in request body'})
+        }
+    except Exception as e:
+        logger.error(f"Video split error: {str(e)}")
+        return {
+            'statusCode': 500,
+            'headers': get_cors_headers(origin),
+            'body': json.dumps({'message': 'Failed to split video', 'error': str(e)})
+        }
 
 def handle_job_status(event):
     """Handle job status requests - placeholder implementation"""
