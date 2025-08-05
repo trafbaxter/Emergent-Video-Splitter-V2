@@ -76,9 +76,10 @@ MONGODB_DB_NAME = os.environ.get('DB_NAME', 'videosplitter')
 # In-memory user storage for demo purposes (fallback when MongoDB not available)
 DEMO_USERS = {}
 
-# Initialize AWS clients
+# AWS clients
 s3 = boto3.client('s3')
 lambda_client = boto3.client('lambda')
+FFMPEG_LAMBDA_FUNCTION = 'ffmpeg-converter'
 FFMPEG_LAMBDA_FUNCTION = 'ffmpeg-converter'
 
 def get_cors_headers(origin=None):
