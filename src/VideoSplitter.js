@@ -598,6 +598,12 @@ const VideoSplitter = () => {
                     onError={(e) => {
                       console.error('Video error:', e);
                       console.error('Video error details:', e.target.error);
+                      
+                      // Show user-friendly error message for format issues
+                      if (e.target.error && e.target.error.code === 4) {
+                        // Format error - codec not supported
+                        console.warn('Video format not supported by browser player');
+                      }
                     }}
                     onCanPlay={() => console.log('Video can play')}
                     style={{ 
