@@ -91,13 +91,13 @@ def create_integrated_auth_package():
         if not all_present:
             print("⚠️  Some authentication packages missing - authentication may not work")
         
-        # Copy integrated Lambda function
-        print("\n📄 Adding integrated Lambda function code...")
-        if os.path.exists('lambda_function_integrated.py'):
-            shutil.copy2('lambda_function_integrated.py', os.path.join(package_dir, 'lambda_function.py'))
-            print("✅ Integrated Lambda function copied")
+        # Copy integrated Lambda function with fallback
+        print("\n📄 Adding integrated Lambda function code (with fallback)...")
+        if os.path.exists('lambda_function_with_fallback.py'):
+            shutil.copy2('lambda_function_with_fallback.py', os.path.join(package_dir, 'lambda_function.py'))
+            print("✅ Integrated Lambda function with fallback copied")
         else:
-            print("❌ lambda_function_integrated.py not found")
+            print("❌ lambda_function_with_fallback.py not found")
             return None
         
         # Create zip file
