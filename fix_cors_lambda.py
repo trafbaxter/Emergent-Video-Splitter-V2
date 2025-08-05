@@ -494,19 +494,16 @@ def handle_user_profile(event):
         }
 
 def handle_video_stream(event):
-    """Handle video streaming requests - fast and efficient"""
+    """Handle video streaming requests - using working master branch approach"""
     origin = event.get('headers', {}).get('origin') or event.get('headers', {}).get('Origin')
     
     try:
-        # Extract S3 key from path
-        path_parameters = event.get('pathParameters', {})
-        s3_key = path_parameters.get('key') if path_parameters else None
+        # Extract job_id from path (this is the S3 key in our case)
+        path = event.get('path', '')
+        s3_key = None
         
-        # Alternative: extract from path
-        if not s3_key:
-            path = event.get('path', '')
-            if '/api/video-stream/' in path:
-                s3_key = path.split('/api/video-stream/')[-1]
+        if '/api/video-stream/' in path:
+            s3_key = path.split('/api/video-stream/')[-1]
         
         if not s3_key:
             return {
@@ -515,48 +512,39 @@ def handle_video_stream(event):
                 'body': json.dumps({'message': 'S3 key is required'})
             }
         
-        logger.info(f"Generating video stream URL for key: {s3_key}")
+        logger.info(f"Video stream request for key: {s3_key}")
         
-        # Determine content type from file extension only (no S3 head_object call to avoid delays)
-        content_type = 'video/mp4'  # default
-        if s3_key.lower().endswith('.mkv'):
-            content_type = 'video/x-matroska'
-        elif s3_key.lower().endswith('.avi'):
-            content_type = 'video/x-msvideo'
-        elif s3_key.lower().endswith('.mov'):
-            content_type = 'video/quicktime'
-        elif s3_key.lower().endswith('.webm'):
-            content_type = 'video/webm'
-                
-        # Generate presigned URL for video streaming - fast and simple
         try:
+            # Check if the file exists (fast check)
+            s3.head_object(Bucket=BUCKET_NAME, Key=s3_key)
+            
+            # Generate simple presigned URL like the working version
             stream_url = s3.generate_presigned_url(
                 'get_object',
-                Params={
-                    'Bucket': BUCKET_NAME, 
-                    'Key': s3_key,
-                    'ResponseContentType': content_type
-                },
-                ExpiresIn=7200  # 2 hours for video streaming
+                Params={'Bucket': BUCKET_NAME, 'Key': s3_key},
+                ExpiresIn=3600  # 1 hour
             )
+            
+            logger.info(f"Generated stream URL for: {s3_key}")
             
             return {
                 'statusCode': 200,
                 'headers': get_cors_headers(origin),
-                'body': json.dumps({
-                    'stream_url': stream_url,
-                    's3_key': s3_key,
-                    'content_type': content_type,
-                    'expires_in': 7200
-                })
+                'body': json.dumps({'stream_url': stream_url})
             }
             
-        except Exception as e:
-            logger.error(f"Failed to generate stream URL: {str(e)}")
+        except s3.exceptions.NoSuchKey:
             return {
                 'statusCode': 404,
                 'headers': get_cors_headers(origin),
-                'body': json.dumps({'message': 'Video not found or access denied', 'error': str(e)})
+                'body': json.dumps({'error': 'Video not found'})
+            }
+        except Exception as s3_error:
+            logger.error(f"S3 error: {str(s3_error)}")
+            return {
+                'statusCode': 500,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'error': f'Failed to generate stream URL: {str(s3_error)}'})
             }
         
     except Exception as e:
@@ -564,7 +552,7 @@ def handle_video_stream(event):
         return {
             'statusCode': 500,
             'headers': get_cors_headers(origin),
-            'body': json.dumps({'message': 'Failed to generate video stream', 'error': str(e)})
+            'body': json.dumps({'error': f'Failed to process video stream request: {str(e)}'})
         }
 
 def handle_get_video_info(event):
