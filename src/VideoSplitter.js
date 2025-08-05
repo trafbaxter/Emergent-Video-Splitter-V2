@@ -363,7 +363,10 @@ const VideoSplitter = () => {
               </p>
               {!jobId && (
                 <button
-                  onClick={uploadFile}
+                  onClick={(e) => {
+                    e.stopPropagation(); // Prevent event bubbling to parent div
+                    uploadFile();
+                  }}
                   disabled={uploading}
                   style={{
                     marginTop: '20px',
