@@ -492,7 +492,7 @@ def handle_user_profile(event):
         }
 
 def handle_video_stream(event):
-    """Handle video streaming requests"""
+    """Handle video streaming requests - optimized for video playback"""
     origin = event.get('headers', {}).get('origin') or event.get('headers', {}).get('Origin')
     
     try:
@@ -515,21 +515,57 @@ def handle_video_stream(event):
         
         logger.info(f"Generating video stream URL for key: {s3_key}")
         
-        # Generate presigned URL for video streaming (longer expiration for streaming)
+        # Get file info to determine content type
+        try:
+            # First, get the file metadata to determine proper content type
+            head_response = s3.head_object(Bucket=BUCKET_NAME, Key=s3_key)
+            content_type = head_response.get('ContentType', 'video/mp4')
+            
+            # Fix content type for MKV files (this might be the key issue!)
+            if s3_key.lower().endswith('.mkv'):
+                content_type = 'video/x-matroska'
+            elif s3_key.lower().endswith('.mp4'):
+                content_type = 'video/mp4'
+            elif s3_key.lower().endswith('.avi'):
+                content_type = 'video/x-msvideo'
+            elif s3_key.lower().endswith('.mov'):
+                content_type = 'video/quicktime'
+            elif s3_key.lower().endswith('.webm'):
+                content_type = 'video/webm'
+                
+            logger.info(f"Content type for {s3_key}: {content_type}")
+            
+        except Exception as e:
+            logger.warning(f"Could not get file metadata: {e}")
+            content_type = 'video/mp4'  # fallback
+        
+        # Generate presigned URL for video streaming with proper headers
         try:
             stream_url = s3.generate_presigned_url(
                 'get_object',
-                Params={'Bucket': BUCKET_NAME, 'Key': s3_key},
+                Params={
+                    'Bucket': BUCKET_NAME, 
+                    'Key': s3_key,
+                    'ResponseContentType': content_type,
+                    'ResponseCacheControl': 'max-age=3600'
+                },
                 ExpiresIn=7200  # 2 hours for video streaming
             )
             
+            # Also set proper CORS headers that allow video streaming
+            cors_headers = get_cors_headers(origin)
+            cors_headers['Access-Control-Allow-Methods'] = 'GET, HEAD, OPTIONS'
+            cors_headers['Access-Control-Expose-Headers'] = 'Content-Range, Content-Length, Content-Type'
+            
             return {
                 'statusCode': 200,
-                'headers': get_cors_headers(origin),
+                'headers': cors_headers,
                 'body': json.dumps({
                     'stream_url': stream_url,
                     's3_key': s3_key,
-                    'expires_in': 7200
+                    'content_type': content_type,
+                    'expires_in': 7200,
+                    'note': 'Optimized for video streaming with proper Content-Type'
                 })
             }
             
@@ -538,7 +574,7 @@ def handle_video_stream(event):
             return {
                 'statusCode': 404,
                 'headers': get_cors_headers(origin),
-                'body': json.dumps({'message': 'Video not found or access denied'})
+                'body': json.dumps({'message': 'Video not found or access denied', 'error': str(e)})
             }
         
     except Exception as e:
