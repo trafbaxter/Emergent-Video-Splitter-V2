@@ -676,48 +676,14 @@ const VideoSplitter = () => {
               </h2>
               
               {videoUrl ? (
-                <div>
-                  <video
-                    ref={videoRef}
-                    src={videoUrl}
-                    controls
-                    onTimeUpdate={(e) => setCurrentTime(e.target.currentTime)}
-                    onLoadStart={() => console.log('Video loading started')}
-                    onLoadedData={() => console.log('Video data loaded')}
-                    onError={(e) => {
-                      console.error('Video error:', e);
-                      console.error('Video error details:', e.target.error);
-                      
-                      // Show user-friendly error message for format issues
-                      if (e.target.error && e.target.error.code === 4) {
-                        // Format error - codec not supported
-                        console.warn('Video format not supported by browser player');
-                      }
-                    }}
-                    onCanPlay={() => console.log('Video can play')}
-                    style={{ 
-                      width: '100%', 
-                      borderRadius: '10px',
-                      maxHeight: '300px'
-                    }}
-                    crossOrigin="anonymous"
-                  />
-                  <div style={{ 
-                    marginTop: '15px', 
-                    color: 'rgba(255,255,255,0.8)',
-                    textAlign: 'center'
-                  }}>
-                    Current Time: {formatTime(currentTime)}
-                  </div>
-                  <div style={{ 
-                    marginTop: '5px', 
-                    color: 'rgba(255,255,255,0.6)',
-                    textAlign: 'center',
-                    fontSize: '12px'
-                  }}>
-                    Stream URL: {videoUrl.substring(0, 50)}...
-                  </div>
-                </div>
+                <VideoPlayer 
+                  videoUrl={videoUrl}
+                  videoRef={videoRef}
+                  currentTime={currentTime}
+                  setCurrentTime={setCurrentTime}
+                  formatTime={formatTime}
+                  filename={selectedFile?.name || 'video'}
+                />
               ) : (
                 <div style={{
                   background: 'rgba(0,0,0,0.3)',
