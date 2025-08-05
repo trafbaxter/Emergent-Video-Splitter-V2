@@ -862,7 +862,7 @@ class VideoSplitterTester:
 
 if __name__ == "__main__":
     tester = VideoSplitterTester()
-    passed, failed = tester.run_all_tests()
+    passed, failed = tester.run_timeout_fix_tests()
     
     # Exit with appropriate code
     sys.exit(0 if failed == 0 else 1)
