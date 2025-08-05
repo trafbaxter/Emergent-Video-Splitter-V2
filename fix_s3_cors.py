@@ -9,7 +9,7 @@ import json
 from botocore.exceptions import ClientError
 
 # Configuration
-S3_BUCKET_NAME = 'videosplitter-uploads'
+S3_BUCKET_NAME = 'videosplitter-storage-1751560247'
 
 # Allowed origins for S3 CORS - matching our Lambda CORS configuration
 ALLOWED_ORIGINS = [
