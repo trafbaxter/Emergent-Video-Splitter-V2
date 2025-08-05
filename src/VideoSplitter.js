@@ -821,15 +821,15 @@ const VideoSplitter = () => {
                     value={outputFormat}
                     onChange={(e) => setOutputFormat(e.target.value)}
                     style={{
-                      ...inputStyle,
+                      ...selectStyle,
                       height: '45px'
                     }}
                   >
-                    <option value="mp4">MP4</option>
-                    <option value="mkv">MKV</option>
-                    <option value="avi">AVI</option>
-                    <option value="mov">MOV</option>
-                    <option value="webm">WebM</option>
+                    <option value="mp4" style={{backgroundColor: '#2d3748', color: 'white'}}>MP4</option>
+                    <option value="mkv" style={{backgroundColor: '#2d3748', color: 'white'}}>MKV</option>
+                    <option value="avi" style={{backgroundColor: '#2d3748', color: 'white'}}>AVI</option>
+                    <option value="mov" style={{backgroundColor: '#2d3748', color: 'white'}}>MOV</option>
+                    <option value="webm" style={{backgroundColor: '#2d3748', color: 'white'}}>WebM</option>
                   </select>
                 </div>
 
