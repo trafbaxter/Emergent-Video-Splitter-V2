@@ -127,8 +127,14 @@ metadata:
   run_ui: false
 
 test_plan:
-  current_focus: []
-  stuck_tasks: []
+  current_focus:
+    - "Video Streaming Endpoint"
+    - "Video Metadata Extraction"
+    - "Video Processing Endpoints"
+  stuck_tasks:
+    - "Video Streaming Endpoint"
+    - "Video Metadata Extraction"
+    - "Video Processing Endpoints"
   test_all: false
   test_priority: "high_first"
 
@@ -137,3 +143,5 @@ agent_communication:
     message: "Starting comprehensive CORS testing for AWS Lambda authentication system. Focus on testing multiple origins and verifying CORS headers are properly set."
   - agent: "testing"
     message: "✅ CORS TESTING COMPLETE - All tests passed (32/32, 100% success rate). The enhanced CORS configuration is working perfectly: 1) All 6 allowed origins properly supported 2) Authentication endpoints (register/login/profile) working with CORS 3) Health check exposes CORS config correctly 4) End-to-end user registration successful 5) CORS error resolution working for unauthorized origins. The Lambda function successfully handles requests from develop.tads-video-splitter.com, main.tads-video-splitter.com, working.tads-video-splitter.com, and localhost ports 3000/3001/127.0.0.1:3000. Authentication system is fully functional with demo mode fallback when MongoDB unavailable."
+  - agent: "testing"
+    message: "🚨 CRITICAL DISCOVERY: Video processing functionality is NOT implemented despite being advertised. Comprehensive testing revealed: 1) Video streaming endpoint (GET /api/video-stream/{key}) returns 404 - explains why video preview shows 'loading...' 2) Video metadata endpoint (POST /api/get-video-info) returns 404 - explains why subtitle count shows 0 instead of detecting actual subtitles 3) All video processing endpoints (split-video, job-status, download) return 404 4) Lambda function only implements authentication and presigned URLs 5) Health check falsely advertises 5 video endpoints that don't exist. User's reported issues are 100% confirmed and caused by missing backend implementation."
