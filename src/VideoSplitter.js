@@ -444,6 +444,17 @@ const VideoSplitter = () => {
     boxSizing: 'border-box'
   };
 
+  const selectStyle = {
+    background: 'rgba(255, 255, 255, 0.1)',
+    border: '1px solid rgba(255, 255, 255, 0.3)',
+    borderRadius: '10px',
+    padding: '10px 15px',
+    color: 'white',
+    fontSize: '14px',
+    width: '100%',
+    boxSizing: 'border-box'
+  };
+
   return (
     <div style={{ 
       minHeight: '100vh',
