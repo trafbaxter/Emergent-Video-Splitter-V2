@@ -592,11 +592,19 @@ const VideoSplitter = () => {
                     src={videoUrl}
                     controls
                     onTimeUpdate={(e) => setCurrentTime(e.target.currentTime)}
+                    onLoadStart={() => console.log('Video loading started')}
+                    onLoadedData={() => console.log('Video data loaded')}
+                    onError={(e) => {
+                      console.error('Video error:', e);
+                      console.error('Video error details:', e.target.error);
+                    }}
+                    onCanPlay={() => console.log('Video can play')}
                     style={{ 
                       width: '100%', 
                       borderRadius: '10px',
                       maxHeight: '300px'
                     }}
+                    crossOrigin="anonymous"
                   />
                   <div style={{ 
                     marginTop: '15px', 
@@ -604,6 +612,14 @@ const VideoSplitter = () => {
                     textAlign: 'center'
                   }}>
                     Current Time: {formatTime(currentTime)}
+                  </div>
+                  <div style={{ 
+                    marginTop: '5px', 
+                    color: 'rgba(255,255,255,0.6)',
+                    textAlign: 'center',
+                    fontSize: '12px'
+                  }}>
+                    Stream URL: {videoUrl.substring(0, 50)}...
                   </div>
                 </div>
               ) : (
