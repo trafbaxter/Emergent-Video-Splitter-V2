@@ -52,8 +52,8 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 30
 REFRESH_TOKEN_EXPIRE_DAYS = 7
 
 # MongoDB configuration
-MONGODB_URI = os.environ.get('MONGODB_URI', 'mongodb://localhost:27017/')
-MONGODB_DB_NAME = os.environ.get('MONGODB_DB_NAME', 'videosplitter')
+MONGO_URL = os.environ.get('MONGO_URL', 'mongodb://localhost:27017/')
+MONGODB_DB_NAME = os.environ.get('DB_NAME', 'videosplitter')
 
 # Initialize AWS clients
 s3 = boto3.client('s3')
@@ -76,7 +76,7 @@ def get_mongo_client():
         return None
     
     try:
-        client = MongoClient(MONGODB_URI, serverSelectionTimeoutMS=5000)
+        client = MongoClient(MONGO_URL, serverSelectionTimeoutMS=5000)
         # Test the connection
         client.server_info()
         return client
