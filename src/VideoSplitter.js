@@ -208,15 +208,30 @@ const VideoSplitter = () => {
   // Get video stream URL for preview
   const getVideoStream = async (key) => {
     try {
+      console.log('Getting video stream for key:', key);
+      
       const response = await fetch(`${API_BASE}/api/video-stream/${key}`, {
         headers: {
           'Authorization': `Bearer ${accessToken}`
         }
       });
 
+      console.log('Video stream response status:', response.status);
+
       if (response.ok) {
         const data = await response.json();
-        setVideoUrl(data.stream_url);
+        console.log('Video stream data:', data);
+        
+        if (data.stream_url) {
+          setVideoUrl(data.stream_url);
+          console.log('Video URL set:', data.stream_url);
+        } else {
+          console.warn('No stream_url in response');
+        }
+      } else {
+        console.error('Failed to get video stream, status:', response.status);
+        const errorText = await response.text();
+        console.error('Error response:', errorText);
       }
     } catch (error) {
       console.error('Failed to get video stream:', error);
