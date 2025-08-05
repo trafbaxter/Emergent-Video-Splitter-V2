@@ -316,12 +316,14 @@ const VideoSplitter = () => {
     }
   };
 
-  // Get video stream URL for preview
+  // Get video stream URL for preview - using working master branch approach
   const getVideoStream = async (key) => {
     try {
       console.log('Getting video stream for key:', key);
       
-      const response = await fetch(`${API_BASE}/api/video-stream/${key}`, {
+      // Add timestamp for cache busting like the working version
+      const timestamp = Date.now();
+      const response = await fetch(`${API_BASE}/api/video-stream/${key}?t=${timestamp}`, {
         headers: {
           'Authorization': `Bearer ${accessToken}`
         }
@@ -336,8 +338,17 @@ const VideoSplitter = () => {
         if (data.stream_url) {
           setVideoUrl(data.stream_url);
           console.log('Video URL set:', data.stream_url);
+          
+          // Use direct DOM manipulation like the working version
+          setTimeout(() => {
+            if (videoRef.current) {
+              console.log('Setting video src directly to DOM element');
+              videoRef.current.src = data.stream_url;
+              videoRef.current.load(); // Critical: explicit load() call!
+            }
+          }, 100);
         } else {
-          console.warn('No stream_url in response');
+          console.warn('No stream_url in response:', data);
         }
       } else {
         console.error('Failed to get video stream, status:', response.status);
