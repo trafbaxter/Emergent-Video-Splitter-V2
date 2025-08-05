@@ -272,15 +272,15 @@ def test_integrated_system():
             'critical': False
         },
         {
-            'name': 'Authentication Login Check',
+            'name': 'MongoDB Connection Test',
             'payload': {
                 "httpMethod": "POST",
-                "path": "/api/auth/login", 
+                "path": "/api/auth/register", 
                 "headers": {"Content-Type": "application/json"},
-                "body": '{"email":"test@example.com","password":"TestPass123!"}'
+                "body": '{"email":"mongodb-test@example.com","password":"TestPass123!","firstName":"MongoDB","lastName":"Test"}'
             },
             'critical': False
-        }
+        },
     ]
     
     core_working = True
