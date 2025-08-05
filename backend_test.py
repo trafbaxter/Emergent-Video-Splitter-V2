@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-Comprehensive AWS Lambda Backend Testing for Video Splitter Pro
-Tests the lambda_function_with_fallback.py deployment with authentication and core video processing functionality.
+CORS-Focused AWS Lambda Backend Testing for Video Splitter Pro
+Tests the updated Lambda function with enhanced CORS support for authentication system.
+Focus on testing authentication endpoints with different origins and verifying CORS headers.
 """
 
 import requests
@@ -15,6 +16,16 @@ import sys
 API_GATEWAY_URL = "https://2419j971hh.execute-api.us-east-1.amazonaws.com/prod"
 S3_BUCKET = "videosplitter-uploads"
 TIMEOUT = 30
+
+# CORS Test Origins - matching the allowed origins in fix_cors_lambda.py
+TEST_ORIGINS = [
+    'https://develop.tads-video-splitter.com',
+    'https://main.tads-video-splitter.com', 
+    'https://working.tads-video-splitter.com',
+    'http://localhost:3000',
+    'http://localhost:3001',
+    'http://127.0.0.1:3000'
+]
 
 class VideoSplitterTester:
     def __init__(self):
