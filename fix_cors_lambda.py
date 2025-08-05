@@ -492,7 +492,7 @@ def handle_user_profile(event):
         }
 
 def handle_video_stream(event):
-    """Handle video streaming requests"""
+    """Handle video streaming requests - fast and efficient"""
     origin = event.get('headers', {}).get('origin') or event.get('headers', {}).get('Origin')
     
     try:
@@ -515,11 +515,26 @@ def handle_video_stream(event):
         
         logger.info(f"Generating video stream URL for key: {s3_key}")
         
-        # Generate presigned URL for video streaming (longer expiration for streaming)
+        # Determine content type from file extension only (no S3 head_object call to avoid delays)
+        content_type = 'video/mp4'  # default
+        if s3_key.lower().endswith('.mkv'):
+            content_type = 'video/x-matroska'
+        elif s3_key.lower().endswith('.avi'):
+            content_type = 'video/x-msvideo'
+        elif s3_key.lower().endswith('.mov'):
+            content_type = 'video/quicktime'
+        elif s3_key.lower().endswith('.webm'):
+            content_type = 'video/webm'
+                
+        # Generate presigned URL for video streaming - fast and simple
         try:
             stream_url = s3.generate_presigned_url(
                 'get_object',
-                Params={'Bucket': BUCKET_NAME, 'Key': s3_key},
+                Params={
+                    'Bucket': BUCKET_NAME, 
+                    'Key': s3_key,
+                    'ResponseContentType': content_type
+                },
                 ExpiresIn=7200  # 2 hours for video streaming
             )
             
@@ -529,6 +544,7 @@ def handle_video_stream(event):
                 'body': json.dumps({
                     'stream_url': stream_url,
                     's3_key': s3_key,
+                    'content_type': content_type,
                     'expires_in': 7200
                 })
             }
@@ -538,7 +554,7 @@ def handle_video_stream(event):
             return {
                 'statusCode': 404,
                 'headers': get_cors_headers(origin),
-                'body': json.dumps({'message': 'Video not found or access denied'})
+                'body': json.dumps({'message': 'Video not found or access denied', 'error': str(e)})
             }
         
     except Exception as e:
