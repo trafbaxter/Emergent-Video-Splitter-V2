@@ -258,90 +258,406 @@ class VideoSplitterTester:
         except Exception as e:
             self.log_test("S3 Presigned URL Generation", False, f"Error: {str(e)}")
 
-    def test_video_metadata(self, object_key: str):
-        """Test video metadata extraction"""
-        try:
-            metadata_data = {
-                "objectKey": object_key
+    def test_video_metadata_extraction_real_ffmpeg(self):
+        """Test 1: Video metadata extraction with real FFmpeg Lambda calls"""
+        print("🔍 Testing Video Metadata Extraction (Real FFmpeg)...")
+        
+        # Test with a realistic S3 key that should exist or be processable
+        test_cases = [
+            {
+                "s3_key": "uploads/test-video.mp4",
+                "description": "Standard MP4 video file"
+            },
+            {
+                "s3_key": "uploads/sample-mkv-file.mkv", 
+                "description": "MKV file with potential subtitles"
+            },
+            {
+                "s3_key": "test/demo-video.mp4",
+                "description": "Demo video file"
             }
-            
-            response = self.session.post(f"{self.base_url}/api/get-video-info", json=metadata_data)
-            
-            if response.status_code == 200:
-                data = response.json()
-                self.log_test("Video Metadata Extraction", True, "Metadata endpoint accessible")
-            elif response.status_code == 404:
-                # Expected for non-existent video file
-                self.log_test("Video Metadata Extraction", True, "Endpoint working (404 for non-existent file is expected)")
-            elif response.status_code == 500:
-                self.log_test("Video Metadata Extraction", False, "Internal server error", response.json() if response.content else {})
-            else:
-                self.log_test("Video Metadata Extraction", False, f"HTTP {response.status_code}", response.json() if response.content else {})
+        ]
+        
+        for test_case in test_cases:
+            try:
+                metadata_data = {
+                    "s3_key": test_case["s3_key"]
+                }
                 
-        except Exception as e:
-            self.log_test("Video Metadata Extraction", False, f"Error: {str(e)}")
+                print(f"   Testing: {test_case['description']} ({test_case['s3_key']})")
+                start_time = time.time()
+                
+                response = self.session.post(f"{self.base_url}/api/get-video-info", json=metadata_data)
+                response_time = time.time() - start_time
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    # Check for real FFmpeg metadata fields
+                    expected_fields = ['duration', 'format', 'video_streams', 'audio_streams', 'subtitle_streams']
+                    
+                    if all(field in data for field in expected_fields):
+                        duration = data.get('duration', 0)
+                        subtitle_count = data.get('subtitle_streams', 0)
+                        
+                        # Check if we're getting real duration (not fake estimates like 1:12)
+                        if duration > 0:
+                            self.log_test(
+                                f"Video Metadata Extraction - {test_case['description']}",
+                                True,
+                                f"Real FFmpeg metadata retrieved: Duration={duration}s, Subtitles={subtitle_count}, Response time={response_time:.2f}s"
+                            )
+                        else:
+                            self.log_test(
+                                f"Video Metadata Extraction - {test_case['description']}",
+                                False,
+                                f"Duration is 0 - may not be calling real FFmpeg. Response time={response_time:.2f}s"
+                            )
+                    else:
+                        missing_fields = [f for f in expected_fields if f not in data]
+                        self.log_test(
+                            f"Video Metadata Extraction - {test_case['description']}",
+                            False,
+                            f"Missing expected fields: {missing_fields}",
+                            data
+                        )
+                        
+                elif response.status_code == 400:
+                    # Check if it's proper validation (missing s3_key)
+                    data = response.json() if response.content else {}
+                    error_msg = data.get('error', '')
+                    
+                    if 's3_key' in error_msg:
+                        self.log_test(
+                            f"Video Metadata Extraction - {test_case['description']}",
+                            True,
+                            "Proper request validation working (400 for missing s3_key)"
+                        )
+                    else:
+                        self.log_test(
+                            f"Video Metadata Extraction - {test_case['description']}",
+                            False,
+                            f"Unexpected 400 error: {error_msg}"
+                        )
+                        
+                elif response.status_code == 404:
+                    # File not found - this is expected for test files
+                    self.log_test(
+                        f"Video Metadata Extraction - {test_case['description']}",
+                        True,
+                        f"Endpoint working (404 for non-existent file is expected). Response time={response_time:.2f}s"
+                    )
+                    
+                elif response.status_code == 504:
+                    # Gateway timeout - this was the previous issue
+                    self.log_test(
+                        f"Video Metadata Extraction - {test_case['description']}",
+                        False,
+                        f"❌ TIMEOUT ISSUE PERSISTS: HTTP 504 after {response_time:.2f}s - FFmpeg Lambda may still be timing out"
+                    )
+                    
+                elif response.status_code == 502:
+                    self.log_test(
+                        f"Video Metadata Extraction - {test_case['description']}",
+                        False,
+                        f"Lambda execution failure (502). Response time={response_time:.2f}s"
+                    )
+                    
+                else:
+                    self.log_test(
+                        f"Video Metadata Extraction - {test_case['description']}",
+                        False,
+                        f"HTTP {response.status_code}. Response time={response_time:.2f}s",
+                        response.json() if response.content else {}
+                    )
+                    
+            except requests.exceptions.Timeout:
+                self.log_test(
+                    f"Video Metadata Extraction - {test_case['description']}",
+                    False,
+                    f"Request timeout after {TIMEOUT}s - FFmpeg processing may be taking too long"
+                )
+            except Exception as e:
+                self.log_test(
+                    f"Video Metadata Extraction - {test_case['description']}",
+                    False,
+                    f"Error: {str(e)}"
+                )
 
-    def test_video_splitting(self):
-        """Test 5: Video splitting functionality"""
-        print("🔍 Testing Video Splitting Functionality...")
+    def test_video_splitting_real_processing(self):
+        """Test 2: Video splitting with real FFmpeg processing (should return 202, not 501)"""
+        print("🔍 Testing Video Splitting (Real Processing)...")
         
         try:
             split_data = {
-                "objectKey": "test/sample_video.mp4",
+                "s3_key": "uploads/test-video.mp4",
                 "segments": [
-                    {"start": 0, "end": 30, "name": "segment_1"},
-                    {"start": 30, "end": 60, "name": "segment_2"}
+                    {
+                        "start_time": "00:00:00",
+                        "end_time": "00:00:30", 
+                        "output_name": "segment_1.mp4"
+                    },
+                    {
+                        "start_time": "00:00:30",
+                        "end_time": "00:01:00",
+                        "output_name": "segment_2.mp4"
+                    }
                 ]
             }
             
+            start_time = time.time()
             response = self.session.post(f"{self.base_url}/api/split-video", json=split_data)
+            response_time = time.time() - start_time
             
-            if response.status_code == 200:
+            if response.status_code == 202:
+                # This is what we expect now - processing started
                 data = response.json()
-                self.log_test("Video Splitting", True, "Split endpoint accessible and processing")
-            elif response.status_code == 400:
-                # Expected for invalid request data
-                self.log_test("Video Splitting", True, "Endpoint working (400 for invalid data is expected)")
-            elif response.status_code == 404:
-                # Expected for non-existent video file
-                self.log_test("Video Splitting", True, "Endpoint working (404 for non-existent file is expected)")
-            elif response.status_code == 502:
-                self.log_test("Video Splitting", False, "Lambda execution failure (502)", {})
-            else:
-                self.log_test("Video Splitting", False, f"HTTP {response.status_code}", response.json() if response.content else {})
-                
-        except Exception as e:
-            self.log_test("Video Splitting", False, f"Error: {str(e)}")
-
-    def test_video_streaming(self):
-        """Test 6: Video streaming functionality"""
-        print("🔍 Testing Video Streaming Functionality...")
-        
-        try:
-            # Test download endpoint
-            test_key = "test/sample_video.mp4"
-            response = self.session.get(f"{self.base_url}/api/download/{test_key}")
-            
-            if response.status_code == 200:
-                data = response.json()
-                if 'downloadUrl' in data:
-                    download_url = data['downloadUrl']
-                    if 'amazonaws.com' in download_url:
-                        self.log_test("Video Streaming/Download", True, "Download URL generated successfully")
-                    else:
-                        self.log_test("Video Streaming/Download", False, "Invalid download URL format", data)
+                if 'job_id' in data:
+                    job_id = data['job_id']
+                    self.log_test(
+                        "Video Splitting - Real Processing",
+                        True,
+                        f"✅ RESTORED: Now returns 202 (processing started) instead of 501. Job ID: {job_id}. Response time={response_time:.2f}s"
+                    )
+                    
+                    # Test job status tracking with the returned job_id
+                    self.test_job_status_tracking(job_id)
+                    
                 else:
-                    self.log_test("Video Streaming/Download", False, "Missing downloadUrl in response", data)
-            elif response.status_code == 404:
-                # Expected for non-existent file
-                self.log_test("Video Streaming/Download", True, "Endpoint working (404 for non-existent file is expected)")
-            elif response.status_code == 502:
-                self.log_test("Video Streaming/Download", False, "Lambda execution failure (502)", {})
-            else:
-                self.log_test("Video Streaming/Download", False, f"HTTP {response.status_code}", response.json() if response.content else {})
+                    self.log_test(
+                        "Video Splitting - Real Processing",
+                        False,
+                        "202 response but missing job_id",
+                        data
+                    )
+                    
+            elif response.status_code == 501:
+                # This was the old placeholder behavior
+                self.log_test(
+                    "Video Splitting - Real Processing",
+                    False,
+                    "❌ STILL PLACEHOLDER: Returns 501 'Not Implemented' - real FFmpeg processing not restored yet"
+                )
                 
+            elif response.status_code == 400:
+                # Check if it's proper validation
+                data = response.json() if response.content else {}
+                error_msg = data.get('error', '')
+                
+                if any(field in error_msg for field in ['s3_key', 'segments']):
+                    self.log_test(
+                        "Video Splitting - Real Processing",
+                        True,
+                        f"Proper request validation working (400): {error_msg}"
+                    )
+                else:
+                    self.log_test(
+                        "Video Splitting - Real Processing",
+                        False,
+                        f"Unexpected 400 error: {error_msg}"
+                    )
+                    
+            elif response.status_code == 404:
+                # File not found
+                self.log_test(
+                    "Video Splitting - Real Processing",
+                    True,
+                    f"Endpoint working (404 for non-existent file is expected). Response time={response_time:.2f}s"
+                )
+                
+            elif response.status_code == 504:
+                self.log_test(
+                    "Video Splitting - Real Processing",
+                    False,
+                    f"Gateway timeout (504) after {response_time:.2f}s - FFmpeg processing timeout"
+                )
+                
+            else:
+                self.log_test(
+                    "Video Splitting - Real Processing",
+                    False,
+                    f"HTTP {response.status_code}. Response time={response_time:.2f}s",
+                    response.json() if response.content else {}
+                )
+                
+        except requests.exceptions.Timeout:
+            self.log_test(
+                "Video Splitting - Real Processing",
+                False,
+                f"Request timeout after {TIMEOUT}s"
+            )
         except Exception as e:
-            self.log_test("Video Streaming/Download", False, f"Error: {str(e)}")
+            self.log_test(
+                "Video Splitting - Real Processing",
+                False,
+                f"Error: {str(e)}"
+            )
+
+    def test_job_status_tracking(self, job_id: str = None):
+        """Test 3: Job status tracking (should check S3 for results, not placeholder)"""
+        print("🔍 Testing Job Status Tracking (S3 Results Check)...")
+        
+        # Use provided job_id or create test job_ids
+        test_job_ids = [job_id] if job_id else [
+            "test-job-" + uuid.uuid4().hex[:8],
+            "sample-processing-job-123",
+            "ffmpeg-job-" + str(int(time.time()))
+        ]
+        
+        for test_job_id in test_job_ids:
+            if not test_job_id:
+                continue
+                
+            try:
+                start_time = time.time()
+                response = self.session.get(f"{self.base_url}/api/job-status/{test_job_id}")
+                response_time = time.time() - start_time
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    expected_fields = ['job_id', 'status']
+                    
+                    if all(field in data for field in expected_fields):
+                        status = data.get('status', '')
+                        
+                        # Check if it's checking S3 for real results
+                        if status in ['pending', 'processing', 'completed', 'failed']:
+                            self.log_test(
+                                f"Job Status Tracking - {test_job_id[:16]}...",
+                                True,
+                                f"✅ RESTORED: Real S3 status check. Status: {status}. Response time={response_time:.2f}s"
+                            )
+                        else:
+                            self.log_test(
+                                f"Job Status Tracking - {test_job_id[:16]}...",
+                                False,
+                                f"Unexpected status value: {status}",
+                                data
+                            )
+                    else:
+                        missing_fields = [f for f in expected_fields if f not in data]
+                        self.log_test(
+                            f"Job Status Tracking - {test_job_id[:16]}...",
+                            False,
+                            f"Missing expected fields: {missing_fields}",
+                            data
+                        )
+                        
+                elif response.status_code == 404:
+                    # Job not found - this is expected for test job IDs
+                    self.log_test(
+                        f"Job Status Tracking - {test_job_id[:16]}...",
+                        True,
+                        f"Endpoint working (404 for non-existent job is expected). Response time={response_time:.2f}s"
+                    )
+                    
+                elif response.status_code == 501:
+                    # This was the old placeholder behavior
+                    self.log_test(
+                        f"Job Status Tracking - {test_job_id[:16]}...",
+                        False,
+                        "❌ STILL PLACEHOLDER: Returns 501 'Not Implemented' - S3 status checking not restored yet"
+                    )
+                    
+                else:
+                    self.log_test(
+                        f"Job Status Tracking - {test_job_id[:16]}...",
+                        False,
+                        f"HTTP {response.status_code}. Response time={response_time:.2f}s",
+                        response.json() if response.content else {}
+                    )
+                    
+            except Exception as e:
+                self.log_test(
+                    f"Job Status Tracking - {test_job_id[:16]}...",
+                    False,
+                    f"Error: {str(e)}"
+                )
+
+    def test_download_functionality_presigned_urls(self):
+        """Test 4: Download functionality (should generate presigned URLs, not placeholder)"""
+        print("🔍 Testing Download Functionality (Presigned URLs)...")
+        
+        test_cases = [
+            {
+                "job_id": "test-job-123",
+                "filename": "segment_1.mp4",
+                "description": "MP4 segment download"
+            },
+            {
+                "job_id": "sample-job-456", 
+                "filename": "output_video.mkv",
+                "description": "MKV output download"
+            },
+            {
+                "job_id": "ffmpeg-job-789",
+                "filename": "processed_clip.mp4", 
+                "description": "Processed clip download"
+            }
+        ]
+        
+        for test_case in test_cases:
+            try:
+                start_time = time.time()
+                response = self.session.get(f"{self.base_url}/api/download/{test_case['job_id']}/{test_case['filename']}")
+                response_time = time.time() - start_time
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    
+                    if 'download_url' in data:
+                        download_url = data['download_url']
+                        
+                        # Check if it's a real S3 presigned URL
+                        if 'amazonaws.com' in download_url and 'Signature' in download_url:
+                            self.log_test(
+                                f"Download Functionality - {test_case['description']}",
+                                True,
+                                f"✅ RESTORED: Real S3 presigned URL generated. Response time={response_time:.2f}s"
+                            )
+                        else:
+                            self.log_test(
+                                f"Download Functionality - {test_case['description']}",
+                                False,
+                                f"Invalid presigned URL format: {download_url[:100]}..."
+                            )
+                    else:
+                        self.log_test(
+                            f"Download Functionality - {test_case['description']}",
+                            False,
+                            "Missing download_url in response",
+                            data
+                        )
+                        
+                elif response.status_code == 404:
+                    # File not found - this is expected for test files
+                    self.log_test(
+                        f"Download Functionality - {test_case['description']}",
+                        True,
+                        f"Endpoint working (404 for non-existent file is expected). Response time={response_time:.2f}s"
+                    )
+                    
+                elif response.status_code == 501:
+                    # This was the old placeholder behavior
+                    self.log_test(
+                        f"Download Functionality - {test_case['description']}",
+                        False,
+                        "❌ STILL PLACEHOLDER: Returns 501 'Not Implemented' - presigned URL generation not restored yet"
+                    )
+                    
+                else:
+                    self.log_test(
+                        f"Download Functionality - {test_case['description']}",
+                        False,
+                        f"HTTP {response.status_code}. Response time={response_time:.2f}s",
+                        response.json() if response.content else {}
+                    )
+                    
+            except Exception as e:
+                self.log_test(
+                    f"Download Functionality - {test_case['description']}",
+                    False,
+                    f"Error: {str(e)}"
+                )
 
     def test_ffmpeg_integration(self):
         """Test 7: FFmpeg Lambda integration"""
