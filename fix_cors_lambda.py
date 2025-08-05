@@ -46,7 +46,7 @@ except ImportError:
     logger.warning("⚠️ pymongo library not available")
 
 # Environment variables
-BUCKET_NAME = 'videosplitter-uploads'
+BUCKET_NAME = 'videosplitter-storage-1751560247'
 AWS_REGION = os.environ.get('AWS_REGION', 'us-east-1')
 
 # Updated CORS configuration - allow multiple origins
