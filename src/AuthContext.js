@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+<<<<<<< HEAD
 import axios from 'axios';
 
 // Get backend URL from environment - for authentication, always use local backend
@@ -9,6 +10,11 @@ const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8001'
 const AuthContext = createContext();
 
 // Custom hook to use auth context
+=======
+
+const AuthContext = createContext();
+
+>>>>>>> 085ab42453e7546ea3bd7540378445f968373221
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
@@ -17,6 +23,7 @@ export const useAuth = () => {
   return context;
 };
 
+<<<<<<< HEAD
 // Auth Provider Component
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
@@ -250,10 +257,106 @@ export const AuthProvider = ({ children }) => {
   // Check if user is admin
   const isAdmin = () => {
     return hasRole('admin');
+=======
+export const AuthProvider = ({ children }) => {
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [accessToken, setAccessToken] = useState(localStorage.getItem('access_token'));
+  
+  const API_BASE = process.env.REACT_APP_BACKEND_URL || 'https://2419j971hh.execute-api.us-east-1.amazonaws.com/prod';
+
+  useEffect(() => {
+    if (accessToken) {
+      fetchUserProfile();
+    } else {
+      setLoading(false);
+    }
+  }, [accessToken]);
+
+  const fetchUserProfile = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/api/user/profile`, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setUser(data.user);
+      } else {
+        // Token is invalid or expired
+        logout();
+      }
+    } catch (error) {
+      console.error('Failed to fetch user profile:', error);
+      logout();
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const login = async (email, password) => {
+    try {
+      const response = await fetch(`${API_BASE}/api/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ email, password })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setAccessToken(data.access_token);
+        localStorage.setItem('access_token', data.access_token);
+        setUser(data.user);
+        return { success: true };
+      } else {
+        return { success: false, error: data.message || 'Login failed' };
+      }
+    } catch (error) {
+      return { success: false, error: 'Network error. Please try again.' };
+    }
+  };
+
+  const register = async (userData) => {
+    try {
+      const response = await fetch(`${API_BASE}/api/auth/register`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(userData)
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setAccessToken(data.access_token);
+        localStorage.setItem('access_token', data.access_token);
+        setUser(data.user);
+        return { success: true };
+      } else {
+        return { success: false, error: data.message || 'Registration failed' };
+      }
+    } catch (error) {
+      return { success: false, error: 'Network error. Please try again.' };
+    }
+  };
+
+  const logout = () => {
+    setUser(null);
+    setAccessToken(null);
+    localStorage.removeItem('access_token');
+>>>>>>> 085ab42453e7546ea3bd7540378445f968373221
   };
 
   const value = {
     user,
+<<<<<<< HEAD
     isAuthenticated,
     isLoading,
     login,
@@ -263,6 +366,14 @@ export const AuthProvider = ({ children }) => {
     hasRole,
     isAdmin,
     tokens
+=======
+    loading,
+    accessToken,
+    login,
+    register,
+    logout,
+    API_BASE
+>>>>>>> 085ab42453e7546ea3bd7540378445f968373221
   };
 
   return (
