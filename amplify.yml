@@ -6,7 +6,7 @@ frontend:
         - npm ci --legacy-peer-deps
     build:
       commands:
-        - CI='' npm run build
+        - npm run build
   artifacts:
     baseDirectory: build
     files:
