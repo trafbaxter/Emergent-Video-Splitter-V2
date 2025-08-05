@@ -339,10 +339,10 @@ const VideoSplitter = () => {
             padding: '40px',
             textAlign: 'center',
             backgroundColor: dragOver ? '#f8f9fa' : '#fafafa',
-            cursor: 'pointer',
+            cursor: selectedFile ? 'default' : 'pointer',
             transition: 'all 0.3s ease'
           }}
-          onClick={() => fileInputRef.current?.click()}
+          onClick={() => !selectedFile && fileInputRef.current?.click()}
         >
           <input
             type="file"
@@ -363,7 +363,10 @@ const VideoSplitter = () => {
               </p>
               {!jobId && (
                 <button
-                  onClick={uploadFile}
+                  onClick={(e) => {
+                    e.stopPropagation(); // Prevent event bubbling to parent div
+                    uploadFile();
+                  }}
                   disabled={uploading}
                   style={{
                     marginTop: '20px',
