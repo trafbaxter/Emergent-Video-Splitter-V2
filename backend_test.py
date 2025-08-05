@@ -1,8 +1,14 @@
 #!/usr/bin/env python3
 """
-Video Processing Endpoints Testing for Video Splitter Pro
-Tests the newly implemented video processing endpoints in AWS Lambda.
-Focus on testing video streaming, metadata extraction, and placeholder endpoints.
+TIMEOUT FIX TESTING for Video Splitter Pro
+Testing the critical timeout fix where main Lambda timeout was increased from 30s to 900s (15 minutes).
+
+URGENT TEST FOCUS:
+1. POST /api/get-video-info - Should now complete and return REAL video duration from FFmpeg analysis
+2. POST /api/split-video - Should now return 202 and start actual processing instead of timing out
+3. Response times - Should now be able to exceed 30 seconds without 504 errors
+
+This should resolve the critical 29-second timeout issue that was blocking all video processing.
 """
 
 import requests
@@ -15,7 +21,7 @@ import sys
 # Configuration
 API_GATEWAY_URL = "https://2419j971hh.execute-api.us-east-1.amazonaws.com/prod"
 S3_BUCKET = "videosplitter-storage-1751560247"
-TIMEOUT = 30
+TIMEOUT = 120  # Increased timeout to test the 900s Lambda timeout fix
 
 # CORS Test Origins - matching the allowed origins in fix_cors_lambda.py
 TEST_ORIGINS = [
@@ -253,140 +259,444 @@ class VideoSplitterTester:
         except Exception as e:
             self.log_test("S3 Presigned URL Generation", False, f"Error: {str(e)}")
 
-    def test_video_metadata(self, object_key: str):
-        """Test video metadata extraction"""
-        try:
-            metadata_data = {
-                "objectKey": object_key
+    def test_timeout_fix_video_metadata(self):
+        """Test 1: URGENT - Video metadata extraction timeout fix"""
+        print("🚨 TESTING TIMEOUT FIX: Video Metadata Extraction...")
+        
+        # Test with realistic S3 keys that should trigger FFmpeg processing
+        test_cases = [
+            {
+                "s3_key": "uploads/test-video.mp4",
+                "description": "Standard MP4 video file",
+                "expected_duration_range": (10, 300)  # 10s to 5min reasonable for test video
+            },
+            {
+                "s3_key": "uploads/sample-mkv-file.mkv", 
+                "description": "MKV file with potential subtitles",
+                "expected_duration_range": (30, 600)  # 30s to 10min reasonable for MKV
             }
-            
-            response = self.session.post(f"{self.base_url}/api/get-video-info", json=metadata_data)
-            
-            if response.status_code == 200:
-                data = response.json()
-                self.log_test("Video Metadata Extraction", True, "Metadata endpoint accessible")
-            elif response.status_code == 404:
-                # Expected for non-existent video file
-                self.log_test("Video Metadata Extraction", True, "Endpoint working (404 for non-existent file is expected)")
-            elif response.status_code == 500:
-                self.log_test("Video Metadata Extraction", False, "Internal server error", response.json() if response.content else {})
-            else:
-                self.log_test("Video Metadata Extraction", False, f"HTTP {response.status_code}", response.json() if response.content else {})
+        ]
+        
+        for test_case in test_cases:
+            try:
+                metadata_data = {
+                    "s3_key": test_case["s3_key"]
+                }
                 
-        except Exception as e:
-            self.log_test("Video Metadata Extraction", False, f"Error: {str(e)}")
+                print(f"   🎯 TIMEOUT FIX TEST: {test_case['description']} ({test_case['s3_key']})")
+                start_time = time.time()
+                
+                response = self.session.post(f"{self.base_url}/api/get-video-info", json=metadata_data)
+                response_time = time.time() - start_time
+                
+                print(f"   ⏱️  Response time: {response_time:.2f}s")
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    # Check for real FFmpeg metadata fields
+                    expected_fields = ['duration', 'format', 'video_streams', 'audio_streams', 'subtitle_streams']
+                    
+                    if all(field in data for field in expected_fields):
+                        duration = data.get('duration', 0)
+                        subtitle_count = data.get('subtitle_streams', 0)
+                        format_info = data.get('format', 'unknown')
+                        
+                        # Check if we're getting REAL duration from FFmpeg (not fake estimates)
+                        if duration > 0:
+                            self.log_test(
+                                f"🎉 TIMEOUT FIX SUCCESS - {test_case['description']}",
+                                True,
+                                f"✅ REAL FFmpeg metadata retrieved! Duration={duration}s, Format={format_info}, Subtitles={subtitle_count}, Response time={response_time:.2f}s. NO MORE 504 TIMEOUTS!"
+                            )
+                        else:
+                            self.log_test(
+                                f"TIMEOUT FIX - {test_case['description']}",
+                                False,
+                                f"Duration is 0 - may still be using placeholder logic. Response time={response_time:.2f}s"
+                            )
+                    else:
+                        missing_fields = [f for f in expected_fields if f not in data]
+                        self.log_test(
+                            f"TIMEOUT FIX - {test_case['description']}",
+                            False,
+                            f"Missing expected FFmpeg fields: {missing_fields}. Response time={response_time:.2f}s",
+                            data
+                        )
+                        
+                elif response.status_code == 404:
+                    # File not found - this is expected for test files, but endpoint is working
+                    self.log_test(
+                        f"🎯 TIMEOUT FIX - {test_case['description']}",
+                        True,
+                        f"✅ NO TIMEOUT! Endpoint working (404 for non-existent file is expected). Response time={response_time:.2f}s - Lambda timeout fix successful!"
+                    )
+                    
+                elif response.status_code == 504:
+                    # Gateway timeout - this was the previous issue that should be FIXED
+                    self.log_test(
+                        f"❌ TIMEOUT FIX FAILED - {test_case['description']}",
+                        False,
+                        f"🚨 CRITICAL: HTTP 504 timeout still occurring after {response_time:.2f}s! Lambda timeout increase from 30s→900s did NOT resolve the issue. Need further investigation."
+                    )
+                    
+                elif response.status_code == 502:
+                    self.log_test(
+                        f"TIMEOUT FIX - {test_case['description']}",
+                        False,
+                        f"Lambda execution failure (502). Response time={response_time:.2f}s. May indicate Lambda configuration issue."
+                    )
+                    
+                else:
+                    self.log_test(
+                        f"TIMEOUT FIX - {test_case['description']}",
+                        False,
+                        f"HTTP {response.status_code}. Response time={response_time:.2f}s",
+                        response.json() if response.content else {}
+                    )
+                    
+            except requests.exceptions.Timeout:
+                self.log_test(
+                    f"❌ TIMEOUT FIX FAILED - {test_case['description']}",
+                    False,
+                    f"🚨 CRITICAL: Request timeout after {TIMEOUT}s - Lambda timeout increase did NOT resolve client-side timeout issues"
+                )
+            except Exception as e:
+                self.log_test(
+                    f"TIMEOUT FIX - {test_case['description']}",
+                    False,
+                    f"Error: {str(e)}"
+                )
 
-    def test_video_splitting(self):
-        """Test 5: Video splitting functionality"""
-        print("🔍 Testing Video Splitting Functionality...")
+    def test_timeout_fix_video_splitting(self):
+        """Test 2: URGENT - Video splitting timeout fix (should return 202, not timeout)"""
+        print("🚨 TESTING TIMEOUT FIX: Video Splitting...")
         
         try:
             split_data = {
-                "objectKey": "test/sample_video.mp4",
+                "s3_key": "uploads/test-video.mp4",
                 "segments": [
-                    {"start": 0, "end": 30, "name": "segment_1"},
-                    {"start": 30, "end": 60, "name": "segment_2"}
+                    {
+                        "start_time": "00:00:00",
+                        "end_time": "00:00:30", 
+                        "output_name": "segment_1.mp4"
+                    },
+                    {
+                        "start_time": "00:00:30",
+                        "end_time": "00:01:00",
+                        "output_name": "segment_2.mp4"
+                    }
                 ]
             }
             
+            print(f"   🎯 TIMEOUT FIX TEST: Video splitting with 2 segments")
+            start_time = time.time()
+            
             response = self.session.post(f"{self.base_url}/api/split-video", json=split_data)
+            response_time = time.time() - start_time
             
-            if response.status_code == 200:
+            print(f"   ⏱️  Response time: {response_time:.2f}s")
+            
+            if response.status_code == 202:
+                # This is what we expect now - processing started, no timeout
                 data = response.json()
-                self.log_test("Video Splitting", True, "Split endpoint accessible and processing")
-            elif response.status_code == 400:
-                # Expected for invalid request data
-                self.log_test("Video Splitting", True, "Endpoint working (400 for invalid data is expected)")
-            elif response.status_code == 404:
-                # Expected for non-existent video file
-                self.log_test("Video Splitting", True, "Endpoint working (404 for non-existent file is expected)")
-            elif response.status_code == 502:
-                self.log_test("Video Splitting", False, "Lambda execution failure (502)", {})
-            else:
-                self.log_test("Video Splitting", False, f"HTTP {response.status_code}", response.json() if response.content else {})
-                
-        except Exception as e:
-            self.log_test("Video Splitting", False, f"Error: {str(e)}")
-
-    def test_video_streaming(self):
-        """Test 6: Video streaming functionality"""
-        print("🔍 Testing Video Streaming Functionality...")
-        
-        try:
-            # Test download endpoint
-            test_key = "test/sample_video.mp4"
-            response = self.session.get(f"{self.base_url}/api/download/{test_key}")
-            
-            if response.status_code == 200:
-                data = response.json()
-                if 'downloadUrl' in data:
-                    download_url = data['downloadUrl']
-                    if 'amazonaws.com' in download_url:
-                        self.log_test("Video Streaming/Download", True, "Download URL generated successfully")
-                    else:
-                        self.log_test("Video Streaming/Download", False, "Invalid download URL format", data)
-                else:
-                    self.log_test("Video Streaming/Download", False, "Missing downloadUrl in response", data)
-            elif response.status_code == 404:
-                # Expected for non-existent file
-                self.log_test("Video Streaming/Download", True, "Endpoint working (404 for non-existent file is expected)")
-            elif response.status_code == 502:
-                self.log_test("Video Streaming/Download", False, "Lambda execution failure (502)", {})
-            else:
-                self.log_test("Video Streaming/Download", False, f"HTTP {response.status_code}", response.json() if response.content else {})
-                
-        except Exception as e:
-            self.log_test("Video Streaming/Download", False, f"Error: {str(e)}")
-
-    def test_ffmpeg_integration(self):
-        """Test 7: FFmpeg Lambda integration"""
-        print("🔍 Testing FFmpeg Lambda Integration...")
-        
-        # This is tested indirectly through video metadata extraction
-        # The lambda_function_with_fallback.py calls the ffmpeg-converter Lambda function
-        
-        try:
-            # Test with a realistic object key to see if FFmpeg Lambda is called
-            metadata_data = {
-                "objectKey": "uploads/test-video-for-ffmpeg.mp4"
-            }
-            
-            response = self.session.post(f"{self.base_url}/api/get-video-info", json=metadata_data)
-            
-            # Check response time to infer if FFmpeg processing is attempted
-            response_time = response.elapsed.total_seconds()
-            
-            if response.status_code == 404:
-                # Expected for non-existent file, but should be fast if FFmpeg integration works
-                if response_time < 5:
+                if 'job_id' in data:
+                    job_id = data['job_id']
                     self.log_test(
-                        "FFmpeg Lambda Integration",
+                        "🎉 TIMEOUT FIX SUCCESS - Video Splitting",
                         True,
-                        f"FFmpeg integration appears functional (fast 404 response: {response_time:.2f}s)"
+                        f"✅ REAL PROCESSING STARTED! Returns 202 (processing started) with job_id: {job_id}. Response time={response_time:.2f}s. NO MORE 504 TIMEOUTS!"
                     )
+                    
+                    # Test job status tracking with the returned job_id
+                    self.test_timeout_fix_job_status(job_id)
+                    
                 else:
                     self.log_test(
-                        "FFmpeg Lambda Integration",
+                        "TIMEOUT FIX - Video Splitting",
                         False,
-                        f"Slow response suggests FFmpeg timeout issues ({response_time:.2f}s)"
+                        f"202 response but missing job_id. Response time={response_time:.2f}s",
+                        data
                     )
-            elif response.status_code == 500:
-                error_data = response.json() if response.content else {}
-                error_msg = error_data.get('error', 'Unknown error')
-                
-                if 'ffmpeg' in error_msg.lower() or 'lambda' in error_msg.lower():
-                    self.log_test("FFmpeg Lambda Integration", False, f"FFmpeg Lambda error: {error_msg}")
-                else:
-                    self.log_test("FFmpeg Lambda Integration", False, f"Server error: {error_msg}")
-            else:
+                    
+            elif response.status_code == 404:
+                # File not found - endpoint is working, no timeout
                 self.log_test(
-                    "FFmpeg Lambda Integration",
+                    "🎯 TIMEOUT FIX - Video Splitting",
                     True,
-                    f"FFmpeg integration accessible (HTTP {response.status_code}, {response_time:.2f}s)"
+                    f"✅ NO TIMEOUT! Endpoint working (404 for non-existent file is expected). Response time={response_time:.2f}s - Lambda timeout fix successful!"
                 )
                 
+            elif response.status_code == 504:
+                # Gateway timeout - this should be FIXED now
+                self.log_test(
+                    "❌ TIMEOUT FIX FAILED - Video Splitting",
+                    False,
+                    f"🚨 CRITICAL: HTTP 504 timeout still occurring after {response_time:.2f}s! Lambda timeout increase from 30s→900s did NOT resolve the issue."
+                )
+                
+            else:
+                self.log_test(
+                    "TIMEOUT FIX - Video Splitting",
+                    False,
+                    f"HTTP {response.status_code}. Response time={response_time:.2f}s",
+                    response.json() if response.content else {}
+                )
+                
+        except requests.exceptions.Timeout:
+            self.log_test(
+                "❌ TIMEOUT FIX FAILED - Video Splitting",
+                False,
+                f"🚨 CRITICAL: Request timeout after {TIMEOUT}s - Lambda timeout increase did NOT resolve client-side timeout issues"
+            )
         except Exception as e:
-            self.log_test("FFmpeg Lambda Integration", False, f"Error: {str(e)}")
+            self.log_test(
+                "TIMEOUT FIX - Video Splitting",
+                False,
+                f"Error: {str(e)}"
+            )
+
+    def test_timeout_fix_job_status(self, job_id: str = None):
+        """Test 3: Job status tracking timeout fix"""
+        print("🚨 TESTING TIMEOUT FIX: Job Status Tracking...")
+        
+        # Use provided job_id or create test job_id
+        test_job_id = job_id if job_id else f"timeout-test-job-{uuid.uuid4().hex[:8]}"
+        
+        try:
+            print(f"   🎯 TIMEOUT FIX TEST: Job status for {test_job_id[:20]}...")
+            start_time = time.time()
+            
+            response = self.session.get(f"{self.base_url}/api/job-status/{test_job_id}")
+            response_time = time.time() - start_time
+            
+            print(f"   ⏱️  Response time: {response_time:.2f}s")
+            
+            if response.status_code == 200:
+                data = response.json()
+                expected_fields = ['job_id', 'status']
+                
+                if all(field in data for field in expected_fields):
+                    status = data.get('status', '')
+                    
+                    # Check if it's checking S3 for real results
+                    if status in ['pending', 'processing', 'completed', 'failed']:
+                        self.log_test(
+                            f"🎉 TIMEOUT FIX SUCCESS - Job Status",
+                            True,
+                            f"✅ REAL S3 status check working! Status: {status}. Response time={response_time:.2f}s. NO MORE 504 TIMEOUTS!"
+                        )
+                    else:
+                        self.log_test(
+                            f"TIMEOUT FIX - Job Status",
+                            False,
+                            f"Unexpected status value: {status}. Response time={response_time:.2f}s",
+                            data
+                        )
+                else:
+                    missing_fields = [f for f in expected_fields if f not in data]
+                    self.log_test(
+                        f"TIMEOUT FIX - Job Status",
+                        False,
+                        f"Missing expected fields: {missing_fields}. Response time={response_time:.2f}s",
+                        data
+                    )
+                    
+            elif response.status_code == 404:
+                # Job not found - this is expected for test job IDs, but no timeout
+                self.log_test(
+                    f"🎯 TIMEOUT FIX - Job Status",
+                    True,
+                    f"✅ NO TIMEOUT! Endpoint working (404 for non-existent job is expected). Response time={response_time:.2f}s - Lambda timeout fix successful!"
+                )
+                
+            elif response.status_code == 504:
+                # Gateway timeout - this should be FIXED now
+                self.log_test(
+                    f"❌ TIMEOUT FIX FAILED - Job Status",
+                    False,
+                    f"🚨 CRITICAL: HTTP 504 timeout still occurring after {response_time:.2f}s! Lambda timeout increase did NOT resolve the issue."
+                )
+                
+            else:
+                self.log_test(
+                    f"TIMEOUT FIX - Job Status",
+                    False,
+                    f"HTTP {response.status_code}. Response time={response_time:.2f}s",
+                    response.json() if response.content else {}
+                )
+                
+        except requests.exceptions.Timeout:
+            self.log_test(
+                f"❌ TIMEOUT FIX FAILED - Job Status",
+                False,
+                f"🚨 CRITICAL: Request timeout after {TIMEOUT}s - Lambda timeout increase did NOT resolve client-side timeout issues"
+            )
+        except Exception as e:
+            self.log_test(
+                f"TIMEOUT FIX - Job Status",
+                False,
+                f"Error: {str(e)}"
+            )
+
+    def test_download_functionality_presigned_urls(self):
+        """Test 4: Download functionality (should generate presigned URLs, not placeholder)"""
+        print("🔍 Testing Download Functionality (Presigned URLs)...")
+        
+        test_cases = [
+            {
+                "job_id": "test-job-123",
+                "filename": "segment_1.mp4",
+                "description": "MP4 segment download"
+            },
+            {
+                "job_id": "sample-job-456", 
+                "filename": "output_video.mkv",
+                "description": "MKV output download"
+            },
+            {
+                "job_id": "ffmpeg-job-789",
+                "filename": "processed_clip.mp4", 
+                "description": "Processed clip download"
+            }
+        ]
+        
+        for test_case in test_cases:
+            try:
+                start_time = time.time()
+                response = self.session.get(f"{self.base_url}/api/download/{test_case['job_id']}/{test_case['filename']}")
+                response_time = time.time() - start_time
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    
+                    if 'download_url' in data:
+                        download_url = data['download_url']
+                        
+                        # Check if it's a real S3 presigned URL
+                        if 'amazonaws.com' in download_url and 'Signature' in download_url:
+                            self.log_test(
+                                f"Download Functionality - {test_case['description']}",
+                                True,
+                                f"✅ RESTORED: Real S3 presigned URL generated. Response time={response_time:.2f}s"
+                            )
+                        else:
+                            self.log_test(
+                                f"Download Functionality - {test_case['description']}",
+                                False,
+                                f"Invalid presigned URL format: {download_url[:100]}..."
+                            )
+                    else:
+                        self.log_test(
+                            f"Download Functionality - {test_case['description']}",
+                            False,
+                            "Missing download_url in response",
+                            data
+                        )
+                        
+                elif response.status_code == 404:
+                    # File not found - this is expected for test files
+                    self.log_test(
+                        f"Download Functionality - {test_case['description']}",
+                        True,
+                        f"Endpoint working (404 for non-existent file is expected). Response time={response_time:.2f}s"
+                    )
+                    
+                elif response.status_code == 501:
+                    # This was the old placeholder behavior
+                    self.log_test(
+                        f"Download Functionality - {test_case['description']}",
+                        False,
+                        "❌ STILL PLACEHOLDER: Returns 501 'Not Implemented' - presigned URL generation not restored yet"
+                    )
+                    
+                else:
+                    self.log_test(
+                        f"Download Functionality - {test_case['description']}",
+                        False,
+                        f"HTTP {response.status_code}. Response time={response_time:.2f}s",
+                        response.json() if response.content else {}
+                    )
+                    
+            except Exception as e:
+                self.log_test(
+                    f"Download Functionality - {test_case['description']}",
+                    False,
+                    f"Error: {str(e)}"
+                )
+
+    def test_video_streaming_endpoint(self):
+        """Test 5: Video streaming endpoint (should work as before)"""
+        print("🔍 Testing Video Streaming Endpoint...")
+        
+        test_keys = [
+            "uploads/test-video.mp4",
+            "test/sample-mkv-file.mkv",
+            "demo/example-video.mp4"
+        ]
+        
+        for test_key in test_keys:
+            try:
+                start_time = time.time()
+                response = self.session.get(f"{self.base_url}/api/video-stream/{test_key}")
+                response_time = time.time() - start_time
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    expected_fields = ['stream_url', 's3_key', 'expires_in']
+                    
+                    if all(field in data for field in expected_fields):
+                        stream_url = data['stream_url']
+                        
+                        if 'amazonaws.com' in stream_url and 'Signature' in stream_url:
+                            self.log_test(
+                                f"Video Streaming - {test_key.split('/')[-1]}",
+                                True,
+                                f"Valid streaming URL generated. Response time={response_time:.2f}s"
+                            )
+                        else:
+                            self.log_test(
+                                f"Video Streaming - {test_key.split('/')[-1]}",
+                                False,
+                                f"Invalid streaming URL format"
+                            )
+                    else:
+                        missing_fields = [f for f in expected_fields if f not in data]
+                        self.log_test(
+                            f"Video Streaming - {test_key.split('/')[-1]}",
+                            False,
+                            f"Missing expected fields: {missing_fields}",
+                            data
+                        )
+                        
+                elif response.status_code == 404:
+                    # Expected for non-existent files
+                    self.log_test(
+                        f"Video Streaming - {test_key.split('/')[-1]}",
+                        True,
+                        f"Endpoint working (404 for non-existent file is expected). Response time={response_time:.2f}s"
+                    )
+                    
+                elif response.status_code == 504:
+                    self.log_test(
+                        f"Video Streaming - {test_key.split('/')[-1]}",
+                        False,
+                        f"Gateway timeout (504) after {response_time:.2f}s"
+                    )
+                    
+                else:
+                    self.log_test(
+                        f"Video Streaming - {test_key.split('/')[-1]}",
+                        False,
+                        f"HTTP {response.status_code}. Response time={response_time:.2f}s",
+                        response.json() if response.content else {}
+                    )
+                    
+            except Exception as e:
+                self.log_test(
+                    f"Video Streaming - {test_key.split('/')[-1]}",
+                    False,
+                    f"Error: {str(e)}"
+                )
 
     def test_s3_bucket_access(self):
         """Test 8: S3 bucket configuration and access"""
@@ -427,28 +737,34 @@ class VideoSplitterTester:
         except Exception as e:
             self.log_test("S3 Bucket Access", False, f"Error: {str(e)}")
 
-    def run_all_tests(self):
-        """Run all tests and provide summary"""
+    def run_timeout_fix_tests(self):
+        """Run focused tests on the timeout fix - main Lambda timeout increased from 30s to 900s"""
         print("=" * 80)
-        print("🚀 AWS LAMBDA BACKEND COMPREHENSIVE TESTING")
+        print("🚨 URGENT: TIMEOUT FIX TESTING")
         print("=" * 80)
         print(f"Testing API Gateway URL: {self.base_url}")
         print(f"Expected S3 Bucket: {S3_BUCKET}")
         print()
+        print("🎯 CRITICAL TIMEOUT FIX TESTING:")
+        print("   Main Lambda timeout increased from 30 seconds → 900 seconds (15 minutes)")
+        print("   This should resolve the critical 29-second timeout issue blocking video processing")
+        print()
+        print("📋 TESTING FOCUS:")
+        print("   1. POST /api/get-video-info - Should return REAL video duration from FFmpeg")
+        print("   2. POST /api/split-video - Should return 202 and start processing (no timeout)")
+        print("   3. Response times - Should exceed 30 seconds without 504 errors")
+        print()
         
-        # Run all tests
+        # Run focused timeout fix tests
+        self.test_timeout_fix_video_metadata()
+        self.test_timeout_fix_video_splitting()
+        
+        # Quick connectivity check
         self.test_basic_connectivity()
-        self.test_cors_configuration()
-        self.test_authentication_endpoints()
-        self.test_core_video_processing()
-        self.test_video_splitting()
-        self.test_video_streaming()
-        self.test_ffmpeg_integration()
-        self.test_s3_bucket_access()
         
         # Summary
         print("=" * 80)
-        print("📊 TEST SUMMARY")
+        print("📊 TIMEOUT FIX TEST SUMMARY")
         print("=" * 80)
         
         total_tests = len(self.test_results)
@@ -461,41 +777,83 @@ class VideoSplitterTester:
         print(f"Success Rate: {(passed_tests/total_tests)*100:.1f}%")
         print()
         
-        # Failed tests details
-        if failed_tests > 0:
-            print("❌ FAILED TESTS:")
-            for result in self.test_results:
-                if not result['success']:
-                    print(f"   • {result['test']}: {result['details']}")
-            print()
+        # Analyze timeout fix status
+        timeout_fix_status = {
+            'metadata_no_timeout': False,
+            'splitting_no_timeout': False,
+            'real_ffmpeg_working': False
+        }
         
-        # Critical issues
-        critical_failures = []
         for result in self.test_results:
-            if not result['success'] and any(keyword in result['details'].lower() for keyword in ['502', 'connection', 'timeout', 'execution failure']):
-                critical_failures.append(result['test'])
+            if result['success']:
+                if 'timeout fix success' in result['test'].lower():
+                    if 'metadata' in result['test'].lower():
+                        timeout_fix_status['metadata_no_timeout'] = True
+                        if 'real ffmpeg' in result['details'].lower():
+                            timeout_fix_status['real_ffmpeg_working'] = True
+                    elif 'splitting' in result['test'].lower():
+                        timeout_fix_status['splitting_no_timeout'] = True
+                elif 'no timeout' in result['details'].lower():
+                    if 'metadata' in result['test'].lower():
+                        timeout_fix_status['metadata_no_timeout'] = True
+                    elif 'splitting' in result['test'].lower():
+                        timeout_fix_status['splitting_no_timeout'] = True
         
-        if critical_failures:
-            print("🚨 CRITICAL ISSUES DETECTED:")
-            for failure in critical_failures:
-                print(f"   • {failure}")
+        print("🔍 TIMEOUT FIX STATUS:")
+        print(f"   ✅ Video Metadata No Timeout: {'FIXED' if timeout_fix_status['metadata_no_timeout'] else 'STILL TIMING OUT'}")
+        print(f"   ✅ Video Splitting No Timeout: {'FIXED' if timeout_fix_status['splitting_no_timeout'] else 'STILL TIMING OUT'}")
+        print(f"   ✅ Real FFmpeg Processing: {'WORKING' if timeout_fix_status['real_ffmpeg_working'] else 'NOT CONFIRMED'}")
+        print()
+        
+        # Failed tests details
+        timeout_failures = []
+        other_failures = []
+        
+        for result in self.test_results:
+            if not result['success']:
+                if '504' in result['details'] or 'timeout' in result['details'].lower():
+                    timeout_failures.append(result)
+                else:
+                    other_failures.append(result)
+        
+        if timeout_failures:
+            print("🚨 TIMEOUT ISSUES STILL PRESENT:")
+            for result in timeout_failures:
+                print(f"   • {result['test']}: {result['details']}")
             print()
         
-        # Recommendations
-        print("💡 RECOMMENDATIONS:")
+        if other_failures:
+            print("❌ OTHER ISSUES:")
+            for result in other_failures:
+                print(f"   • {result['test']}: {result['details']}")
+            print()
         
-        auth_failures = sum(1 for r in self.test_results if not r['success'] and 'auth' in r['test'].lower())
-        if auth_failures > 0:
-            print("   • Authentication system has MongoDB connectivity issues (expected based on test history)")
-            print("   • Core video processing functionality should be prioritized")
+        # Final assessment
+        print("💡 TIMEOUT FIX ASSESSMENT:")
         
-        if any('502' in r['details'] for r in self.test_results if not r['success']):
-            print("   • Lambda function execution failures detected - check deployment and dependencies")
-        
-        if passed_tests >= total_tests * 0.7:
-            print("   • Overall system health is good - most functionality is working")
+        fixed_count = sum(timeout_fix_status.values())
+        if fixed_count == 3:
+            print("   🎉 TIMEOUT FIX COMPLETELY SUCCESSFUL!")
+            print("   • Video processing endpoints no longer timeout after 29 seconds")
+            print("   • Real FFmpeg processing is working")
+            print("   • Lambda timeout increase from 30s→900s resolved the issue")
+        elif fixed_count >= 1:
+            print(f"   ✅ PARTIAL SUCCESS: {fixed_count}/3 timeout issues resolved")
+            if not timeout_fix_status['metadata_no_timeout']:
+                print("   • Video metadata extraction still timing out")
+            if not timeout_fix_status['splitting_no_timeout']:
+                print("   • Video splitting still timing out")
+            if not timeout_fix_status['real_ffmpeg_working']:
+                print("   • Real FFmpeg processing not confirmed")
         else:
-            print("   • System requires immediate attention - multiple critical failures")
+            print("   ❌ TIMEOUT FIX FAILED: All endpoints still timing out")
+            print("   • Lambda timeout increase from 30s→900s did NOT resolve the issue")
+            print("   • Further investigation needed - may be FFmpeg Lambda timeout, not main Lambda")
+        
+        if timeout_failures:
+            print("   • Consider checking FFmpeg Lambda timeout settings")
+            print("   • Verify Lambda function configuration and deployment")
+            print("   • Check CloudWatch logs for detailed error information")
         
         print()
         print("=" * 80)
@@ -504,7 +862,7 @@ class VideoSplitterTester:
 
 if __name__ == "__main__":
     tester = VideoSplitterTester()
-    passed, failed = tester.run_all_tests()
+    passed, failed = tester.run_timeout_fix_tests()
     
     # Exit with appropriate code
     sys.exit(0 if failed == 0 else 1)

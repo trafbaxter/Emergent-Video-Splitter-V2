@@ -76,9 +76,10 @@ MONGODB_DB_NAME = os.environ.get('DB_NAME', 'videosplitter')
 # In-memory user storage for demo purposes (fallback when MongoDB not available)
 DEMO_USERS = {}
 
-# Initialize AWS clients
+# AWS clients
 s3 = boto3.client('s3')
 lambda_client = boto3.client('lambda')
+FFMPEG_LAMBDA_FUNCTION = 'ffmpeg-converter'
 FFMPEG_LAMBDA_FUNCTION = 'ffmpeg-converter'
 
 def get_cors_headers(origin=None):
@@ -278,6 +279,7 @@ def handle_health_check(event):
             'GET /api/user/profile',
             'POST /api/generate-presigned-url',
             'POST /api/get-video-info',
+            'GET /api/check-metadata/{s3_key}',
             'GET /api/video-stream/{key}',
             'POST /api/split-video',
             'GET /api/job-status/{job_id}',
@@ -566,7 +568,7 @@ def handle_video_stream(event):
         }
 
 def handle_get_video_info(event):
-    """Handle video metadata extraction requests"""
+    """Handle video metadata extraction using async FFmpeg Lambda"""
     origin = event.get('headers', {}).get('origin') or event.get('headers', {}).get('Origin')
     
     try:
@@ -582,81 +584,74 @@ def handle_get_video_info(event):
         
         logger.info(f"Getting video info for key: {s3_key}")
         
-        # Get basic file information from S3
+        # First, try to get cached metadata from S3 (if it exists)
+        metadata_key = f"metadata/{s3_key.replace('/', '_')}.json"
         try:
-            response = s3.head_object(Bucket=BUCKET_NAME, Key=s3_key)
-            file_size = response.get('ContentLength', 0)
-            content_type = response.get('ContentType', 'video/unknown')
-            last_modified = response.get('LastModified')
-            
-            # Extract format from filename or content type
-            filename = s3_key.split('/')[-1] if '/' in s3_key else s3_key
-            file_extension = filename.lower().split('.')[-1] if '.' in filename else 'unknown'
-            
-            # Enhanced metadata based on file type and size
-            if file_extension == 'mkv':
-                format_name = 'x-matroska'
-                # MKV files commonly have subtitles
-                estimated_subtitle_streams = 1
-                estimated_audio_streams = 1
-                estimated_video_streams = 1
-            elif file_extension == 'mp4':
-                format_name = 'mp4'
-                estimated_subtitle_streams = 0  # Less common in MP4
-                estimated_audio_streams = 1
-                estimated_video_streams = 1
-            elif file_extension == 'avi':
-                format_name = 'avi'
-                estimated_subtitle_streams = 0
-                estimated_audio_streams = 1
-                estimated_video_streams = 1
-            else:
-                format_name = file_extension
-                estimated_subtitle_streams = 0
-                estimated_audio_streams = 1
-                estimated_video_streams = 1
-            
-            # Estimate duration based on file size (rough approximation)
-            # Typical video bitrate: ~1-10 Mbps, so 1MB ~= 8-80 seconds
-            # Conservative estimate: 1MB = 10 seconds for decent quality
-            estimated_duration = max(60, int(file_size / (1024 * 1024 * 0.1)))  # At least 1 minute
-            
-            video_info = {
-                'duration': estimated_duration,
-                'format': format_name,
-                'size': file_size,
-                'video_streams': estimated_video_streams,
-                'audio_streams': estimated_audio_streams,
-                'subtitle_streams': estimated_subtitle_streams,
-                'filename': filename,
-                'file_extension': file_extension,
-                'content_type': content_type,
-                'last_modified': last_modified.isoformat() if last_modified else None,
-                'estimated': True,
-                'note': 'Metadata estimated from file properties - FFmpeg analysis not available in current Lambda'
-            }
-            
-            logger.info(f"Generated video info: {video_info}")
+            response = s3.get_object(Bucket=BUCKET_NAME, Key=metadata_key)
+            cached_metadata = json.loads(response['Body'].read())
+            logger.info(f"Found cached metadata: {cached_metadata}")
             
             return {
                 'statusCode': 200,
                 'headers': get_cors_headers(origin),
-                'body': json.dumps(video_info)
+                'body': json.dumps(cached_metadata)
             }
             
         except s3.exceptions.NoSuchKey:
-            return {
-                'statusCode': 404,
-                'headers': get_cors_headers(origin),
-                'body': json.dumps({'message': 'Video file not found'})
+            logger.info("No cached metadata found, starting FFmpeg analysis...")
+            
+            # Generate job ID for async processing
+            job_id = str(uuid.uuid4())
+            
+            # Call FFmpeg Lambda ASYNCHRONOUSLY to avoid API Gateway timeout
+            ffmpeg_payload = {
+                'operation': 'extract_metadata',
+                'source_bucket': BUCKET_NAME,
+                'source_key': s3_key,
+                'job_id': job_id,
+                'callback': {
+                    'type': 's3_result',
+                    'bucket': BUCKET_NAME,
+                    'result_key': metadata_key
+                }
             }
-        except Exception as e:
-            logger.error(f"S3 error getting video info: {str(e)}")
-            return {
-                'statusCode': 500,
-                'headers': get_cors_headers(origin),
-                'body': json.dumps({'message': 'Failed to access video file', 'error': str(e)})
-            }
+            
+            logger.info(f"Starting async metadata extraction: {job_id}")
+            
+            try:
+                # ASYNC invocation - returns immediately!
+                response = lambda_client.invoke(
+                    FunctionName=FFMPEG_LAMBDA_FUNCTION,
+                    InvocationType='Event',  # ASYNC - This is the key!
+                    Payload=json.dumps(ffmpeg_payload)
+                )
+                
+                logger.info(f"Async FFmpeg Lambda started successfully")
+                
+                # Return immediately with fallback metadata and processing status
+                fallback_data = get_immediate_fallback_metadata(s3_key)
+                fallback_data['processing'] = True
+                fallback_data['job_id'] = job_id
+                fallback_data['note'] = 'Real metadata being processed asynchronously - refresh in 30 seconds for accurate results'
+                
+                return {
+                    'statusCode': 202,  # Accepted - processing started
+                    'headers': get_cors_headers(origin),
+                    'body': json.dumps(fallback_data)
+                }
+                
+            except Exception as ffmpeg_error:
+                logger.error(f"Failed to start async FFmpeg: {str(ffmpeg_error)}")
+                
+                # Return fallback metadata if FFmpeg is unavailable
+                fallback_data = get_immediate_fallback_metadata(s3_key)
+                fallback_data['note'] = 'FFmpeg processing unavailable - using file-based estimates'
+                
+                return {
+                    'statusCode': 200,
+                    'headers': get_cors_headers(origin),
+                    'body': json.dumps(fallback_data)
+                }
         
     except json.JSONDecodeError:
         return {
@@ -672,47 +667,351 @@ def handle_get_video_info(event):
             'body': json.dumps({'message': 'Failed to get video info', 'error': str(e)})
         }
 
-def handle_split_video(event):
-    """Handle video splitting requests - placeholder implementation"""
+def handle_check_metadata(event):
+    """Handle metadata check requests - check if cached metadata exists"""
     origin = event.get('headers', {}).get('origin') or event.get('headers', {}).get('Origin')
     
-    return {
-        'statusCode': 501,
-        'headers': get_cors_headers(origin),
-        'body': json.dumps({
-            'message': 'Video splitting not yet implemented',
-            'note': 'This feature requires FFmpeg Lambda layer implementation',
-            'status': 'coming_soon'
-        })
-    }
+    try:
+        # Extract S3 key from path
+        path = event.get('path', '')
+        s3_key = None
+        
+        if '/api/check-metadata/' in path:
+            s3_key = path.split('/api/check-metadata/')[-1]
+        
+        if not s3_key:
+            return {
+                'statusCode': 400,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'S3 key is required'})
+            }
+        
+        logger.info(f"Checking metadata for key: {s3_key}")
+        
+        # Check if cached metadata exists in S3
+        metadata_key = f"metadata/{s3_key.replace('/', '_')}.json"
+        try:
+            response = s3.get_object(Bucket=BUCKET_NAME, Key=metadata_key)
+            cached_metadata = json.loads(response['Body'].read())
+            logger.info(f"Found cached metadata: {cached_metadata}")
+            
+            return {
+                'statusCode': 200,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({
+                    'metadata_available': True,
+                    'metadata': cached_metadata
+                })
+            }
+            
+        except s3.exceptions.NoSuchKey:
+            logger.info("No cached metadata found")
+            return {
+                'statusCode': 200,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({
+                    'metadata_available': False,
+                    'message': 'Metadata not yet processed'
+                })
+            }
+            
+    except Exception as e:
+        logger.error(f"Check metadata error: {str(e)}")
+        return {
+            'statusCode': 500,
+            'headers': get_cors_headers(origin),
+            'body': json.dumps({'message': 'Failed to check metadata', 'error': str(e)})
+        }
+
+def get_immediate_fallback_metadata(s3_key):
+    """Get immediate fallback metadata for instant response"""
+    try:
+        # Get basic file information from S3 (fast operation)
+        response = s3.head_object(Bucket=BUCKET_NAME, Key=s3_key)
+        file_size = response.get('ContentLength', 0)
+        
+        # Extract format from filename
+        filename = s3_key.split('/')[-1] if '/' in s3_key else s3_key
+        file_extension = filename.lower().split('.')[-1] if '.' in filename else 'unknown'
+        
+        # Improved fallback metadata based on file characteristics
+        return {
+            'duration': 0,  # Will be updated by async processing
+            'format': file_extension,
+            'size': file_size,
+            'video_streams': 1,
+            'audio_streams': 1,
+            'subtitle_streams': 1 if file_extension == 'mkv' else 0,
+            'filename': filename,
+            'fallback': True
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting fallback metadata: {str(e)}")
+        return {
+            'duration': 0,
+            'format': 'unknown',
+            'size': 0,
+            'video_streams': 1,
+            'audio_streams': 1,
+            'subtitle_streams': 0,
+            'filename': 'unknown',
+            'fallback': True,
+            'error': str(e)
+        }
+
+def handle_split_video(event):
+    """Handle video splitting requests using FFmpeg Lambda"""
+    origin = event.get('headers', {}).get('origin') or event.get('headers', {}).get('Origin')
+    
+    try:
+        body = json.loads(event['body'])
+        s3_key = body.get('s3_key')
+        
+        if not s3_key:
+            return {
+                'statusCode': 400,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'S3 key is required'})
+            }
+        
+        logger.info(f"Starting video split for key: {s3_key}")
+        logger.info(f"Split config: {json.dumps(body)}")
+        
+        # Generate job ID for tracking
+        job_id = str(uuid.uuid4())
+        
+        # Prepare FFmpeg Lambda payload
+        ffmpeg_payload = {
+            'operation': 'split_video',
+            'source_bucket': BUCKET_NAME,
+            'source_key': s3_key,
+            'job_id': job_id,
+            'split_config': {
+                'method': body.get('method', 'intervals'),
+                'time_points': body.get('time_points', []),
+                'interval_duration': body.get('interval_duration', 300),
+                'preserve_quality': body.get('preserve_quality', True),
+                'output_format': body.get('output_format', 'mp4'),
+                'keyframe_interval': body.get('keyframe_interval', 2),
+                'subtitle_offset': body.get('subtitle_offset', 0)
+            }
+        }
+        
+        logger.info(f"Calling FFmpeg Lambda for video splitting")
+        logger.info(f"FFmpeg payload: {json.dumps(ffmpeg_payload)}")
+        
+        try:
+            # Call FFmpeg Lambda asynchronously for long-running video processing
+            response = lambda_client.invoke(
+                FunctionName=FFMPEG_LAMBDA_FUNCTION,
+                InvocationType='Event',  # Async invocation
+                Payload=json.dumps(ffmpeg_payload)
+            )
+            
+            logger.info(f"FFmpeg Lambda invoked successfully, job_id: {job_id}")
+            
+            return {
+                'statusCode': 202,  # Accepted - processing started
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({
+                    'job_id': job_id,
+                    'status': 'processing',
+                    'message': 'Video splitting started',
+                    'estimated_time': 'Processing may take several minutes depending on video length'
+                })
+            }
+            
+        except Exception as ffmpeg_error:
+            logger.error(f"Failed to call FFmpeg Lambda: {str(ffmpeg_error)}")
+            return {
+                'statusCode': 500,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({
+                    'message': 'Failed to start video processing', 
+                    'error': str(ffmpeg_error),
+                    'note': 'FFmpeg Lambda function may not be available'
+                })
+            }
+        
+    except json.JSONDecodeError:
+        return {
+            'statusCode': 400,
+            'headers': get_cors_headers(origin),
+            'body': json.dumps({'message': 'Invalid JSON in request body'})
+        }
+    except Exception as e:
+        logger.error(f"Video split error: {str(e)}")
+        return {
+            'statusCode': 500,
+            'headers': get_cors_headers(origin),
+            'body': json.dumps({'message': 'Failed to split video', 'error': str(e)})
+        }
 
 def handle_job_status(event):
-    """Handle job status requests - placeholder implementation"""
+    """Handle job status requests"""
     origin = event.get('headers', {}).get('origin') or event.get('headers', {}).get('Origin')
     
-    return {
-        'statusCode': 501,
-        'headers': get_cors_headers(origin),
-        'body': json.dumps({
-            'message': 'Job status tracking not yet implemented',
-            'note': 'This feature requires background processing implementation',
-            'status': 'coming_soon'
-        })
-    }
+    try:
+        # Extract job ID from path
+        path = event.get('path', '')
+        job_id = None
+        
+        if '/api/job-status/' in path:
+            job_id = path.split('/api/job-status/')[-1]
+        
+        if not job_id:
+            return {
+                'statusCode': 400,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'Job ID is required'})
+            }
+        
+        logger.info(f"Checking status for job: {job_id}")
+        
+        # Check S3 for job results (common pattern for FFmpeg Lambda results)
+        try:
+            # Look for job results in S3 under a results prefix
+            list_response = s3.list_objects_v2(
+                Bucket=BUCKET_NAME,
+                Prefix=f"results/{job_id}/",
+                MaxKeys=10
+            )
+            
+            if 'Contents' in list_response and len(list_response['Contents']) > 0:
+                # Job completed - results found
+                results = []
+                for obj in list_response['Contents']:
+                    filename = obj['Key'].split('/')[-1]
+                    if filename and not filename.endswith('/'):  # Skip directory markers
+                        results.append({
+                            'filename': filename,
+                            'size': obj.get('Size', 0),
+                            'key': obj['Key']
+                        })
+                
+                return {
+                    'statusCode': 200,
+                    'headers': get_cors_headers(origin),
+                    'body': json.dumps({
+                        'job_id': job_id,
+                        'status': 'completed',
+                        'progress': 100,
+                        'results': results
+                    })
+                }
+            else:
+                # Job still processing or failed
+                return {
+                    'statusCode': 200,
+                    'headers': get_cors_headers(origin),
+                    'body': json.dumps({
+                        'job_id': job_id,
+                        'status': 'processing',
+                        'progress': 50,  # Estimated progress
+                        'message': 'Video processing in progress...'
+                    })
+                }
+                
+        except Exception as s3_error:
+            logger.error(f"Error checking job status in S3: {str(s3_error)}")
+            return {
+                'statusCode': 200,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({
+                    'job_id': job_id,
+                    'status': 'processing',
+                    'progress': 25,
+                    'message': 'Processing status unknown - job may still be running'
+                })
+            }
+        
+    except Exception as e:
+        logger.error(f"Job status error: {str(e)}")
+        return {
+            'statusCode': 500,
+            'headers': get_cors_headers(origin),
+            'body': json.dumps({'message': 'Failed to get job status', 'error': str(e)})
+        }
 
 def handle_download_file(event):
-    """Handle file download requests - placeholder implementation"""
+    """Handle file download requests"""
     origin = event.get('headers', {}).get('origin') or event.get('headers', {}).get('Origin')
     
-    return {
-        'statusCode': 501,
-        'headers': get_cors_headers(origin),
-        'body': json.dumps({
-            'message': 'File download not yet implemented',
-            'note': 'This feature requires processed file management',
-            'status': 'coming_soon'
-        })
-    }
+    try:
+        # Extract job_id and filename from path
+        path = event.get('path', '')
+        
+        if '/api/download/' not in path:
+            return {
+                'statusCode': 400,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'Invalid download path'})
+            }
+        
+        # Parse path: /api/download/{job_id}/{filename}
+        path_parts = path.split('/api/download/')[-1].split('/')
+        if len(path_parts) < 2:
+            return {
+                'statusCode': 400,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'Job ID and filename are required'})
+            }
+        
+        job_id = path_parts[0]
+        filename = '/'.join(path_parts[1:])  # Handle filenames with slashes
+        
+        logger.info(f"Download request - Job ID: {job_id}, Filename: {filename}")
+        
+        # Generate download URL for the processed file
+        s3_key = f"results/{job_id}/{filename}"
+        
+        try:
+            # Check if file exists
+            s3.head_object(Bucket=BUCKET_NAME, Key=s3_key)
+            
+            # Generate presigned URL for download
+            download_url = s3.generate_presigned_url(
+                'get_object',
+                Params={
+                    'Bucket': BUCKET_NAME,
+                    'Key': s3_key,
+                    'ResponseContentDisposition': f'attachment; filename="{filename}"'
+                },
+                ExpiresIn=3600  # 1 hour for downloads
+            )
+            
+            return {
+                'statusCode': 200,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({
+                    'download_url': download_url,
+                    'filename': filename,
+                    'expires_in': 3600
+                })
+            }
+            
+        except s3.exceptions.NoSuchKey:
+            return {
+                'statusCode': 404,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'File not found or processing not completed'})
+            }
+        except Exception as s3_error:
+            logger.error(f"S3 error for download: {str(s3_error)}")
+            return {
+                'statusCode': 500,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'Failed to generate download URL', 'error': str(s3_error)})
+            }
+        
+    except Exception as e:
+        logger.error(f"Download error: {str(e)}")
+        return {
+            'statusCode': 500,
+            'headers': get_cors_headers(origin),
+            'body': json.dumps({'message': 'Failed to process download request', 'error': str(e)})
+        }
 
 def handle_generate_presigned_url(event):
     """Handle presigned URL generation for S3 uploads"""
@@ -828,6 +1127,8 @@ def lambda_handler(event, context):
             return handle_video_stream(event)
         elif path == '/api/get-video-info':
             return handle_get_video_info(event)
+        elif path.startswith('/api/check-metadata/'):
+            return handle_check_metadata(event)
         elif path == '/api/split-video':
             return handle_split_video(event)
         elif path.startswith('/api/job-status/'):
