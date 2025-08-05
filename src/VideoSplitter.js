@@ -168,6 +168,8 @@ const VideoSplitter = () => {
   // Get video information
   const getVideoInfo = async (key) => {
     try {
+      console.log('Getting video info for key:', key);
+      
       const response = await fetch(`${API_BASE}/api/get-video-info`, {
         method: 'POST',
         headers: {
@@ -177,30 +179,49 @@ const VideoSplitter = () => {
         body: JSON.stringify({ s3_key: key })
       });
 
+      console.log('Video info response status:', response.status);
+
       if (response.ok) {
         const info = await response.json();
+        console.log('Video info received:', info);
         setVideoInfo(info);
       } else {
-        // Fallback metadata
+        console.warn('Video info extraction failed, using enhanced fallback');
+        const errorText = await response.text();
+        console.error('Video info error:', errorText);
+        
+        // Enhanced fallback metadata based on file type
+        const fileExtension = selectedFile.name.toLowerCase().split('.').pop();
+        const estimatedDuration = Math.floor(selectedFile.size / (1024 * 1024 * 10)); // Better estimation
+        
         setVideoInfo({
-          duration: Math.floor(selectedFile.size / (1024 * 1024 * 60)), // Rough estimate
-          format: selectedFile.type.split('/')[1] || 'unknown',
+          duration: estimatedDuration,
+          format: fileExtension === 'mkv' ? 'x-matroska' : (selectedFile.type.split('/')[1] || fileExtension),
           size: selectedFile.size,
           video_streams: 1,
           audio_streams: 1,
-          subtitle_streams: 0
+          // MKV files commonly have subtitles, so make a reasonable assumption
+          subtitle_streams: fileExtension === 'mkv' ? 1 : 0,
+          filename: selectedFile.name,
+          container: fileExtension
         });
       }
     } catch (error) {
       console.error('Failed to get video info:', error);
-      // Set fallback metadata
+      
+      // Enhanced fallback metadata
+      const fileExtension = selectedFile.name.toLowerCase().split('.').pop();
+      const estimatedDuration = Math.floor(selectedFile.size / (1024 * 1024 * 10));
+      
       setVideoInfo({
-        duration: Math.floor(selectedFile.size / (1024 * 1024 * 60)),
-        format: selectedFile.type.split('/')[1] || 'unknown',
+        duration: estimatedDuration,
+        format: fileExtension === 'mkv' ? 'x-matroska' : (selectedFile.type.split('/')[1] || fileExtension),
         size: selectedFile.size,
         video_streams: 1,
         audio_streams: 1,
-        subtitle_streams: 0
+        subtitle_streams: fileExtension === 'mkv' ? 1 : 0,
+        filename: selectedFile.name,
+        container: fileExtension
       });
     }
   };
@@ -208,15 +229,30 @@ const VideoSplitter = () => {
   // Get video stream URL for preview
   const getVideoStream = async (key) => {
     try {
+      console.log('Getting video stream for key:', key);
+      
       const response = await fetch(`${API_BASE}/api/video-stream/${key}`, {
         headers: {
           'Authorization': `Bearer ${accessToken}`
         }
       });
 
+      console.log('Video stream response status:', response.status);
+
       if (response.ok) {
         const data = await response.json();
-        setVideoUrl(data.stream_url);
+        console.log('Video stream data:', data);
+        
+        if (data.stream_url) {
+          setVideoUrl(data.stream_url);
+          console.log('Video URL set:', data.stream_url);
+        } else {
+          console.warn('No stream_url in response');
+        }
+      } else {
+        console.error('Failed to get video stream, status:', response.status);
+        const errorText = await response.text();
+        console.error('Error response:', errorText);
       }
     } catch (error) {
       console.error('Failed to get video stream:', error);
@@ -773,7 +809,10 @@ const VideoSplitter = () => {
                   <select
                     value={outputFormat}
                     onChange={(e) => setOutputFormat(e.target.value)}
-                    style={inputStyle}
+                    style={{
+                      ...inputStyle,
+                      height: '45px'
+                    }}
                   >
                     <option value="mp4">MP4</option>
                     <option value="mkv">MKV</option>

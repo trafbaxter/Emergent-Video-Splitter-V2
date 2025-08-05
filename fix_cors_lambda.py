@@ -491,9 +491,255 @@ def handle_user_profile(event):
             'body': json.dumps({'message': 'Failed to get profile', 'error': str(e)})
         }
 
+def handle_video_stream(event):
+    """Handle video streaming requests"""
+    origin = event.get('headers', {}).get('origin') or event.get('headers', {}).get('Origin')
+    
+    try:
+        # Extract S3 key from path
+        path_parameters = event.get('pathParameters', {})
+        s3_key = path_parameters.get('key') if path_parameters else None
+        
+        # Alternative: extract from path
+        if not s3_key:
+            path = event.get('path', '')
+            if '/api/video-stream/' in path:
+                s3_key = path.split('/api/video-stream/')[-1]
+        
+        if not s3_key:
+            return {
+                'statusCode': 400,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'S3 key is required'})
+            }
+        
+        logger.info(f"Generating video stream URL for key: {s3_key}")
+        
+        # Generate presigned URL for video streaming (longer expiration for streaming)
+        try:
+            stream_url = s3.generate_presigned_url(
+                'get_object',
+                Params={'Bucket': BUCKET_NAME, 'Key': s3_key},
+                ExpiresIn=7200  # 2 hours for video streaming
+            )
+            
+            return {
+                'statusCode': 200,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({
+                    'stream_url': stream_url,
+                    's3_key': s3_key,
+                    'expires_in': 7200
+                })
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to generate stream URL: {str(e)}")
+            return {
+                'statusCode': 404,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'Video not found or access denied'})
+            }
+        
+    except Exception as e:
+        logger.error(f"Video stream error: {str(e)}")
+        return {
+            'statusCode': 500,
+            'headers': get_cors_headers(origin),
+            'body': json.dumps({'message': 'Failed to generate video stream', 'error': str(e)})
+        }
+
+def handle_get_video_info(event):
+    """Handle video metadata extraction requests"""
+    origin = event.get('headers', {}).get('origin') or event.get('headers', {}).get('Origin')
+    
+    try:
+        body = json.loads(event['body'])
+        s3_key = body.get('s3_key')
+        
+        if not s3_key:
+            return {
+                'statusCode': 400,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'S3 key is required'})
+            }
+        
+        logger.info(f"Getting video info for key: {s3_key}")
+        
+        # Get basic file information from S3
+        try:
+            response = s3.head_object(Bucket=BUCKET_NAME, Key=s3_key)
+            file_size = response.get('ContentLength', 0)
+            content_type = response.get('ContentType', 'video/unknown')
+            last_modified = response.get('LastModified')
+            
+            # Extract format from filename or content type
+            filename = s3_key.split('/')[-1] if '/' in s3_key else s3_key
+            file_extension = filename.lower().split('.')[-1] if '.' in filename else 'unknown'
+            
+            # Enhanced metadata based on file type and size
+            if file_extension == 'mkv':
+                format_name = 'x-matroska'
+                # MKV files commonly have subtitles
+                estimated_subtitle_streams = 1
+                estimated_audio_streams = 1
+                estimated_video_streams = 1
+            elif file_extension == 'mp4':
+                format_name = 'mp4'
+                estimated_subtitle_streams = 0  # Less common in MP4
+                estimated_audio_streams = 1
+                estimated_video_streams = 1
+            elif file_extension == 'avi':
+                format_name = 'avi'
+                estimated_subtitle_streams = 0
+                estimated_audio_streams = 1
+                estimated_video_streams = 1
+            else:
+                format_name = file_extension
+                estimated_subtitle_streams = 0
+                estimated_audio_streams = 1
+                estimated_video_streams = 1
+            
+            # Estimate duration based on file size (rough approximation)
+            # Typical video bitrate: ~1-10 Mbps, so 1MB ~= 8-80 seconds
+            # Conservative estimate: 1MB = 10 seconds for decent quality
+            estimated_duration = max(60, int(file_size / (1024 * 1024 * 0.1)))  # At least 1 minute
+            
+            video_info = {
+                'duration': estimated_duration,
+                'format': format_name,
+                'size': file_size,
+                'video_streams': estimated_video_streams,
+                'audio_streams': estimated_audio_streams,
+                'subtitle_streams': estimated_subtitle_streams,
+                'filename': filename,
+                'file_extension': file_extension,
+                'content_type': content_type,
+                'last_modified': last_modified.isoformat() if last_modified else None,
+                'estimated': True,
+                'note': 'Metadata estimated from file properties - FFmpeg analysis not available in current Lambda'
+            }
+            
+            logger.info(f"Generated video info: {video_info}")
+            
+            return {
+                'statusCode': 200,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps(video_info)
+            }
+            
+        except s3.exceptions.NoSuchKey:
+            return {
+                'statusCode': 404,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'Video file not found'})
+            }
+        except Exception as e:
+            logger.error(f"S3 error getting video info: {str(e)}")
+            return {
+                'statusCode': 500,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'Failed to access video file', 'error': str(e)})
+            }
+        
+    except json.JSONDecodeError:
+        return {
+            'statusCode': 400,
+            'headers': get_cors_headers(origin),
+            'body': json.dumps({'message': 'Invalid JSON in request body'})
+        }
+    except Exception as e:
+        logger.error(f"Video info error: {str(e)}")
+        return {
+            'statusCode': 500,
+            'headers': get_cors_headers(origin),
+            'body': json.dumps({'message': 'Failed to get video info', 'error': str(e)})
+        }
+
+def handle_split_video(event):
+    """Handle video splitting requests - placeholder implementation"""
+    origin = event.get('headers', {}).get('origin') or event.get('headers', {}).get('Origin')
+    
+    return {
+        'statusCode': 501,
+        'headers': get_cors_headers(origin),
+        'body': json.dumps({
+            'message': 'Video splitting not yet implemented',
+            'note': 'This feature requires FFmpeg Lambda layer implementation',
+            'status': 'coming_soon'
+        })
+    }
+
+def handle_job_status(event):
+    """Handle job status requests - placeholder implementation"""
+    origin = event.get('headers', {}).get('origin') or event.get('headers', {}).get('Origin')
+    
+    return {
+        'statusCode': 501,
+        'headers': get_cors_headers(origin),
+        'body': json.dumps({
+            'message': 'Job status tracking not yet implemented',
+            'note': 'This feature requires background processing implementation',
+            'status': 'coming_soon'
+        })
+    }
+
+def handle_download_file(event):
+    """Handle file download requests - placeholder implementation"""
+    origin = event.get('headers', {}).get('origin') or event.get('headers', {}).get('Origin')
+    
+    return {
+        'statusCode': 501,
+        'headers': get_cors_headers(origin),
+        'body': json.dumps({
+            'message': 'File download not yet implemented',
+            'note': 'This feature requires processed file management',
+            'status': 'coming_soon'
+        })
+    }
+
 def handle_generate_presigned_url(event):
     """Handle presigned URL generation for S3 uploads"""
     origin = event.get('headers', {}).get('origin') or event.get('headers', {}).get('Origin')
+    
+    try:
+        body = json.loads(event['body'])
+        filename = body.get('filename')
+        content_type = body.get('contentType', 'video/mp4')
+        
+        if not filename:
+            return {
+                'statusCode': 400,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'Filename is required'})
+            }
+        
+        # Generate unique key for S3
+        key = f"uploads/{uuid.uuid4()}/{filename}"
+        
+        # Generate presigned URL for upload
+        presigned_url = s3.generate_presigned_url(
+            'put_object',
+            Params={'Bucket': BUCKET_NAME, 'Key': key, 'ContentType': content_type},
+            ExpiresIn=3600
+        )
+        
+        return {
+            'statusCode': 200,
+            'headers': get_cors_headers(origin),
+            'body': json.dumps({
+                'uploadUrl': presigned_url,
+                'key': key
+            })
+        }
+        
+    except Exception as e:
+        logger.error(f"Presigned URL error: {str(e)}")
+        return {
+            'statusCode': 500,
+            'headers': get_cors_headers(origin),
+            'body': json.dumps({'message': 'Failed to generate upload URL', 'error': str(e)})
+        }
     
     try:
         body = json.loads(event['body'])
@@ -562,6 +808,16 @@ def lambda_handler(event, context):
             return handle_user_profile(event)
         elif path == '/api/generate-presigned-url':
             return handle_generate_presigned_url(event)
+        elif path.startswith('/api/video-stream/'):
+            return handle_video_stream(event)
+        elif path == '/api/get-video-info':
+            return handle_get_video_info(event)
+        elif path == '/api/split-video':
+            return handle_split_video(event)
+        elif path.startswith('/api/job-status/'):
+            return handle_job_status(event)
+        elif path.startswith('/api/download/'):
+            return handle_download_file(event)
         else:
             # Return 404 for unknown paths
             return {
