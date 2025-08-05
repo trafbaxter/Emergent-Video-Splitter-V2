@@ -71,32 +71,6 @@ tmp/
 *.db
 *.sqlite
 
-<<<<<<< HEAD
-# Mobile development
-android-sdk/
-
-#amplify-do-not-edit-begin
-amplify/\#current-cloud-backend
-amplify/.config/local-*
-amplify/logs
-amplify/mock-data
-amplify/mock-api-resources
-amplify/backend/amplify-meta.json
-amplify/backend/.temp
-build/
-dist/
-node_modules/
-aws-exports.js
-awsconfiguration.json
-amplifyconfiguration.json
-amplifyconfiguration.dart
-amplify-build-config.json
-amplify-gradle-config.json
-amplifytools.xcconfig
-.secret-*
-**.sample
-#amplify-do-not-edit-end
-=======
 # Certificates and keys (NEVER commit these)
 *.pem
 *.key
@@ -107,4 +81,3 @@ amplifytools.xcconfig
 # Configuration files that might contain secrets
 config.json
 secrets.json
->>>>>>> 3c1a9381a2bbf306e9e3761b31de97962165c8fc
