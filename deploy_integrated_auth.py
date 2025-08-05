@@ -157,7 +157,7 @@ def deploy_integrated_auth_lambda(zip_path):
                 'JWT_REFRESH_SECRET': 'production-refresh-secret-change-this-2024', 
                 'FRONTEND_URL': 'https://develop.tads-video-splitter.com',
                 'S3_BUCKET': 'videosplitter-uploads',
-                'MONGO_URL': 'mongodb://localhost:27017/',
+                'MONGO_URL': 'mongodb://172.31.32.212:27017/videosplitter',
                 'DB_NAME': 'videosplitter'
             }
             
