@@ -678,13 +678,13 @@ const VideoSplitter = () => {
                   value={splitMethod}
                   onChange={(e) => setSplitMethod(e.target.value)}
                   style={{
-                    ...inputStyle,
+                    ...selectStyle,
                     marginBottom: '20px',
                     height: '45px'
                   }}
                 >
-                  <option value="time">Time-based (Manual Points)</option>
-                  <option value="intervals">Equal Intervals</option>
+                  <option value="time" style={{backgroundColor: '#2d3748', color: 'white'}}>Time-based (Manual Points)</option>
+                  <option value="intervals" style={{backgroundColor: '#2d3748', color: 'white'}}>Equal Intervals</option>
                 </select>
 
                 {splitMethod === 'time' && (
