@@ -567,7 +567,7 @@ def handle_video_stream(event):
         }
 
 def handle_get_video_info(event):
-    """Handle video metadata extraction requests"""
+    """Handle video metadata extraction using FFmpeg Lambda"""
     origin = event.get('headers', {}).get('origin') or event.get('headers', {}).get('Origin')
     
     try:
@@ -583,81 +583,45 @@ def handle_get_video_info(event):
         
         logger.info(f"Getting video info for key: {s3_key}")
         
-        # Get basic file information from S3
+        # Call FFmpeg Lambda for actual metadata extraction
+        ffmpeg_payload = {
+            'operation': 'extract_metadata',
+            'source_bucket': BUCKET_NAME,
+            'source_key': s3_key,
+            'job_id': str(uuid.uuid4())
+        }
+        
+        logger.info(f"Calling FFmpeg Lambda for metadata: {s3_key}")
+        
         try:
-            response = s3.head_object(Bucket=BUCKET_NAME, Key=s3_key)
-            file_size = response.get('ContentLength', 0)
-            content_type = response.get('ContentType', 'video/unknown')
-            last_modified = response.get('LastModified')
+            response = lambda_client.invoke(
+                FunctionName=FFMPEG_LAMBDA_FUNCTION,
+                Payload=json.dumps(ffmpeg_payload)
+            )
             
-            # Extract format from filename or content type
-            filename = s3_key.split('/')[-1] if '/' in s3_key else s3_key
-            file_extension = filename.lower().split('.')[-1] if '.' in filename else 'unknown'
+            result = json.loads(response['Payload'].read())
+            logger.info(f"FFmpeg Lambda response: {result}")
             
-            # Enhanced metadata based on file type and size
-            if file_extension == 'mkv':
-                format_name = 'x-matroska'
-                # MKV files commonly have subtitles
-                estimated_subtitle_streams = 1
-                estimated_audio_streams = 1
-                estimated_video_streams = 1
-            elif file_extension == 'mp4':
-                format_name = 'mp4'
-                estimated_subtitle_streams = 0  # Less common in MP4
-                estimated_audio_streams = 1
-                estimated_video_streams = 1
-            elif file_extension == 'avi':
-                format_name = 'avi'
-                estimated_subtitle_streams = 0
-                estimated_audio_streams = 1
-                estimated_video_streams = 1
+            if result.get('statusCode') == 200:
+                metadata = json.loads(result['body'])
+                logger.info(f"Video metadata extracted: {metadata}")
+                
+                return {
+                    'statusCode': 200,
+                    'headers': get_cors_headers(origin),
+                    'body': json.dumps(metadata)
+                }
             else:
-                format_name = file_extension
-                estimated_subtitle_streams = 0
-                estimated_audio_streams = 1
-                estimated_video_streams = 1
+                logger.error(f"FFmpeg Lambda error: {result}")
+                
+                # Fallback to basic metadata if FFmpeg fails
+                return get_fallback_metadata(s3_key, origin)
+                
+        except Exception as ffmpeg_error:
+            logger.error(f"Failed to call FFmpeg Lambda: {str(ffmpeg_error)}")
             
-            # Estimate duration based on file size (rough approximation)
-            # Typical video bitrate: ~1-10 Mbps, so 1MB ~= 8-80 seconds
-            # Conservative estimate: 1MB = 10 seconds for decent quality
-            estimated_duration = max(60, int(file_size / (1024 * 1024 * 0.1)))  # At least 1 minute
-            
-            video_info = {
-                'duration': estimated_duration,
-                'format': format_name,
-                'size': file_size,
-                'video_streams': estimated_video_streams,
-                'audio_streams': estimated_audio_streams,
-                'subtitle_streams': estimated_subtitle_streams,
-                'filename': filename,
-                'file_extension': file_extension,
-                'content_type': content_type,
-                'last_modified': last_modified.isoformat() if last_modified else None,
-                'estimated': True,
-                'note': 'Metadata estimated from file properties - FFmpeg analysis not available in current Lambda'
-            }
-            
-            logger.info(f"Generated video info: {video_info}")
-            
-            return {
-                'statusCode': 200,
-                'headers': get_cors_headers(origin),
-                'body': json.dumps(video_info)
-            }
-            
-        except s3.exceptions.NoSuchKey:
-            return {
-                'statusCode': 404,
-                'headers': get_cors_headers(origin),
-                'body': json.dumps({'message': 'Video file not found'})
-            }
-        except Exception as e:
-            logger.error(f"S3 error getting video info: {str(e)}")
-            return {
-                'statusCode': 500,
-                'headers': get_cors_headers(origin),
-                'body': json.dumps({'message': 'Failed to access video file', 'error': str(e)})
-            }
+            # Fallback to basic metadata
+            return get_fallback_metadata(s3_key, origin)
         
     except json.JSONDecodeError:
         return {
@@ -671,6 +635,42 @@ def handle_get_video_info(event):
             'statusCode': 500,
             'headers': get_cors_headers(origin),
             'body': json.dumps({'message': 'Failed to get video info', 'error': str(e)})
+        }
+
+def get_fallback_metadata(s3_key, origin):
+    """Get basic metadata as fallback when FFmpeg is not available"""
+    try:
+        # Get basic file information from S3
+        response = s3.head_object(Bucket=BUCKET_NAME, Key=s3_key)
+        file_size = response.get('ContentLength', 0)
+        
+        # Extract format from filename
+        filename = s3_key.split('/')[-1] if '/' in s3_key else s3_key
+        file_extension = filename.lower().split('.')[-1] if '.' in filename else 'unknown'
+        
+        # Basic fallback metadata
+        fallback_metadata = {
+            'duration': 0,  # Can't determine without FFmpeg
+            'format': file_extension,
+            'size': file_size,
+            'video_streams': 1,
+            'audio_streams': 1,
+            'subtitle_streams': 1 if file_extension == 'mkv' else 0,
+            'filename': filename,
+            'note': 'FFmpeg analysis not available - using basic file information'
+        }
+        
+        return {
+            'statusCode': 200,
+            'headers': get_cors_headers(origin),
+            'body': json.dumps(fallback_metadata)
+        }
+        
+    except Exception as e:
+        return {
+            'statusCode': 500,
+            'headers': get_cors_headers(origin),
+            'body': json.dumps({'message': 'Failed to get file information', 'error': str(e)})
         }
 
 def handle_split_video(event):
