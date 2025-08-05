@@ -90,6 +90,8 @@ const VideoPlayer = ({ videoUrl, videoRef, currentTime, setCurrentTime, formatTi
     </div>
   );
 };
+
+const VideoSplitter = () => {
   const { accessToken, API_BASE } = useAuth();
   
   // File handling
