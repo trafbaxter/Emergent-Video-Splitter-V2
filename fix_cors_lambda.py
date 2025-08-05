@@ -1126,6 +1126,8 @@ def lambda_handler(event, context):
             return handle_video_stream(event)
         elif path == '/api/get-video-info':
             return handle_get_video_info(event)
+        elif path.startswith('/api/check-metadata/'):
+            return handle_check_metadata(event)
         elif path == '/api/split-video':
             return handle_split_video(event)
         elif path.startswith('/api/job-status/'):
