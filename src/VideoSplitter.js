@@ -29,7 +29,7 @@ const VideoSplitter = () => {
   const [intervalDuration, setIntervalDuration] = useState(300); // 5 minutes
   const [preserveQuality, setPreserveQuality] = useState(true);
   const [outputFormat, setOutputFormat] = useState('mp4');
-  const [forceKeyframes, setForceKeyframes] = useState(false);
+  const [forceKeyframes, setForceKeyframes] = useState(true);
   const [keyframeInterval, setKeyframeInterval] = useState(2);
   const [subtitleOffset, setSubtitleOffset] = useState(0);
 
@@ -113,25 +113,39 @@ const VideoSplitter = () => {
 
       const { uploadUrl, key } = await presignedResponse.json();
 
-      // Upload file to S3
-      const uploadResponse = await fetch(uploadUrl, {
-        method: 'PUT',
-        body: selectedFile,
-        headers: {
-          'Content-Type': selectedFile.type
-        }
+      // Upload file to S3 with progress tracking
+      const xhr = new XMLHttpRequest();
+      
+      return new Promise((resolve, reject) => {
+        xhr.upload.addEventListener('progress', (e) => {
+          if (e.lengthComputable) {
+            const percentage = Math.round((e.loaded / e.total) * 100);
+            setUploadProgress(percentage);
+          }
+        });
+
+        xhr.addEventListener('load', async () => {
+          if (xhr.status === 200) {
+            setJobId(key);
+            setUploadProgress(100);
+            
+            // Get video metadata and stream URL
+            await getVideoInfo(key);
+            await getVideoStream(key);
+            resolve();
+          } else {
+            reject(new Error('Upload failed'));
+          }
+        });
+
+        xhr.addEventListener('error', () => {
+          reject(new Error('Upload failed'));
+        });
+
+        xhr.open('PUT', uploadUrl);
+        xhr.setRequestHeader('Content-Type', selectedFile.type);
+        xhr.send(selectedFile);
       });
-
-      if (!uploadResponse.ok) {
-        throw new Error('Failed to upload file');
-      }
-
-      setJobId(key);
-      setUploadProgress(100);
-
-      // Get video metadata
-      await getVideoInfo(key);
-      await getVideoStream(key);
 
     } catch (error) {
       console.error('Upload failed:', error);
@@ -157,10 +171,9 @@ const VideoSplitter = () => {
         const info = await response.json();
         setVideoInfo(info);
       } else {
-        // Metadata extraction might fail due to timeout, but video can still be processed
-        console.warn('Failed to get video info, using fallback');
+        // Fallback metadata
         setVideoInfo({
-          duration: 0,
+          duration: Math.floor(selectedFile.size / (1024 * 1024 * 60)), // Rough estimate
           format: selectedFile.type.split('/')[1] || 'unknown',
           size: selectedFile.size,
           video_streams: 1,
@@ -170,6 +183,15 @@ const VideoSplitter = () => {
       }
     } catch (error) {
       console.error('Failed to get video info:', error);
+      // Set fallback metadata
+      setVideoInfo({
+        duration: Math.floor(selectedFile.size / (1024 * 1024 * 60)),
+        format: selectedFile.type.split('/')[1] || 'unknown',
+        size: selectedFile.size,
+        video_streams: 1,
+        audio_streams: 1,
+        subtitle_streams: 0
+      });
     }
   };
 
@@ -204,6 +226,27 @@ const VideoSplitter = () => {
   // Remove time point
   const removeTimePoint = (time) => {
     setTimePoints(timePoints.filter(t => t !== time));
+  };
+
+  // Add manual time point
+  const addManualTimePoint = (timeInput) => {
+    const parts = timeInput.split(':');
+    let seconds = 0;
+    
+    if (parts.length === 2) {
+      // MM:SS format
+      seconds = parseInt(parts[0]) * 60 + parseInt(parts[1]);
+    } else if (parts.length === 3) {
+      // HH:MM:SS format  
+      seconds = parseInt(parts[0]) * 3600 + parseInt(parts[1]) * 60 + parseInt(parts[2]);
+    } else {
+      // Assume it's just seconds
+      seconds = parseInt(timeInput);
+    }
+    
+    if (!isNaN(seconds) && seconds >= 0 && !timePoints.includes(seconds)) {
+      setTimePoints([...timePoints, seconds].sort((a, b) => a - b));
+    }
   };
 
   // Start video splitting
@@ -321,381 +364,590 @@ const VideoSplitter = () => {
     }
   };
 
-  return (
-    <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '20px' }}>
-      <h1 style={{ textAlign: 'center', marginBottom: '30px', color: '#333' }}>
-        Video Splitter Pro
-      </h1>
+  const cardStyle = {
+    background: 'rgba(255, 255, 255, 0.1)',
+    backdropFilter: 'blur(10px)',
+    borderRadius: '20px',
+    border: '1px solid rgba(255, 255, 255, 0.2)',
+    padding: '30px',
+    marginBottom: '30px',
+    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)'
+  };
 
-      {/* File Upload Section */}
-      <div style={{ marginBottom: '30px' }}>
-        <div
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-          style={{
-            border: `3px dashed ${dragOver ? '#007bff' : '#ccc'}`,
-            borderRadius: '10px',
-            padding: '40px',
-            textAlign: 'center',
-            backgroundColor: dragOver ? '#f8f9fa' : '#fafafa',
-            cursor: selectedFile ? 'default' : 'pointer',
-            transition: 'all 0.3s ease'
-          }}
-          onClick={() => !selectedFile && fileInputRef.current?.click()}
-        >
-          <input
-            type="file"
-            accept="video/*"
-            onChange={handleFileInputChange}
-            ref={fileInputRef}
-            style={{ display: 'none' }}
-          />
+  const buttonStyle = {
+    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+    border: 'none',
+    borderRadius: '10px',
+    padding: '12px 24px',
+    color: 'white',
+    fontSize: '16px',
+    fontWeight: '600',
+    cursor: 'pointer',
+    transition: 'all 0.3s ease',
+    boxShadow: '0 4px 15px rgba(0, 0, 0, 0.2)'
+  };
+
+  const inputStyle = {
+    background: 'rgba(255, 255, 255, 0.1)',
+    border: '1px solid rgba(255, 255, 255, 0.3)',
+    borderRadius: '10px',
+    padding: '10px 15px',
+    color: 'white',
+    fontSize: '14px',
+    width: '100%',
+    boxSizing: 'border-box'
+  };
+
+  return (
+    <div style={{ 
+      minHeight: '100vh',
+      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+      padding: '40px 20px'
+    }}>
+      <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+        
+        {/* Header */}
+        <div style={{ textAlign: 'center', marginBottom: '40px' }}>
+          <h1 style={{ 
+            fontSize: '3rem', 
+            fontWeight: '700', 
+            color: 'white', 
+            margin: '0 0 10px 0',
+            textShadow: '0 2px 10px rgba(0,0,0,0.3)'
+          }}>
+            Video Splitter Pro
+          </h1>
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center', 
+            gap: '10px',
+            marginBottom: '10px'
+          }}>
+            <span style={{ color: '#4ade80', fontSize: '1.2rem' }}>⚡</span>
+            <span style={{ color: 'rgba(255,255,255,0.9)', fontSize: '1.1rem', fontWeight: '500' }}>
+              AWS Amplify Mode
+            </span>
+          </div>
+          <p style={{ 
+            color: 'rgba(255,255,255,0.8)', 
+            fontSize: '1.2rem', 
+            margin: 0,
+            fontWeight: '300'
+          }}>
+            Split videos of any size while preserving subtitles and quality
+          </p>
+        </div>
+
+        {/* Upload Section */}
+        <div style={cardStyle}>
+          <h2 style={{ color: 'white', fontSize: '1.5rem', marginBottom: '20px', fontWeight: '600' }}>
+            Upload Video
+          </h2>
           
-          {selectedFile ? (
-            <div>
-              <h3 style={{ margin: '0 0 10px 0', color: '#28a745' }}>✓ File Selected</h3>
-              <p style={{ margin: '5px 0', fontSize: '18px', fontWeight: 'bold' }}>
-                {selectedFile.name}
+          {!selectedFile ? (
+            <div
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              onClick={() => fileInputRef.current?.click()}
+              style={{
+                border: `2px dashed ${dragOver ? '#4ade80' : 'rgba(255,255,255,0.3)'}`,
+                borderRadius: '15px',
+                padding: '50px 20px',
+                textAlign: 'center',
+                cursor: 'pointer',
+                transition: 'all 0.3s ease',
+                background: dragOver ? 'rgba(74, 222, 128, 0.1)' : 'transparent'
+              }}
+            >
+              <input
+                type="file"
+                accept="video/*"
+                onChange={handleFileInputChange}
+                ref={fileInputRef}
+                style={{ display: 'none' }}
+              />
+              
+              <div style={{ fontSize: '3rem', marginBottom: '20px' }}>📁</div>
+              <h3 style={{ color: 'white', fontSize: '1.3rem', margin: '0 0 10px 0' }}>
+                Choose Video File
+              </h3>
+              <p style={{ color: 'rgba(255,255,255,0.7)', margin: 0 }}>
+                Drag & drop or click to browse
               </p>
-              <p style={{ margin: '5px 0', color: '#666' }}>
+            </div>
+          ) : (
+            <div style={{
+              background: 'rgba(74, 222, 128, 0.2)',
+              borderRadius: '15px',
+              padding: '20px',
+              textAlign: 'center'
+            }}>
+              <div style={{ fontSize: '1.2rem', color: '#4ade80', marginBottom: '10px', fontWeight: '600' }}>
+                Selected: {selectedFile.name}
+              </div>
+              <div style={{ color: 'rgba(255,255,255,0.8)', marginBottom: '20px' }}>
                 Size: {(selectedFile.size / (1024 * 1024)).toFixed(1)} MB
-              </p>
+              </div>
+              
               {!jobId && (
                 <button
                   onClick={(e) => {
-                    e.stopPropagation(); // Prevent event bubbling to parent div
+                    e.stopPropagation();
                     uploadFile();
                   }}
                   disabled={uploading}
                   style={{
-                    marginTop: '20px',
-                    padding: '12px 30px',
-                    fontSize: '16px',
-                    backgroundColor: uploading ? '#6c757d' : '#007bff',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '5px',
-                    cursor: uploading ? 'not-allowed' : 'pointer'
+                    ...buttonStyle,
+                    background: uploading ? 'rgba(255,255,255,0.2)' : 'linear-gradient(135deg, #4ade80 0%, #22c55e 100%)',
+                    cursor: uploading ? 'not-allowed' : 'pointer',
+                    opacity: uploading ? 0.7 : 1
                   }}
                 >
-                  {uploading ? `Uploading... ${uploadProgress}%` : 'Upload & Process'}
+                  {uploading ? `Uploading... ${uploadProgress}%` : 'Upload to AWS S3'}
                 </button>
               )}
             </div>
-          ) : (
-            <div>
-              <h3 style={{ margin: '0 0 15px 0', color: '#666' }}>
-                Drop your video file here or click to browse
-              </h3>
-              <p style={{ color: '#999' }}>
-                Supports: MP4, AVI, MOV, MKV, WebM, FLV, WMV
-              </p>
-            </div>
           )}
         </div>
-      </div>
 
-      {/* Video Info and Preview */}
-      {videoInfo && (
-        <div style={{ marginBottom: '30px', padding: '20px', border: '1px solid #ddd', borderRadius: '10px' }}>
-          <h3 style={{ marginBottom: '15px' }}>Video Information</h3>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '10px', marginBottom: '20px' }}>
-            <div><strong>Duration:</strong> {videoInfo.duration > 0 ? formatTime(videoInfo.duration) : 'Processing...'}</div>
-            <div><strong>Format:</strong> {videoInfo.format}</div>
-            <div><strong>Size:</strong> {(videoInfo.size / (1024 * 1024)).toFixed(1)} MB</div>
-            <div><strong>Video Streams:</strong> {videoInfo.video_streams}</div>
-            <div><strong>Audio Streams:</strong> {videoInfo.audio_streams}</div>
-            <div><strong>Subtitle Streams:</strong> {videoInfo.subtitle_streams}</div>
-          </div>
-
-          {videoUrl && (
-            <div>
-              <video
-                ref={videoRef}
-                src={videoUrl}
-                controls
-                onTimeUpdate={(e) => setCurrentTime(e.target.currentTime)}
-                style={{ width: '100%', maxHeight: '400px', borderRadius: '5px' }}
-              />
-              <div style={{ marginTop: '10px', fontSize: '14px', color: '#666' }}>
-                Current time: {formatTime(currentTime)}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Split Configuration */}
-      {jobId && !processing && (
-        <div style={{ marginBottom: '30px', padding: '20px', border: '1px solid #ddd', borderRadius: '10px' }}>
-          <h3 style={{ marginBottom: '15px' }}>Split Configuration</h3>
-          
-          {/* Split Method */}
-          <div style={{ marginBottom: '20px' }}>
-            <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Split Method:</label>
-            <div>
-              <label style={{ marginRight: '20px', cursor: 'pointer' }}>
-                <input
-                  type="radio"
-                  value="time"
-                  checked={splitMethod === 'time'}
-                  onChange={(e) => setSplitMethod(e.target.value)}
-                  style={{ marginRight: '5px' }}
-                />
-                Time-based
-              </label>
-              <label style={{ cursor: 'pointer' }}>
-                <input
-                  type="radio"
-                  value="intervals"
-                  checked={splitMethod === 'intervals'}
-                  onChange={(e) => setSplitMethod(e.target.value)}
-                  style={{ marginRight: '5px' }}
-                />
-                Equal intervals
-              </label>
-            </div>
-          </div>
-
-          {/* Time-based configuration */}
-          {splitMethod === 'time' && (
-            <div style={{ marginBottom: '20px' }}>
-              <div style={{ marginBottom: '10px' }}>
-                <button
-                  onClick={addCurrentTime}
-                  disabled={!videoRef.current}
-                  style={{
-                    padding: '8px 16px',
-                    backgroundColor: '#28a745',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '4px',
-                    cursor: 'pointer',
-                    marginRight: '10px'
-                  }}
-                >
-                  Add Current Time ({formatTime(currentTime)})
-                </button>
-              </div>
+        {/* Video Preview and Info */}
+        {videoInfo && (
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'fr 1fr',
+            gap: '30px',
+            marginBottom: '30px'
+          }}>
+            
+            {/* Video Preview */}
+            <div style={cardStyle}>
+              <h2 style={{ color: 'white', fontSize: '1.5rem', marginBottom: '20px', fontWeight: '600' }}>
+                Video Preview
+              </h2>
               
-              {timePoints.length > 0 && (
+              {videoUrl ? (
                 <div>
-                  <strong>Split Points:</strong>
-                  <div style={{ marginTop: '5px' }}>
-                    {timePoints.map((time, index) => (
-                      <span
-                        key={index}
-                        style={{
-                          display: 'inline-block',
-                          margin: '2px',
-                          padding: '4px 8px',
-                          backgroundColor: '#007bff',
-                          color: 'white',
-                          borderRadius: '4px',
-                          fontSize: '12px'
-                        }}
-                      >
-                        {formatTime(time)}
-                        <button
-                          onClick={() => removeTimePoint(time)}
-                          style={{
-                            marginLeft: '5px',
-                            background: 'none',
-                            border: 'none',
-                            color: 'white',
-                            cursor: 'pointer'
-                          }}
-                        >
-                          ×
-                        </button>
-                      </span>
-                    ))}
+                  <video
+                    ref={videoRef}
+                    src={videoUrl}
+                    controls
+                    onTimeUpdate={(e) => setCurrentTime(e.target.currentTime)}
+                    style={{ 
+                      width: '100%', 
+                      borderRadius: '10px',
+                      maxHeight: '300px'
+                    }}
+                  />
+                  <div style={{ 
+                    marginTop: '15px', 
+                    color: 'rgba(255,255,255,0.8)',
+                    textAlign: 'center'
+                  }}>
+                    Current Time: {formatTime(currentTime)}
                   </div>
                 </div>
-              )}
-            </div>
-          )}
-
-          {/* Interval configuration */}
-          {splitMethod === 'intervals' && (
-            <div style={{ marginBottom: '20px' }}>
-              <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
-                Interval Duration (seconds):
-              </label>
-              <input
-                type="number"
-                value={intervalDuration}
-                onChange={(e) => setIntervalDuration(parseInt(e.target.value))}
-                min="30"
-                max="3600"
-                style={{
-                  padding: '8px',
-                  border: '1px solid #ccc',
-                  borderRadius: '4px',
-                  width: '120px'
-                }}
-              />
-            </div>
-          )}
-
-          {/* Output Settings */}
-          <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: '#f8f9fa', borderRadius: '5px' }}>
-            <h4 style={{ marginBottom: '10px' }}>Output Settings</h4>
-            
-            <div style={{ marginBottom: '10px' }}>
-              <label style={{ cursor: 'pointer' }}>
-                <input
-                  type="checkbox"
-                  checked={preserveQuality}
-                  onChange={(e) => setPreserveQuality(e.target.checked)}
-                  style={{ marginRight: '8px' }}
-                />
-                Preserve Original Quality
-              </label>
-            </div>
-
-            <div style={{ marginBottom: '10px' }}>
-              <label style={{ display: 'block', marginBottom: '5px' }}>Output Format:</label>
-              <select
-                value={outputFormat}
-                onChange={(e) => setOutputFormat(e.target.value)}
-                style={{ padding: '5px', borderRadius: '4px', border: '1px solid #ccc' }}
-              >
-                <option value="mp4">MP4</option>
-                <option value="mkv">MKV</option>
-                <option value="avi">AVI</option>
-                <option value="mov">MOV</option>
-                <option value="webm">WebM</option>
-              </select>
-            </div>
-
-            <div style={{ marginBottom: '10px' }}>
-              <label style={{ cursor: 'pointer' }}>
-                <input
-                  type="checkbox"
-                  checked={forceKeyframes}
-                  onChange={(e) => setForceKeyframes(e.target.checked)}
-                  style={{ marginRight: '8px' }}
-                />
-                Force Keyframe Insertion
-              </label>
-              {forceKeyframes && (
-                <div style={{ marginLeft: '25px', marginTop: '5px' }}>
-                  <label>Keyframe Interval (seconds): </label>
-                  <input
-                    type="number"
-                    value={keyframeInterval}
-                    onChange={(e) => setKeyframeInterval(parseInt(e.target.value))}
-                    min="1"
-                    max="10"
-                    style={{ width: '60px', marginLeft: '5px' }}
-                  />
+              ) : (
+                <div style={{
+                  background: 'rgba(0,0,0,0.3)',
+                  borderRadius: '10px',
+                  padding: '50px',
+                  textAlign: 'center',
+                  color: 'rgba(255,255,255,0.6)'
+                }}>
+                  <div style={{ fontSize: '2rem', marginBottom: '10px' }}>🎥</div>
+                  <p>Video preview loading...</p>
                 </div>
               )}
             </div>
 
-            <div>
-              <label style={{ display: 'block', marginBottom: '5px' }}>Subtitle Sync Offset (seconds):</label>
-              <input
-                type="number"
-                value={subtitleOffset}
-                onChange={(e) => setSubtitleOffset(parseFloat(e.target.value))}
-                step="0.1"
+            {/* Video Information */}
+            <div style={cardStyle}>
+              <h2 style={{ color: 'white', fontSize: '1.5rem', marginBottom: '20px', fontWeight: '600' }}>
+                Video Information
+              </h2>
+              
+              <div style={{ display: 'grid', gap: '15px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: 'rgba(255,255,255,0.8)' }}>Duration:</span>
+                  <span style={{ color: 'white', fontWeight: '600' }}>{formatTime(videoInfo.duration)}</span>
+                </div>
+                
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: 'rgba(255,255,255,0.8)' }}>Format:</span>
+                  <span style={{ color: 'white', fontWeight: '600' }}>{videoInfo.format}</span>
+                </div>
+                
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: 'rgba(255,255,255,0.8)' }}>Size:</span>
+                  <span style={{ color: 'white', fontWeight: '600' }}>{(videoInfo.size / (1024 * 1024)).toFixed(1)} MB</span>
+                </div>
+                
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: 'rgba(255,255,255,0.8)' }}>Video Streams:</span>
+                  <span style={{ color: 'white', fontWeight: '600' }}>{videoInfo.video_streams}</span>
+                </div>
+                
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: 'rgba(255,255,255,0.8)' }}>Audio Streams:</span>
+                  <span style={{ color: 'white', fontWeight: '600' }}>{videoInfo.audio_streams}</span>
+                </div>
+                
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: 'rgba(255,255,255,0.8)' }}>Subtitle Streams:</span>
+                  <span style={{ color: 'white', fontWeight: '600' }}>{videoInfo.subtitle_streams}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Split Configuration */}
+        {jobId && !processing && (
+          <div style={cardStyle}>
+            <h2 style={{ color: 'white', fontSize: '1.5rem', marginBottom: '30px', fontWeight: '600' }}>
+              Split Configuration
+            </h2>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '40px' }}>
+              
+              {/* Left Column - Split Method */}
+              <div>
+                <h3 style={{ color: 'white', fontSize: '1.2rem', marginBottom: '15px' }}>Split Method</h3>
+                
+                <select
+                  value={splitMethod}
+                  onChange={(e) => setSplitMethod(e.target.value)}
+                  style={{
+                    ...inputStyle,
+                    marginBottom: '20px',
+                    height: '45px'
+                  }}
+                >
+                  <option value="time">Time-based (Manual Points)</option>
+                  <option value="intervals">Equal Intervals</option>
+                </select>
+
+                {splitMethod === 'time' && (
+                  <div>
+                    <div style={{ marginBottom: '15px' }}>
+                      <button
+                        onClick={addCurrentTime}
+                        disabled={!videoRef.current}
+                        style={{
+                          ...buttonStyle,
+                          marginRight: '10px',
+                          fontSize: '14px',
+                          padding: '8px 16px'
+                        }}
+                      >
+                        Add Current Time ({formatTime(currentTime)})
+                      </button>
+                    </div>
+                    
+                    <div style={{ marginBottom: '15px' }}>
+                      <input
+                        type="text"
+                        placeholder="MM:SS or HH:MM:SS"
+                        style={inputStyle}
+                        onKeyPress={(e) => {
+                          if (e.key === 'Enter') {
+                            addManualTimePoint(e.target.value);
+                            e.target.value = '';
+                          }
+                        }}
+                      />
+                      <button
+                        onClick={(e) => {
+                          const input = e.target.previousSibling;
+                          addManualTimePoint(input.value);
+                          input.value = '';
+                        }}
+                        style={{
+                          ...buttonStyle,
+                          marginTop: '10px',
+                          fontSize: '14px',
+                          padding: '8px 16px'
+                        }}
+                      >
+                        Add
+                      </button>
+                    </div>
+                    
+                    {timePoints.length > 0 && (
+                      <div>
+                        <h4 style={{ color: 'white', marginBottom: '10px' }}>Split Points:</h4>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                          {timePoints.map((time, index) => (
+                            <div
+                              key={index}
+                              style={{
+                                background: 'rgba(74, 222, 128, 0.2)',
+                                border: '1px solid rgba(74, 222, 128, 0.4)',
+                                borderRadius: '20px',
+                                padding: '5px 12px',
+                                color: '#4ade80',
+                                fontSize: '14px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px'
+                              }}
+                            >
+                              {formatTime(time)}
+                              <button
+                                onClick={() => removeTimePoint(time)}
+                                style={{
+                                  background: 'none',
+                                  border: 'none',
+                                  color: '#ef4444',
+                                  cursor: 'pointer',
+                                  fontSize: '16px',
+                                  padding: 0
+                                }}
+                              >
+                                ×
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {splitMethod === 'intervals' && (
+                  <div>
+                    <label style={{ color: 'rgba(255,255,255,0.9)', display: 'block', marginBottom: '8px' }}>
+                      Interval Duration (seconds):
+                    </label>
+                    <input
+                      type="number"
+                      value={intervalDuration}
+                      onChange={(e) => setIntervalDuration(parseInt(e.target.value))}
+                      min="30"
+                      max="3600"
+                      style={inputStyle}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Right Column - Quality Settings */}
+              <div>
+                <h3 style={{ color: 'white', fontSize: '1.2rem', marginBottom: '15px' }}>Quality Settings</h3>
+                
+                <div style={{ marginBottom: '20px' }}>
+                  <label style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: '10px', 
+                    color: 'rgba(255,255,255,0.9)',
+                    cursor: 'pointer'
+                  }}>
+                    <input
+                      type="checkbox"
+                      checked={preserveQuality}
+                      onChange={(e) => setPreserveQuality(e.target.checked)}
+                      style={{ transform: 'scale(1.2)' }}
+                    />
+                    Preserve original quality
+                  </label>
+                </div>
+
+                <div style={{ marginBottom: '20px' }}>
+                  <label style={{ color: 'rgba(255,255,255,0.9)', display: 'block', marginBottom: '8px' }}>
+                    Output Format:
+                  </label>
+                  <select
+                    value={outputFormat}
+                    onChange={(e) => setOutputFormat(e.target.value)}
+                    style={inputStyle}
+                  >
+                    <option value="mp4">MP4</option>
+                    <option value="mkv">MKV</option>
+                    <option value="avi">AVI</option>
+                    <option value="mov">MOV</option>
+                    <option value="webm">WebM</option>
+                  </select>
+                </div>
+
+                <h3 style={{ color: 'white', fontSize: '1.2rem', marginBottom: '15px', marginTop: '30px' }}>Subtitle Settings</h3>
+                
+                <div style={{ marginBottom: '20px' }}>
+                  <label style={{ color: 'rgba(255,255,255,0.9)', display: 'block', marginBottom: '8px' }}>
+                    Sync Offset (seconds):
+                  </label>
+                  <input
+                    type="number"
+                    value={subtitleOffset}
+                    onChange={(e) => setSubtitleOffset(parseFloat(e.target.value))}
+                    step="0.1"
+                    style={inputStyle}
+                  />
+                </div>
+
+                <h3 style={{ color: 'white', fontSize: '1.2rem', marginBottom: '15px', marginTop: '30px' }}>Keyframe Settings</h3>
+                
+                <div style={{ marginBottom: '20px' }}>
+                  <label style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: '10px', 
+                    color: 'rgba(255,255,255,0.9)',
+                    cursor: 'pointer'
+                  }}>
+                    <input
+                      type="checkbox"
+                      checked={forceKeyframes}
+                      onChange={(e) => setForceKeyframes(e.target.checked)}
+                      style={{ transform: 'scale(1.2)' }}
+                    />
+                    Force keyframes at split points (recommended)
+                  </label>
+                </div>
+
+                {forceKeyframes && (
+                  <div>
+                    <label style={{ color: 'rgba(255,255,255,0.9)', display: 'block', marginBottom: '8px' }}>
+                      Keyframe Interval (seconds):
+                    </label>
+                    <input
+                      type="number"
+                      value={keyframeInterval}
+                      onChange={(e) => setKeyframeInterval(parseInt(e.target.value))}
+                      min="1"
+                      max="10"
+                      style={inputStyle}
+                    />
+                    <p style={{ 
+                      color: 'rgba(255,255,255,0.6)', 
+                      fontSize: '12px', 
+                      margin: '5px 0 0 0' 
+                    }}>
+                      Smaller intervals = more keyframes = better seeking but larger files
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div style={{ textAlign: 'center', marginTop: '30px' }}>
+              <button
+                onClick={startSplitting}
+                disabled={splitMethod === 'time' && timePoints.length === 0}
                 style={{
-                  padding: '5px',
-                  borderRadius: '4px',
-                  border: '1px solid #ccc',
-                  width: '80px'
+                  ...buttonStyle,
+                  background: (splitMethod === 'time' && timePoints.length === 0) 
+                    ? 'rgba(255,255,255,0.2)' 
+                    : 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)',
+                  fontSize: '18px',
+                  padding: '15px 40px',
+                  cursor: (splitMethod === 'time' && timePoints.length === 0) ? 'not-allowed' : 'pointer',
+                  opacity: (splitMethod === 'time' && timePoints.length === 0) ? 0.5 : 1
+                }}
+              >
+                Start Splitting
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Processing Progress */}
+        {processing && (
+          <div style={cardStyle}>
+            <h2 style={{ color: 'white', fontSize: '1.5rem', marginBottom: '20px', fontWeight: '600' }}>
+              🎬 Processing Video...
+            </h2>
+            
+            <div style={{
+              background: 'rgba(255,255,255,0.1)',
+              borderRadius: '15px',
+              height: '30px',
+              overflow: 'hidden',
+              marginBottom: '15px'
+            }}>
+              <div
+                style={{
+                  background: 'linear-gradient(135deg, #4ade80 0%, #22c55e 100%)',
+                  height: '100%',
+                  width: `${progress}%`,
+                  transition: 'width 0.3s ease',
+                  borderRadius: '15px'
                 }}
               />
             </div>
+            
+            <div style={{ 
+              textAlign: 'center', 
+              color: 'white', 
+              fontSize: '18px', 
+              fontWeight: '600' 
+            }}>
+              {progress}% Complete
+            </div>
           </div>
+        )}
 
-          <button
-            onClick={startSplitting}
-            disabled={splitMethod === 'time' && timePoints.length === 0}
-            style={{
-              padding: '12px 30px',
-              fontSize: '16px',
-              backgroundColor: (splitMethod === 'time' && timePoints.length === 0) ? '#6c757d' : '#28a745',
-              color: 'white',
-              border: 'none',
-              borderRadius: '5px',
-              cursor: (splitMethod === 'time' && timePoints.length === 0) ? 'not-allowed' : 'pointer'
-            }}
-          >
-            Start Splitting
-          </button>
-        </div>
-      )}
-
-      {/* Processing Progress */}
-      {processing && (
-        <div style={{ marginBottom: '30px', padding: '20px', border: '1px solid #007bff', borderRadius: '10px' }}>
-          <h3 style={{ marginBottom: '15px', color: '#007bff' }}>Processing Video...</h3>
-          <div style={{ backgroundColor: '#e9ecef', borderRadius: '10px', height: '20px', marginBottom: '10px' }}>
-            <div
-              style={{
-                backgroundColor: '#007bff',
-                height: '100%',
-                borderRadius: '10px',
-                width: `${progress}%`,
-                transition: 'width 0.3s ease'
-              }}
-            />
-          </div>
-          <div style={{ textAlign: 'center', fontSize: '16px' }}>
-            {progress}% Complete
-          </div>
-        </div>
-      )}
-
-      {/* Split Results */}
-      {splitResults && splitResults.length > 0 && (
-        <div style={{ padding: '20px', border: '1px solid #28a745', borderRadius: '10px' }}>
-          <h3 style={{ marginBottom: '15px', color: '#28a745' }}>✓ Split Complete!</h3>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '15px' }}>
-            {splitResults.map((result, index) => (
-              <div
-                key={index}
-                style={{
-                  padding: '15px',
-                  border: '1px solid #ddd',
-                  borderRadius: '8px',
-                  backgroundColor: '#f8f9fa'
-                }}
-              >
-                <h4 style={{ margin: '0 0 10px 0' }}>Segment {index + 1}</h4>
-                <p style={{ margin: '5px 0', fontSize: '14px' }}>
-                  <strong>File:</strong> {result.filename}
-                </p>
-                <p style={{ margin: '5px 0', fontSize: '14px' }}>
-                  <strong>Duration:</strong> {formatTime(result.duration || 0)}
-                </p>
-                <p style={{ margin: '5px 0', fontSize: '14px' }}>
-                  <strong>Size:</strong> {((result.size || 0) / (1024 * 1024)).toFixed(1)} MB
-                </p>
-                <button
-                  onClick={() => downloadFile(result.filename)}
+        {/* Split Results */}
+        {splitResults && splitResults.length > 0 && (
+          <div style={cardStyle}>
+            <h2 style={{ color: 'white', fontSize: '1.5rem', marginBottom: '20px', fontWeight: '600' }}>
+              ✅ Split Complete!
+            </h2>
+            
+            <div style={{ 
+              display: 'grid', 
+              gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', 
+              gap: '20px' 
+            }}>
+              {splitResults.map((result, index) => (
+                <div
+                  key={index}
                   style={{
-                    marginTop: '10px',
-                    padding: '8px 16px',
-                    backgroundColor: '#007bff',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '4px',
-                    cursor: 'pointer',
-                    width: '100%'
+                    background: 'rgba(255,255,255,0.05)',
+                    borderRadius: '15px',
+                    padding: '20px',
+                    border: '1px solid rgba(255,255,255,0.1)'
                   }}
                 >
-                  Download
-                </button>
-              </div>
-            ))}
+                  <h3 style={{ 
+                    color: 'white', 
+                    fontSize: '1.1rem', 
+                    margin: '0 0 15px 0', 
+                    fontWeight: '600' 
+                  }}>
+                    Segment {index + 1}
+                  </h3>
+                  
+                  <div style={{ marginBottom: '15px', color: 'rgba(255,255,255,0.8)' }}>
+                    <div style={{ marginBottom: '5px' }}>
+                      <strong>File:</strong> {result.filename}
+                    </div>
+                    <div style={{ marginBottom: '5px' }}>
+                      <strong>Duration:</strong> {formatTime(result.duration || 0)}
+                    </div>
+                    <div>
+                      <strong>Size:</strong> {((result.size || 0) / (1024 * 1024)).toFixed(1)} MB
+                    </div>
+                  </div>
+                  
+                  <button
+                    onClick={() => downloadFile(result.filename)}
+                    style={{
+                      ...buttonStyle,
+                      width: '100%',
+                      background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)'
+                    }}
+                  >
+                    Download
+                  </button>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 };
