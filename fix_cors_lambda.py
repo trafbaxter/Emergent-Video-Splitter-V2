@@ -740,6 +740,45 @@ def handle_generate_presigned_url(event):
             'headers': get_cors_headers(origin),
             'body': json.dumps({'message': 'Failed to generate upload URL', 'error': str(e)})
         }
+    
+    try:
+        body = json.loads(event['body'])
+        filename = body.get('filename')
+        content_type = body.get('contentType', 'video/mp4')
+        
+        if not filename:
+            return {
+                'statusCode': 400,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'Filename is required'})
+            }
+        
+        # Generate unique key for S3
+        key = f"uploads/{uuid.uuid4()}/{filename}"
+        
+        # Generate presigned URL for upload
+        presigned_url = s3.generate_presigned_url(
+            'put_object',
+            Params={'Bucket': BUCKET_NAME, 'Key': key, 'ContentType': content_type},
+            ExpiresIn=3600
+        )
+        
+        return {
+            'statusCode': 200,
+            'headers': get_cors_headers(origin),
+            'body': json.dumps({
+                'uploadUrl': presigned_url,
+                'key': key
+            })
+        }
+        
+    except Exception as e:
+        logger.error(f"Presigned URL error: {str(e)}")
+        return {
+            'statusCode': 500,
+            'headers': get_cors_headers(origin),
+            'body': json.dumps({'message': 'Failed to generate upload URL', 'error': str(e)})
+        }
 
 def lambda_handler(event, context):
     """Main Lambda handler with enhanced CORS support"""
