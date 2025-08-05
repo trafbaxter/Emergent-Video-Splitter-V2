@@ -484,7 +484,7 @@ def handle_user_profile(event):
         }
 
 def handle_video_stream(event):
-    """Handle video streaming requests - using working master branch approach"""
+    """Handle video streaming requests - immediate response to avoid timeout"""
     origin = event.get('headers', {}).get('origin') or event.get('headers', {}).get('Origin')
     
     try:
@@ -499,16 +499,13 @@ def handle_video_stream(event):
             return {
                 'statusCode': 400,
                 'headers': get_cors_headers(origin),
-                'body': json.dumps({'message': 'S3 key is required'})
+                'body': json.dumps({'error': 'S3 key is required'})
             }
         
         logger.info(f"Video stream request for key: {s3_key}")
         
+        # Generate presigned URL WITHOUT checking if file exists to avoid timeout
         try:
-            # Check if the file exists (fast check)
-            s3.head_object(Bucket=BUCKET_NAME, Key=s3_key)
-            
-            # Generate simple presigned URL like the working version
             stream_url = s3.generate_presigned_url(
                 'get_object',
                 Params={'Bucket': BUCKET_NAME, 'Key': s3_key},
@@ -523,12 +520,6 @@ def handle_video_stream(event):
                 'body': json.dumps({'stream_url': stream_url})
             }
             
-        except s3.exceptions.NoSuchKey:
-            return {
-                'statusCode': 404,
-                'headers': get_cors_headers(origin),
-                'body': json.dumps({'error': 'Video not found'})
-            }
         except Exception as s3_error:
             logger.error(f"S3 error: {str(s3_error)}")
             return {
