@@ -457,7 +457,7 @@ const VideoSplitter = () => {
   };
 
   return (
-    <div style={{ 
+    <div className="video-splitter" style={{ 
       minHeight: '100vh',
       background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
       padding: '40px 20px'
