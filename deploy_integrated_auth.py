@@ -149,8 +149,8 @@ def deploy_integrated_auth_lambda(zip_path):
         import time
         time.sleep(10)
         
-        # Update function configuration
-        print("⚙️  Updating function configuration...")
+        # Update function configuration with VPC and environment variables
+        print("⚙️  Updating function configuration with VPC and MongoDB settings...")
         try:
             env_vars = {
                 'JWT_SECRET': 'production-jwt-secret-change-this-2024',
@@ -161,21 +161,70 @@ def deploy_integrated_auth_lambda(zip_path):
                 'DB_NAME': 'videosplitter'
             }
             
+            # First update environment variables
             config_response = lambda_client.update_function_configuration(
                 FunctionName='videosplitter-api',
-                Timeout=30,  # 30 seconds for auth + video processing
+                Timeout=30,  # 30 seconds for auth + video processing + DB
                 MemorySize=512,  # 512 MB for crypto operations
                 Environment={'Variables': env_vars}
             )
             
-            print(f"✅ Function configuration updated!")
+            print(f"✅ Environment variables updated!")
+            
+            # Wait for configuration update to complete
+            time.sleep(5)
+            
+            # Get current VPC subnets (we'll use default subnets in the VPC)
+            ec2 = boto3.client('ec2')
+            
+            # Get subnets in the same VPC as the EC2 MongoDB instance
+            vpc_id = 'vpc-ff423f85'
+            subnets_response = ec2.describe_subnets(
+                Filters=[
+                    {'Name': 'vpc-id', 'Values': [vpc_id]},
+                    {'Name': 'state', 'Values': ['available']}
+                ]
+            )
+            
+            subnet_ids = [subnet['SubnetId'] for subnet in subnets_response['Subnets']]
+            
+            if subnet_ids:
+                print(f"📡 Configuring Lambda VPC access...")
+                print(f"   VPC ID: {vpc_id}")
+                print(f"   Subnets: {subnet_ids[:2]}")  # Use first 2 subnets for redundancy
+                print(f"   Security Group: sg-0ddff8a31f5606a25")
+                
+                # Update VPC configuration  
+                vpc_response = lambda_client.update_function_configuration(
+                    FunctionName='videosplitter-api',
+                    VpcConfig={
+                        'SubnetIds': subnet_ids[:2],  # Use first 2 subnets
+                        'SecurityGroupIds': ['sg-0ddff8a31f5606a25']
+                    }
+                )
+                
+                print(f"✅ VPC configuration updated!")
+                print(f"   Lambda can now access MongoDB on EC2")
+                
+                # Wait for VPC configuration to complete (this can take a few minutes)
+                print("⏳ Waiting for VPC configuration to complete (this may take 2-3 minutes)...")
+                time.sleep(60)  # VPC updates take longer
+                
+            else:
+                print("⚠️  No subnets found in VPC - VPC configuration skipped")
+            
             print(f"Timeout: {config_response.get('Timeout')} seconds")
             print(f"Memory: {config_response.get('MemorySize')} MB")
             print("🔐 Environment variables configured")
+            print("🗄️  MongoDB connection configured")
             
         except Exception as config_error:
-            print(f"⚠️  Configuration update warning: {str(config_error)}")
-            print("Function code deployed successfully, but configuration may need manual update")
+            print(f"⚠️  Configuration update error: {str(config_error)}")
+            print("Function code deployed successfully, but configuration may need manual VPC setup")
+            print("💡 Manual VPC setup required:")
+            print(f"   - VPC: vpc-ff423f85")
+            print(f"   - Security Group: sg-0ddff8a31f5606a25") 
+            print(f"   - MongoDB: mongodb://172.31.32.212:27017/videosplitter")
         
         return True
         
