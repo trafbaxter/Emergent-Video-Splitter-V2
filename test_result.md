@@ -61,11 +61,11 @@ backend:
 
   - task: "Video Streaming Endpoint"
     implemented: true
-    working: true
+    working: false
     file: "fix_cors_lambda.py"
-    stuck_count: 0
+    stuck_count: 1
     priority: "high"
-    needs_retesting: false
+    needs_retesting: true
     status_history:
       - working: false
         agent: "testing"
@@ -73,6 +73,9 @@ backend:
       - working: true
         agent: "testing"
         comment: "✅ RESOLVED: GET /api/video-stream/{key} endpoint is now fully implemented and working. Returns proper presigned streaming URLs with 'stream_url', 's3_key', and 'expires_in' fields. Successfully generates valid AWS S3 URLs for video streaming. This resolves the user's issue with video preview showing 'loading...' indefinitely."
+      - working: false
+        agent: "testing"
+        comment: "❌ CRITICAL REGRESSION: Video streaming endpoint is now timing out (HTTP 504) after ~29 seconds. Comprehensive testing of enhanced Content-Type handling for MKV files failed due to Lambda function timeout. Endpoint is listed in health check but not responding. This is a deployment/execution issue, not implementation. Presigned URL generation still works fine (0.57s response), indicating the issue is specific to video processing endpoints."
 
   - task: "Video Metadata Extraction"
     implemented: true
