@@ -482,6 +482,7 @@ metadata:
 test_plan:
   current_focus:
     - "Phase 1 user authentication system"
+    - "FFmpeg dependency installation for video processing"
   stuck_tasks:
     - "Phase 1 user authentication system"
   test_all: false
