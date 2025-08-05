@@ -279,6 +279,7 @@ def handle_health_check(event):
             'GET /api/user/profile',
             'POST /api/generate-presigned-url',
             'POST /api/get-video-info',
+            'GET /api/check-metadata/{s3_key}',
             'GET /api/video-stream/{key}',
             'POST /api/split-video',
             'GET /api/job-status/{job_id}',
