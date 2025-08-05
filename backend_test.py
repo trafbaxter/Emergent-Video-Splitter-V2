@@ -1,8 +1,13 @@
 #!/usr/bin/env python3
 """
 Video Processing Endpoints Testing for Video Splitter Pro
-Tests the newly implemented video processing endpoints in AWS Lambda.
-Focus on testing video streaming, metadata extraction, and placeholder endpoints.
+Tests the newly restored video processing functionality that now calls the actual FFmpeg Lambda function.
+
+Key changes being tested:
+1. Video metadata extraction - Now calls FFmpeg Lambda for real duration/metadata analysis
+2. Video splitting - Now calls FFmpeg Lambda with actual split configuration instead of returning 501
+3. Job status tracking - Now checks S3 for completed results instead of placeholder
+4. Download functionality - Now generates presigned URLs for processed files
 """
 
 import requests
@@ -15,7 +20,7 @@ import sys
 # Configuration
 API_GATEWAY_URL = "https://2419j971hh.execute-api.us-east-1.amazonaws.com/prod"
 S3_BUCKET = "videosplitter-storage-1751560247"
-TIMEOUT = 30
+TIMEOUT = 35  # Increased timeout for FFmpeg processing
 
 # CORS Test Origins - matching the allowed origins in fix_cors_lambda.py
 TEST_ORIGINS = [
