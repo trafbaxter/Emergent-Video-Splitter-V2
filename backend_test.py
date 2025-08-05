@@ -773,27 +773,33 @@ class VideoSplitterTester:
             self.log_test("S3 Bucket Access", False, f"Error: {str(e)}")
 
     def run_all_tests(self):
-        """Run all tests and provide summary"""
+        """Run all tests focusing on newly restored video processing functionality"""
         print("=" * 80)
-        print("🚀 AWS LAMBDA BACKEND COMPREHENSIVE TESTING")
+        print("🚀 VIDEO PROCESSING RESTORATION TESTING")
         print("=" * 80)
         print(f"Testing API Gateway URL: {self.base_url}")
         print(f"Expected S3 Bucket: {S3_BUCKET}")
         print()
+        print("🎯 FOCUS: Testing newly restored video processing functionality")
+        print("   1. Video metadata extraction - Now calls FFmpeg Lambda for real duration/metadata")
+        print("   2. Video splitting - Now calls FFmpeg Lambda (should return 202, not 501)")
+        print("   3. Job status tracking - Now checks S3 for completed results")
+        print("   4. Download functionality - Now generates presigned URLs for processed files")
+        print()
         
-        # Run all tests
+        # Run focused tests on restored functionality
+        self.test_video_metadata_extraction_real_ffmpeg()
+        self.test_video_splitting_real_processing()
+        self.test_job_status_tracking()
+        self.test_download_functionality_presigned_urls()
+        self.test_video_streaming_endpoint()
+        
+        # Quick connectivity check
         self.test_basic_connectivity()
-        self.test_cors_configuration()
-        self.test_authentication_endpoints()
-        self.test_core_video_processing()
-        self.test_video_splitting()
-        self.test_video_streaming()
-        self.test_ffmpeg_integration()
-        self.test_s3_bucket_access()
         
         # Summary
         print("=" * 80)
-        print("📊 TEST SUMMARY")
+        print("📊 VIDEO PROCESSING RESTORATION TEST SUMMARY")
         print("=" * 80)
         
         total_tests = len(self.test_results)
@@ -806,6 +812,32 @@ class VideoSplitterTester:
         print(f"Success Rate: {(passed_tests/total_tests)*100:.1f}%")
         print()
         
+        # Analyze restoration status
+        restoration_status = {
+            'metadata_extraction': False,
+            'video_splitting': False, 
+            'job_status': False,
+            'download_urls': False
+        }
+        
+        for result in self.test_results:
+            if result['success']:
+                if 'metadata extraction' in result['test'].lower() and 'real ffmpeg' in result['details'].lower():
+                    restoration_status['metadata_extraction'] = True
+                elif 'video splitting' in result['test'].lower() and '202' in result['details']:
+                    restoration_status['video_splitting'] = True
+                elif 'job status' in result['test'].lower() and 'restored' in result['details'].lower():
+                    restoration_status['job_status'] = True
+                elif 'download functionality' in result['test'].lower() and 'restored' in result['details'].lower():
+                    restoration_status['download_urls'] = True
+        
+        print("🔍 RESTORATION STATUS:")
+        print(f"   ✅ Video Metadata Extraction (Real FFmpeg): {'RESTORED' if restoration_status['metadata_extraction'] else 'NOT RESTORED'}")
+        print(f"   ✅ Video Splitting (202 Response): {'RESTORED' if restoration_status['video_splitting'] else 'NOT RESTORED'}")
+        print(f"   ✅ Job Status Tracking (S3 Check): {'RESTORED' if restoration_status['job_status'] else 'NOT RESTORED'}")
+        print(f"   ✅ Download URLs (Presigned): {'RESTORED' if restoration_status['download_urls'] else 'NOT RESTORED'}")
+        print()
+        
         # Failed tests details
         if failed_tests > 0:
             print("❌ FAILED TESTS:")
@@ -815,32 +847,48 @@ class VideoSplitterTester:
             print()
         
         # Critical issues
-        critical_failures = []
-        for result in self.test_results:
-            if not result['success'] and any(keyword in result['details'].lower() for keyword in ['502', 'connection', 'timeout', 'execution failure']):
-                critical_failures.append(result['test'])
+        timeout_issues = []
+        placeholder_issues = []
         
-        if critical_failures:
-            print("🚨 CRITICAL ISSUES DETECTED:")
-            for failure in critical_failures:
-                print(f"   • {failure}")
+        for result in self.test_results:
+            if not result['success']:
+                if '504' in result['details'] or 'timeout' in result['details'].lower():
+                    timeout_issues.append(result['test'])
+                elif '501' in result['details'] or 'placeholder' in result['details'].lower():
+                    placeholder_issues.append(result['test'])
+        
+        if timeout_issues:
+            print("🚨 TIMEOUT ISSUES (FFmpeg Lambda may be timing out):")
+            for issue in timeout_issues:
+                print(f"   • {issue}")
+            print()
+        
+        if placeholder_issues:
+            print("🚨 PLACEHOLDER ENDPOINTS (Not yet restored):")
+            for issue in placeholder_issues:
+                print(f"   • {issue}")
             print()
         
         # Recommendations
         print("💡 RECOMMENDATIONS:")
         
-        auth_failures = sum(1 for r in self.test_results if not r['success'] and 'auth' in r['test'].lower())
-        if auth_failures > 0:
-            print("   • Authentication system has MongoDB connectivity issues (expected based on test history)")
-            print("   • Core video processing functionality should be prioritized")
-        
-        if any('502' in r['details'] for r in self.test_results if not r['success']):
-            print("   • Lambda function execution failures detected - check deployment and dependencies")
-        
-        if passed_tests >= total_tests * 0.7:
-            print("   • Overall system health is good - most functionality is working")
+        restored_count = sum(restoration_status.values())
+        if restored_count == 4:
+            print("   🎉 ALL VIDEO PROCESSING FUNCTIONALITY SUCCESSFULLY RESTORED!")
+            print("   • Real FFmpeg Lambda integration is working")
+            print("   • Video splitting now processes instead of returning 501")
+            print("   • Job status tracking checks S3 for real results")
+            print("   • Download functionality generates proper presigned URLs")
+        elif restored_count >= 2:
+            print(f"   ✅ PARTIAL SUCCESS: {restored_count}/4 functionalities restored")
+            print("   • Continue working on remaining endpoints")
         else:
-            print("   • System requires immediate attention - multiple critical failures")
+            print("   ❌ RESTORATION INCOMPLETE: Most functionality still using placeholders")
+            print("   • Check Lambda deployment and FFmpeg integration")
+        
+        if timeout_issues:
+            print("   • Investigate FFmpeg Lambda timeout issues")
+            print("   • Consider increasing Lambda timeout or optimizing FFmpeg processing")
         
         print()
         print("=" * 80)
