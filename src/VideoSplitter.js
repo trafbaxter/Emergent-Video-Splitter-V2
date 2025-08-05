@@ -94,6 +94,8 @@ const VideoSplitter = () => {
     setUploadProgress(0);
 
     try {
+      console.log('Starting upload process...');
+      
       // Get presigned URL
       const presignedResponse = await fetch(`${API_BASE}/api/generate-presigned-url`, {
         method: 'POST',
@@ -108,37 +110,40 @@ const VideoSplitter = () => {
       });
 
       if (!presignedResponse.ok) {
+        const errorText = await presignedResponse.text();
+        console.error('Presigned URL error:', errorText);
         throw new Error('Failed to get upload URL');
       }
 
       const { uploadUrl, key } = await presignedResponse.json();
+      console.log('Got presigned URL, uploading to S3...');
 
       // Upload file to S3 with progress tracking
-      const xhr = new XMLHttpRequest();
-      
-      return new Promise((resolve, reject) => {
+      await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        
         xhr.upload.addEventListener('progress', (e) => {
           if (e.lengthComputable) {
             const percentage = Math.round((e.loaded / e.total) * 100);
             setUploadProgress(percentage);
+            console.log(`Upload progress: ${percentage}%`);
           }
         });
 
-        xhr.addEventListener('load', async () => {
+        xhr.addEventListener('load', () => {
           if (xhr.status === 200) {
+            console.log('Upload successful!');
             setJobId(key);
             setUploadProgress(100);
-            
-            // Get video metadata and stream URL
-            await getVideoInfo(key);
-            await getVideoStream(key);
             resolve();
           } else {
-            reject(new Error('Upload failed'));
+            console.error('Upload failed with status:', xhr.status);
+            reject(new Error(`Upload failed with status: ${xhr.status}`));
           }
         });
 
         xhr.addEventListener('error', () => {
+          console.error('Upload error');
           reject(new Error('Upload failed'));
         });
 
@@ -147,9 +152,14 @@ const VideoSplitter = () => {
         xhr.send(selectedFile);
       });
 
+      // Get video metadata and stream URL
+      console.log('Getting video metadata...');
+      await getVideoInfo(key);
+      await getVideoStream(key);
+
     } catch (error) {
       console.error('Upload failed:', error);
-      alert('Upload failed. Please try again.');
+      alert('Upload failed: ' + error.message);
     } finally {
       setUploading(false);
     }
@@ -463,7 +473,7 @@ const VideoSplitter = () => {
             >
               <input
                 type="file"
-                accept="video/*"
+                accept="video/*,.mp4,.avi,.mov,.mkv,.webm,.flv,.wmv,.m4v,.3gp,.ogv"
                 onChange={handleFileInputChange}
                 ref={fileInputRef}
                 style={{ display: 'none' }}
@@ -474,7 +484,8 @@ const VideoSplitter = () => {
                 Choose Video File
               </h3>
               <p style={{ color: 'rgba(255,255,255,0.7)', margin: 0 }}>
-                Drag & drop or click to browse
+                Drag & drop or click to browse<br/>
+                <small>Supports: MP4, AVI, MOV, MKV, WebM, FLV, WMV, M4V</small>
               </p>
             </div>
           ) : (
