@@ -51,15 +51,13 @@ AWS_REGION = os.environ.get('AWS_REGION', 'us-east-1')
 
 # Updated CORS configuration - allow multiple origins
 ALLOWED_ORIGINS = [
-    'https://www.tads-video-splitter.com',
-    'https://tads-video-splitter.com'
     'https://develop.tads-video-splitter.com',
     'https://main.tads-video-splitter.com', 
     'https://master.tads-video-splitter.com',
+    'https://working.tads-video-splitter.com',
     'http://localhost:3000',
     'http://localhost:3001',
-    'http://127.0.0.1:3000',
-    'https://working.tads-video-splitter.com'
+    'http://127.0.0.1:3000'
 ]
 
 # Authentication configuration
