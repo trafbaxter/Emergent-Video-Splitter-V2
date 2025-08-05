@@ -143,8 +143,11 @@ metadata:
 
 test_plan:
   current_focus:
-    - "S3 Presigned URL Generation"
-  stuck_tasks: []
+    - "Video Streaming Endpoint"
+    - "Video Metadata Extraction"
+  stuck_tasks:
+    - "Video Streaming Endpoint"
+    - "Video Metadata Extraction"
   test_all: false
   test_priority: "high_first"
 
