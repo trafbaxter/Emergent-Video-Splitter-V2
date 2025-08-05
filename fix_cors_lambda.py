@@ -567,7 +567,7 @@ def handle_video_stream(event):
         }
 
 def handle_get_video_info(event):
-    """Handle video metadata extraction using FFmpeg Lambda"""
+    """Handle video metadata extraction using async FFmpeg Lambda"""
     origin = event.get('headers', {}).get('origin') or event.get('headers', {}).get('Origin')
     
     try:
@@ -583,45 +583,74 @@ def handle_get_video_info(event):
         
         logger.info(f"Getting video info for key: {s3_key}")
         
-        # Call FFmpeg Lambda for actual metadata extraction
-        ffmpeg_payload = {
-            'operation': 'extract_metadata',
-            'source_bucket': BUCKET_NAME,
-            'source_key': s3_key,
-            'job_id': str(uuid.uuid4())
-        }
-        
-        logger.info(f"Calling FFmpeg Lambda for metadata: {s3_key}")
-        
+        # First, try to get cached metadata from S3 (if it exists)
+        metadata_key = f"metadata/{s3_key.replace('/', '_')}.json"
         try:
-            response = lambda_client.invoke(
-                FunctionName=FFMPEG_LAMBDA_FUNCTION,
-                Payload=json.dumps(ffmpeg_payload)
-            )
+            response = s3.get_object(Bucket=BUCKET_NAME, Key=metadata_key)
+            cached_metadata = json.loads(response['Body'].read())
+            logger.info(f"Found cached metadata: {cached_metadata}")
             
-            result = json.loads(response['Payload'].read())
-            logger.info(f"FFmpeg Lambda response: {result}")
+            return {
+                'statusCode': 200,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps(cached_metadata)
+            }
             
-            if result.get('statusCode') == 200:
-                metadata = json.loads(result['body'])
-                logger.info(f"Video metadata extracted: {metadata}")
+        except s3.exceptions.NoSuchKey:
+            logger.info("No cached metadata found, starting FFmpeg analysis...")
+            
+            # Generate job ID for async processing
+            job_id = str(uuid.uuid4())
+            
+            # Call FFmpeg Lambda ASYNCHRONOUSLY to avoid API Gateway timeout
+            ffmpeg_payload = {
+                'operation': 'extract_metadata',
+                'source_bucket': BUCKET_NAME,
+                'source_key': s3_key,
+                'job_id': job_id,
+                'callback': {
+                    'type': 's3_result',
+                    'bucket': BUCKET_NAME,
+                    'result_key': metadata_key
+                }
+            }
+            
+            logger.info(f"Starting async metadata extraction: {job_id}")
+            
+            try:
+                # ASYNC invocation - returns immediately!
+                response = lambda_client.invoke(
+                    FunctionName=FFMPEG_LAMBDA_FUNCTION,
+                    InvocationType='Event',  # ASYNC - This is the key!
+                    Payload=json.dumps(ffmpeg_payload)
+                )
+                
+                logger.info(f"Async FFmpeg Lambda started successfully")
+                
+                # Return immediately with fallback metadata and processing status
+                fallback_data = get_immediate_fallback_metadata(s3_key)
+                fallback_data['processing'] = True
+                fallback_data['job_id'] = job_id
+                fallback_data['note'] = 'Real metadata being processed asynchronously - refresh in 30 seconds for accurate results'
+                
+                return {
+                    'statusCode': 202,  # Accepted - processing started
+                    'headers': get_cors_headers(origin),
+                    'body': json.dumps(fallback_data)
+                }
+                
+            except Exception as ffmpeg_error:
+                logger.error(f"Failed to start async FFmpeg: {str(ffmpeg_error)}")
+                
+                # Return fallback metadata if FFmpeg is unavailable
+                fallback_data = get_immediate_fallback_metadata(s3_key)
+                fallback_data['note'] = 'FFmpeg processing unavailable - using file-based estimates'
                 
                 return {
                     'statusCode': 200,
                     'headers': get_cors_headers(origin),
-                    'body': json.dumps(metadata)
+                    'body': json.dumps(fallback_data)
                 }
-            else:
-                logger.error(f"FFmpeg Lambda error: {result}")
-                
-                # Fallback to basic metadata if FFmpeg fails
-                return get_fallback_metadata(s3_key, origin)
-                
-        except Exception as ffmpeg_error:
-            logger.error(f"Failed to call FFmpeg Lambda: {str(ffmpeg_error)}")
-            
-            # Fallback to basic metadata
-            return get_fallback_metadata(s3_key, origin)
         
     except json.JSONDecodeError:
         return {
@@ -637,10 +666,10 @@ def handle_get_video_info(event):
             'body': json.dumps({'message': 'Failed to get video info', 'error': str(e)})
         }
 
-def get_fallback_metadata(s3_key, origin):
-    """Get basic metadata as fallback when FFmpeg is not available"""
+def get_immediate_fallback_metadata(s3_key):
+    """Get immediate fallback metadata for instant response"""
     try:
-        # Get basic file information from S3
+        # Get basic file information from S3 (fast operation)
         response = s3.head_object(Bucket=BUCKET_NAME, Key=s3_key)
         file_size = response.get('ContentLength', 0)
         
@@ -648,29 +677,30 @@ def get_fallback_metadata(s3_key, origin):
         filename = s3_key.split('/')[-1] if '/' in s3_key else s3_key
         file_extension = filename.lower().split('.')[-1] if '.' in filename else 'unknown'
         
-        # Basic fallback metadata
-        fallback_metadata = {
-            'duration': 0,  # Can't determine without FFmpeg
+        # Improved fallback metadata based on file characteristics
+        return {
+            'duration': 0,  # Will be updated by async processing
             'format': file_extension,
             'size': file_size,
             'video_streams': 1,
             'audio_streams': 1,
             'subtitle_streams': 1 if file_extension == 'mkv' else 0,
             'filename': filename,
-            'note': 'FFmpeg analysis not available - using basic file information'
-        }
-        
-        return {
-            'statusCode': 200,
-            'headers': get_cors_headers(origin),
-            'body': json.dumps(fallback_metadata)
+            'fallback': True
         }
         
     except Exception as e:
+        logger.error(f"Error getting fallback metadata: {str(e)}")
         return {
-            'statusCode': 500,
-            'headers': get_cors_headers(origin),
-            'body': json.dumps({'message': 'Failed to get file information', 'error': str(e)})
+            'duration': 0,
+            'format': 'unknown',
+            'size': 0,
+            'video_streams': 1,
+            'audio_streams': 1,
+            'subtitle_streams': 0,
+            'filename': 'unknown',
+            'fallback': True,
+            'error': str(e)
         }
 
 def handle_split_video(event):
