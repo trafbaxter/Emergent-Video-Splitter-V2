@@ -463,7 +463,7 @@ const VideoSplitter = () => {
             >
               <input
                 type="file"
-                accept="video/*"
+                accept="video/*,.mp4,.avi,.mov,.mkv,.webm,.flv,.wmv,.m4v,.3gp,.ogv"
                 onChange={handleFileInputChange}
                 ref={fileInputRef}
                 style={{ display: 'none' }}
