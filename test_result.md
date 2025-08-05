@@ -84,9 +84,9 @@ backend:
     implemented: true
     working: false
     file: "fix_cors_lambda.py"
-    stuck_count: 2
+    stuck_count: 3
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: false
         agent: "testing"
@@ -100,6 +100,9 @@ backend:
       - working: false
         agent: "testing"
         comment: "❌ TIMEOUT PERSISTS: S3 head_object() removal did NOT resolve the video metadata endpoint timeout. POST /api/get-video-info still times out after 29.07s with HTTP 504 Gateway Timeout. While video streaming endpoint was fixed, the metadata extraction endpoint continues to have timeout issues. This suggests the timeout problem is specifically in the video metadata processing logic, not the S3 head_object() call."
+      - working: false
+        agent: "testing"
+        comment: "❌ FFMPEG LAMBDA TIMEOUT CONFIRMED: Comprehensive testing shows POST /api/get-video-info endpoint is now RESTORED and calling real FFmpeg Lambda function, but FFmpeg Lambda consistently times out after ~29s with HTTP 504 'Endpoint request timed out'. The endpoint is no longer returning 404/501 placeholders - it's properly implemented and making FFmpeg calls. The issue is FFmpeg Lambda execution timeout, not endpoint implementation. This confirms the restoration was successful but FFmpeg processing needs timeout optimization."
 
   - task: "Video Processing Endpoints"
     implemented: true
