@@ -241,33 +241,14 @@ const VideoSplitter = () => {
         xhr.send(selectedFile);
       });
 
-      // Generate a simple job ID instead of using the full S3 key
-      const jobId = `job-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      setJobId(jobId);
-      
-      // Store the S3 key mapping for this job ID in the backend
-      const mappingResponse = await fetch(`${API_BASE}/api/create-job-mapping`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`
-        },
-        body: JSON.stringify({
-          job_id: jobId,
-          s3_key: key,
-          filename: selectedFile.name
-        })
-      });
+      // Use the S3 key directly but ensure proper encoding
+      console.log('S3 key from upload:', key);
+      setJobId(key);
 
-      if (!mappingResponse.ok) {
-        console.warn('Failed to create job mapping, using S3 key as fallback');
-        setJobId(key); // Fallback to old behavior
-      }
-
-      // Get video metadata and stream URL using job ID
+      // Get video metadata and stream URL using the S3 key
       console.log('Getting video metadata...');
-      await getVideoInfo(jobId);
-      await getVideoStream(jobId);
+      await getVideoInfo(key);
+      await getVideoStream(key);
 
     } catch (error) {
       console.error('Upload failed:', error);
