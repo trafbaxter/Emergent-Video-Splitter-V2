@@ -191,6 +191,18 @@ backend:
         agent: "testing"
         comment: "✅ S3 presigned URL generation working correctly - users can upload files to S3 successfully. Upload workflow tested and confirmed working."
 
+  - task: "S3 Bucket CORS Configuration for Video Streaming"
+    implemented: true
+    working: false
+    file: "S3 bucket configuration"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: false
+        agent: "testing"
+        comment: "❌ CRITICAL S3 CORS ISSUE DISCOVERED: While Lambda generates valid presigned URLs, S3 bucket CORS configuration is blocking video streaming access. Testing shows all S3 presigned URLs return HTTP 403 Forbidden with no CORS headers (Access-Control-Allow-Origin: None) and Content-Type: application/xml (error response). This is the ROOT CAUSE of user's black screen in video preview - browser cannot access S3 video files due to CORS policy violations. S3 bucket needs proper CORS configuration to allow video streaming from browser origins."
+
 frontend:
   - task: "Frontend Integration"
     implemented: true
