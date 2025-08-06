@@ -1,14 +1,23 @@
 #!/usr/bin/env python3
 """
-TIMEOUT FIX TESTING for Video Splitter Pro
-Testing the critical timeout fix where main Lambda timeout was increased from 30s to 900s (15 minutes).
+URGENT: Test split-video CORS and timeout fix
 
-URGENT TEST FOCUS:
-1. POST /api/get-video-info - Should now complete and return REAL video duration from FFmpeg analysis
-2. POST /api/split-video - Should now return 202 and start actual processing instead of timing out
-3. Response times - Should now be able to exceed 30 seconds without 504 errors
+CRITICAL OBJECTIVE:
+Verify that the split-video endpoint now returns HTTP 202 immediately with proper CORS headers 
+instead of timing out with 504 and CORS errors.
 
-This should resolve the critical 29-second timeout issue that was blocking all video processing.
+SPECIFIC TEST:
+1. Test POST /api/split-video with exact payload from review request
+2. MUST return HTTP 202 in under 5 seconds (not 504 timeout)
+3. MUST include CORS headers (Access-Control-Allow-Origin)
+4. Should include job_id, status: "accepted", and other fields
+
+SUCCESS CRITERIA:
+✅ HTTP 202 status (not 504)
+✅ Response time < 5 seconds (not 29+ seconds)  
+✅ CORS headers present (Access-Control-Allow-Origin)
+✅ Response includes job_id and status fields
+✅ No "Failed to fetch" errors from browser
 """
 
 import requests
