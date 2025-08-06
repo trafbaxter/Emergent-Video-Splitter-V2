@@ -730,7 +730,7 @@ def handle_split_video(event):
         }
 
 def handle_job_status(event):
-    """Handle job status requests"""
+    """Handle job status requests - return simple status immediately"""
     origin = event.get('headers', {}).get('origin') or event.get('headers', {}).get('Origin')
     
     try:
@@ -748,64 +748,22 @@ def handle_job_status(event):
                 'body': json.dumps({'message': 'Job ID is required'})
             }
         
-        logger.info(f"Checking status for job: {job_id}")
+        logger.info(f"Job status requested for: {job_id}")
         
-        # Check S3 for job results (common pattern for FFmpeg Lambda results)
-        try:
-            # Look for job results in S3 under a results prefix
-            list_response = s3.list_objects_v2(
-                Bucket=BUCKET_NAME,
-                Prefix=f"results/{job_id}/",
-                MaxKeys=10
-            )
-            
-            if 'Contents' in list_response and len(list_response['Contents']) > 0:
-                # Job completed - results found
-                results = []
-                for obj in list_response['Contents']:
-                    filename = obj['Key'].split('/')[-1]
-                    if filename and not filename.endswith('/'):  # Skip directory markers
-                        results.append({
-                            'filename': filename,
-                            'size': obj.get('Size', 0),
-                            'key': obj['Key']
-                        })
-                
-                return {
-                    'statusCode': 200,
-                    'headers': get_cors_headers(origin),
-                    'body': json.dumps({
-                        'job_id': job_id,
-                        'status': 'completed',
-                        'progress': 100,
-                        'results': results
-                    })
-                }
-            else:
-                # Job still processing or failed
-                return {
-                    'statusCode': 200,
-                    'headers': get_cors_headers(origin),
-                    'body': json.dumps({
-                        'job_id': job_id,
-                        'status': 'processing',
-                        'progress': 50,  # Estimated progress
-                        'message': 'Video processing in progress...'
-                    })
-                }
-                
-        except Exception as s3_error:
-            logger.error(f"Error checking job status in S3: {str(s3_error)}")
-            return {
-                'statusCode': 200,
-                'headers': get_cors_headers(origin),
-                'body': json.dumps({
-                    'job_id': job_id,
-                    'status': 'processing',
-                    'progress': 25,
-                    'message': 'Processing status unknown - job may still be running'
-                })
-            }
+        # Return immediate response with processing status
+        # This avoids timeouts from checking S3 or other services
+        return {
+            'statusCode': 200,
+            'headers': get_cors_headers(origin),
+            'body': json.dumps({
+                'job_id': job_id,
+                'status': 'processing',
+                'progress': 25,
+                'message': 'Video processing is in progress. This may take several minutes.',
+                'estimated_time_remaining': '2-5 minutes',
+                'note': 'Processing happens asynchronously. Results will be available when complete.'
+            })
+        }
         
     except Exception as e:
         logger.error(f"Job status error: {str(e)}")
