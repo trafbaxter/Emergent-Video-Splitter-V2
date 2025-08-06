@@ -258,7 +258,8 @@ metadata:
 test_plan:
   current_focus:
     - "Video Processing Endpoints"
-  stuck_tasks: []
+  stuck_tasks: 
+    - "Video Processing Endpoints"
   test_all: false
   test_priority: "high_first"
 
