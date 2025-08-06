@@ -754,26 +754,60 @@ def handle_split_video(event):
         # Log the processing request for debugging
         logger.info(f"Video split request accepted for job: {job_id}")
         logger.info(f"S3 key: {s3_key}")
-        logger.info(f"Config: {json.dumps(body.get('split_config', {}))}")
+        logger.info(f"Config: {json.dumps(body)}")
         
-        # TODO: In a production system, this would queue the job for background processing
-        # For now, we return immediately to avoid API Gateway timeout
-        # The actual processing would be triggered by a separate system (SQS, Step Functions, etc.)
-        
-        # Return success immediately - avoid any blocking operations
-        return {
+        # Return success immediately to avoid API Gateway timeout
+        response_data = {
             'statusCode': 202,  # Accepted - processing will start
             'headers': get_cors_headers(origin),
             'body': json.dumps({
                 'job_id': job_id,
-                'status': 'accepted',
-                'message': 'Video splitting request accepted successfully',
-                'estimated_time': 'Processing will begin shortly. Check job status in a few minutes.',
-                'note': 'This is a demo response. In production, FFmpeg processing would be queued for background execution.',
+                'status': 'processing',
+                'message': 'Video splitting started successfully',
+                'estimated_time': 'Processing may take several minutes depending on video length',
+                'note': 'Processing is running in background. Use job-status endpoint to check progress.',
                 's3_key': s3_key,
-                'config_received': bool(body.get('method'))
+                'method': body.get('method', 'intervals')
             })
         }
+        
+        # After preparing the response, try to invoke FFmpeg Lambda in background
+        # This happens after we've prepared the response to return
+        try:
+            logger.info(f"Starting background FFmpeg Lambda invocation for job: {job_id}")
+            
+            # Prepare FFmpeg Lambda payload
+            ffmpeg_payload = {
+                'operation': 'split_video',
+                'source_bucket': BUCKET_NAME,
+                'source_key': s3_key,
+                'job_id': job_id,
+                'split_config': {
+                    'method': body.get('method', 'intervals'),
+                    'time_points': body.get('time_points', []),
+                    'interval_duration': body.get('interval_duration', 300),
+                    'preserve_quality': body.get('preserve_quality', True),
+                    'output_format': body.get('output_format', 'mp4'),
+                    'keyframe_interval': body.get('keyframe_interval', 2),
+                    'subtitle_offset': body.get('subtitle_offset', 0)
+                }
+            }
+            
+            # Invoke FFmpeg Lambda asynchronously (this should not block)
+            lambda_client.invoke(
+                FunctionName=FFMPEG_LAMBDA_FUNCTION,
+                InvocationType='Event',  # Asynchronous invocation
+                Payload=json.dumps(ffmpeg_payload)
+            )
+            
+            logger.info(f"FFmpeg Lambda invocation dispatched successfully for job: {job_id}")
+            
+        except Exception as lambda_error:
+            logger.error(f"Failed to invoke FFmpeg Lambda for job {job_id}: {str(lambda_error)}")
+            # Don't fail the request - just log the error
+        
+        # Return the prepared response
+        return response_data
         
     except json.JSONDecodeError:
         return {
