@@ -223,8 +223,11 @@ metadata:
   run_ui: false
 
 test_plan:
-  current_focus: []
-  stuck_tasks: []
+  current_focus:
+    - "S3 Bucket CORS Configuration for Video Streaming"
+    - "Video Processing Endpoints"
+  stuck_tasks:
+    - "Video Processing Endpoints"
   test_all: false
   test_priority: "high_first"
 
