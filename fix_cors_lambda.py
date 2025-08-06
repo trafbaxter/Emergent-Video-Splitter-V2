@@ -751,20 +751,20 @@ def handle_split_video(event):
             }
         }
         
-        # COMPLETE DECOUPLING: Return 202 immediately, then queue processing separately
-        # This is the AWS-recommended pattern for avoiding API Gateway timeouts
+        # S3-BASED JOB QUEUE: Write job details to S3 for background processing
+        # This creates a decoupled system where S3 events can trigger actual processing
         
-        logger.info(f"Video split request for job: {job_id}, S3 key: {s3_key}")
+        logger.info(f"Creating job queue entry for job: {job_id}, S3 key: {s3_key}")
         
-        # STEP 1: Return immediate 202 response (no processing calls whatsoever)
+        # STEP 1: Return immediate 202 response (no blocking operations)
         response_data = {
             'statusCode': 202,
             'headers': get_cors_headers(origin),
             'body': json.dumps({
                 'job_id': job_id,
-                'status': 'accepted',
-                'message': 'Video splitting request accepted successfully',
-                'estimated_time': 'Processing will begin shortly. Check status in 1-2 minutes.',
+                'status': 'queued',
+                'message': 'Video splitting job created successfully',
+                'estimated_time': 'Processing will begin within 1-2 minutes. Check status for updates.',
                 'note': 'Job queued for background processing. Use job-status endpoint to check progress.',
                 's3_key': s3_key,
                 'method': body.get('method', 'intervals'),
@@ -772,28 +772,44 @@ def handle_split_video(event):
             })
         }
         
-        # STEP 2: Queue the processing request using SNS/SQS pattern
-        # For now, we'll log the job details and return immediately
-        # In production, this would publish to SNS/SQS for background processing
-        
-        processing_request = {
-            'job_id': job_id,
-            's3_key': s3_key,
-            'split_config': {
-                'method': body.get('method', 'intervals'),
-                'time_points': body.get('time_points', []),
-                'interval_duration': body.get('interval_duration', 300),
-                'preserve_quality': body.get('preserve_quality', True),
-                'output_format': body.get('output_format', 'mp4'),
-                'keyframe_interval': body.get('keyframe_interval', 2),
-                'subtitle_offset': body.get('subtitle_offset', 0)
+        # STEP 2: Create job file in S3 queue for background processing
+        try:
+            job_details = {
+                'job_id': job_id,
+                'created_at': datetime.now().isoformat(),
+                'source_bucket': BUCKET_NAME,
+                'source_key': s3_key,
+                'split_config': {
+                    'method': body.get('method', 'intervals'),
+                    'time_points': body.get('time_points', []),
+                    'interval_duration': body.get('interval_duration', 300),
+                    'preserve_quality': body.get('preserve_quality', True),
+                    'output_format': body.get('output_format', 'mp4'),
+                    'keyframe_interval': body.get('keyframe_interval', 2),
+                    'subtitle_offset': body.get('subtitle_offset', 0)
+                },
+                'status': 'queued',
+                'output_bucket': BUCKET_NAME,
+                'output_prefix': f'outputs/{job_id}/'
             }
-        }
+            
+            # Write job file to S3 queue
+            job_key = f'jobs/{job_id}.json'
+            s3.put_object(
+                Bucket=BUCKET_NAME,
+                Key=job_key,
+                Body=json.dumps(job_details, indent=2),
+                ContentType='application/json'
+            )
+            
+            logger.info(f"✅ Job file created: s3://{BUCKET_NAME}/{job_key}")
+            logger.info(f"✅ Job {job_id} queued for background processing")
+            
+        except Exception as queue_error:
+            logger.error(f"❌ Failed to create job queue entry: {str(queue_error)}")
+            # Continue anyway - user still gets immediate response
         
-        logger.info(f"Processing request queued: {json.dumps(processing_request)}")
-        logger.info(f"✅ Job {job_id} accepted and queued for processing")
-        
-        # Return immediately - no Lambda invocation, no threading, no blocking operations
+        # Return immediately - processing will happen via S3 event trigger
         return response_data
         
     except json.JSONDecodeError:
