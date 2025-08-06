@@ -734,20 +734,50 @@ def handle_split_video(event):
         # Generate job ID for tracking
         job_id = str(uuid.uuid4())
         
-        # Return immediately with job ID (don't wait for Lambda invoke)
-        # This ensures API Gateway doesn't timeout
-        logger.info(f"Starting video split for key: {s3_key}, job_id: {job_id}")
+        # Prepare FFmpeg Lambda payload
+        ffmpeg_payload = {
+            'operation': 'split_video',
+            'source_bucket': BUCKET_NAME,
+            'source_key': s3_key,
+            'job_id': job_id,
+            'split_config': {
+                'method': body.get('method', 'intervals'),
+                'time_points': body.get('time_points', []),
+                'interval_duration': body.get('interval_duration', 300),
+                'preserve_quality': body.get('preserve_quality', True),
+                'output_format': body.get('output_format', 'mp4'),
+                'keyframe_interval': body.get('keyframe_interval', 2),
+                'subtitle_offset': body.get('subtitle_offset', 0)
+            }
+        }
         
-        # Return success immediately - actual processing will be triggered separately
+        # Invoke FFmpeg Lambda asynchronously (fire-and-forget)
+        try:
+            logger.info(f"Invoking FFmpeg Lambda for job: {job_id}")
+            
+            # Use asynchronous invocation to prevent timeout
+            lambda_client.invoke(
+                FunctionName=FFMPEG_LAMBDA_FUNCTION,
+                InvocationType='Event',  # Asynchronous - returns immediately
+                Payload=json.dumps(ffmpeg_payload)
+            )
+            
+            logger.info(f"FFmpeg Lambda invoked successfully for job: {job_id}")
+            
+        except Exception as lambda_error:
+            logger.error(f"Failed to invoke FFmpeg Lambda: {str(lambda_error)}")
+            # Continue anyway - return accepted status but note the error
+        
+        # Return success immediately - processing is running in background
         return {
-            'statusCode': 202,  # Accepted - processing will start
+            'statusCode': 202,  # Accepted - processing started
             'headers': get_cors_headers(origin),
             'body': json.dumps({
                 'job_id': job_id,
-                'status': 'accepted',
-                'message': 'Video splitting request accepted and will be processed shortly',
+                'status': 'processing',
+                'message': 'Video splitting started successfully',
                 'estimated_time': 'Processing may take several minutes depending on video length',
-                'note': 'Processing will begin momentarily. Use job-status endpoint to check progress.'
+                'note': 'Processing is running in background. Use job-status endpoint to check progress.'
             })
         }
         
