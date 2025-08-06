@@ -721,13 +721,24 @@ def handle_split_video(event):
         
         try:
             # Call FFmpeg Lambda asynchronously for long-running video processing
-            response = lambda_client.invoke(
+            # Use a shorter timeout for the invoke call itself
+            lambda_client_config = boto3.client('lambda', region_name=AWS_REGION, config=boto3.session.Config(
+                read_timeout=5,  # 5 second timeout for invoke call
+                retries={'max_attempts': 1}
+            ))
+            
+            response = lambda_client_config.invoke(
                 FunctionName=FFMPEG_LAMBDA_FUNCTION,
-                InvocationType='Event',  # Async invocation
+                InvocationType='Event',  # Async invocation - should return immediately
                 Payload=json.dumps(ffmpeg_payload)
             )
             
-            logger.info(f"FFmpeg Lambda invoked successfully, job_id: {job_id}")
+            # Check if the invocation was accepted
+            status_code = response.get('StatusCode', 0)
+            if status_code == 202:  # Accepted
+                logger.info(f"FFmpeg Lambda invoked successfully, job_id: {job_id}")
+            else:
+                logger.warning(f"FFmpeg Lambda invocation returned status: {status_code}")
             
             return {
                 'statusCode': 202,  # Accepted - processing started
