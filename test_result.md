@@ -182,10 +182,8 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Video Metadata Extraction"
     - "Video Processing Endpoints"
   stuck_tasks:
-    - "Video Metadata Extraction"
     - "Video Processing Endpoints"
   test_all: false
   test_priority: "high_first"
