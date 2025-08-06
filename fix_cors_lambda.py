@@ -1007,6 +1007,8 @@ def lambda_handler(event, context):
             return handle_user_profile(event)
         elif path == '/api/generate-presigned-url':
             return handle_generate_presigned_url(event)
+        elif path == '/api/create-job-mapping':
+            return handle_create_job_mapping(event)
         elif path.startswith('/api/video-stream/'):
             return handle_video_stream(event)
         elif path == '/api/get-video-info':
