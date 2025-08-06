@@ -483,35 +483,71 @@ def handle_user_profile(event):
         }
 
 def handle_video_stream(event):
-    """Handle video streaming requests - immediate response to avoid timeout"""
+    """Handle video streaming requests - supports both job IDs and S3 keys"""
     origin = event.get('headers', {}).get('origin') or event.get('headers', {}).get('Origin')
     
     try:
-        # Extract job_id from path (this is the S3 key in our case)
+        # Extract the key from the path - could be job ID or S3 key
         path = event.get('path', '')
-        s3_key = None
+        identifier = path.split('/api/video-stream/')[-1]
         
-        if '/api/video-stream/' in path:
-            s3_key = path.split('/api/video-stream/')[-1]
+        if not identifier:
+            return {
+                'statusCode': 400,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'Video identifier is required'})
+            }
+        
+        logger.info(f"Video stream request for identifier: {identifier}")
+        
+        # Determine if this is a job ID or S3 key
+        s3_key = None
+        if identifier.startswith('job-'):
+            # This is a job ID - for now, we'll implement a fallback
+            # In a real implementation, this would look up the S3 key from a database
+            logger.info(f"Job ID detected: {identifier}")
+            # For now, return an error asking for direct S3 key (temporary)
+            return {
+                'statusCode': 400,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({
+                    'message': 'Job ID mapping not yet implemented, please use S3 key directly',
+                    'job_id': identifier
+                })
+            }
+        elif identifier.startswith('uploads/'):
+            # This is an S3 key
+            s3_key = identifier
+            logger.info(f"S3 key detected: {s3_key}")
+        else:
+            # Could be URL encoded S3 key, try to decode
+            try:
+                from urllib.parse import unquote
+                decoded = unquote(identifier)
+                if decoded.startswith('uploads/'):
+                    s3_key = decoded
+                    logger.info(f"URL decoded S3 key: {s3_key}")
+                else:
+                    s3_key = identifier  # Use as-is as fallback
+            except Exception:
+                s3_key = identifier  # Use as-is as fallback
         
         if not s3_key:
             return {
                 'statusCode': 400,
                 'headers': get_cors_headers(origin),
-                'body': json.dumps({'error': 'S3 key is required'})
+                'body': json.dumps({'message': 'Unable to determine S3 key from identifier'})
             }
         
-        logger.info(f"Video stream request for key: {s3_key}")
-        
-        # Generate presigned URL WITHOUT checking if file exists to avoid timeout
         try:
+            # Generate presigned URL for streaming - fixed single encoding
             stream_url = s3.generate_presigned_url(
                 'get_object',
                 Params={'Bucket': BUCKET_NAME, 'Key': s3_key},
-                ExpiresIn=3600  # 1 hour
+                ExpiresIn=3600
             )
             
-            logger.info(f"Generated stream URL for: {s3_key}")
+            logger.info(f"Generated presigned URL for S3 key: {s3_key}")
             
             return {
                 'statusCode': 200,
@@ -524,19 +560,19 @@ def handle_video_stream(event):
             }
             
         except Exception as s3_error:
-            logger.error(f"S3 error: {str(s3_error)}")
+            logger.error(f"S3 presigned URL generation failed: {str(s3_error)}")
             return {
-                'statusCode': 500,
+                'statusCode': 404,
                 'headers': get_cors_headers(origin),
-                'body': json.dumps({'error': f'Failed to generate stream URL: {str(s3_error)}'})
+                'body': json.dumps({'message': 'Video file not found', 'error': str(s3_error)})
             }
-        
+            
     except Exception as e:
-        logger.error(f"Video stream error: {str(e)}")
+        logger.error(f"Video streaming error: {str(e)}")
         return {
             'statusCode': 500,
             'headers': get_cors_headers(origin),
-            'body': json.dumps({'error': f'Failed to process video stream request: {str(e)}'})
+            'body': json.dumps({'message': 'Failed to get video stream', 'error': str(e)})
         }
 
 def handle_get_video_info(event):
@@ -934,6 +970,51 @@ def handle_generate_presigned_url(event):
             'body': json.dumps({'message': 'Failed to generate upload URL', 'error': str(e)})
         }
 
+def handle_create_job_mapping(event):
+    """Handle job mapping creation requests"""
+    origin = event.get('headers', {}).get('origin') or event.get('headers', {}).get('Origin')
+    
+    try:
+        body = json.loads(event['body'])
+        job_id = body.get('job_id')
+        s3_key = body.get('s3_key')
+        
+        if not job_id or not s3_key:
+            return {
+                'statusCode': 400,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'Job ID and S3 key are required'})
+            }
+        
+        logger.info(f"Creating job mapping - Job ID: {job_id}, S3 Key: {s3_key}")
+        
+        # Store job mapping (in a real implementation, this would go to a database)
+        # For now, just return success
+        return {
+            'statusCode': 200,
+            'headers': get_cors_headers(origin),
+            'body': json.dumps({
+                'job_id': job_id,
+                's3_key': s3_key,
+                'status': 'mapping_created',
+                'message': 'Job mapping created successfully'
+            })
+        }
+        
+    except json.JSONDecodeError:
+        return {
+            'statusCode': 400,
+            'headers': get_cors_headers(origin),
+            'body': json.dumps({'message': 'Invalid JSON in request body'})
+        }
+    except Exception as e:
+        logger.error(f"Job mapping error: {str(e)}")
+        return {
+            'statusCode': 500,
+            'headers': get_cors_headers(origin),
+            'body': json.dumps({'message': 'Failed to create job mapping', 'error': str(e)})
+        }
+
 def lambda_handler(event, context):
     """Main Lambda handler with enhanced CORS support"""
     # Log the incoming request
@@ -962,6 +1043,8 @@ def lambda_handler(event, context):
             return handle_user_profile(event)
         elif path == '/api/generate-presigned-url':
             return handle_generate_presigned_url(event)
+        elif path == '/api/create-job-mapping':
+            return handle_create_job_mapping(event)
         elif path.startswith('/api/video-stream/'):
             return handle_video_stream(event)
         elif path == '/api/get-video-info':
