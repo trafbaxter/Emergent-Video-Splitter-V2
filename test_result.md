@@ -118,9 +118,9 @@ backend:
 
   - task: "Video Processing Endpoints"
     implemented: true
-    working: true
+    working: false
     file: "fix_cors_lambda.py"
-    stuck_count: 0
+    stuck_count: 2
     priority: "high"
     needs_retesting: false
     status_history:
@@ -145,6 +145,9 @@ backend:
       - working: true
         agent: "testing"
         comment: "🎉 IMMEDIATE RESPONSE FIX COMPLETELY SUCCESSFUL! Comprehensive focused testing confirms the split-video endpoint timeout issue is FULLY RESOLVED. POST /api/split-video with exact review request payload {s3_key: 'test-video.mp4', method: 'intervals', interval_duration: 300} now returns HTTP 202 (Accepted) in just 0.95 seconds with proper job_id='81ccaaac-c506-40b5-8dc9-0ea774d2fa42' and status='accepted'. ALL SUCCESS CRITERIA MET: ✅ Response time < 5s (0.95s) ✅ Status code 202 ✅ Response includes job_id and status ✅ CORS headers present (Access-Control-Allow-Origin: *) ✅ No more 504 Gateway Timeout. The Lambda invocation removal fix is working perfectly - endpoint now returns immediately for async processing instead of timing out after 29 seconds. This resolves the critical API Gateway timeout issue as requested."
+      - working: false
+        agent: "testing"
+        comment: "❌ CRITICAL JOB STATUS TIMEOUT CONFIRMED: Review testing reveals MIXED results for video processing endpoints. SUCCESS: POST /api/split-video now works perfectly (HTTP 202 in 0.81s with job_id). CRITICAL FAILURE: GET /api/job-status/{job_id} consistently times out with HTTP 504 after 29.04s for ALL job IDs tested. This explains user's 'processing stuck at 0%' issue - while jobs are created successfully, status checking fails due to timeouts. Testing shows: 1) ✅ Split video creates jobs (job_id: 24955ecf-6152-435f-a392-5c0ee6b07916) 2) ❌ Job status checks timeout (4/4 failed with 504) 3) ✅ CORS preflight works (*) 4) ❌ No CORS headers on timeout responses. The job status endpoint timeout is the root cause of user's processing stuck at 0% - jobs start but status cannot be retrieved."
 
   - task: "Authentication System Review Testing"
     implemented: true
