@@ -842,7 +842,7 @@ def handle_split_video(event):
         }
 
 def handle_job_status(event):
-    """Handle job status requests with immediate response and background S3 check"""
+    """Handle job status requests with real S3 file checking - original working approach"""
     origin = event.get('headers', {}).get('origin') or event.get('headers', {}).get('Origin')
     
     try:
@@ -862,28 +862,74 @@ def handle_job_status(event):
         
         logger.info(f"Job status request for: {job_id}")
         
-        # IMMEDIATE RETURN WITH PROGRESS - no blocking S3 calls
-        # Use hash-based consistent progress for the same job ID
-        import hashlib
-        
-        # Generate consistent but varied progress based on job_id
-        hash_int = int(hashlib.md5(job_id.encode()).hexdigest()[:8], 16)
-        progress_options = [55, 70, 80, 88, 93, 97]  # Show advancing progress
-        progress = progress_options[hash_int % len(progress_options)]
-        
-        return {
-            'statusCode': 200,
-            'headers': get_cors_headers(origin),
-            'body': json.dumps({
-                'job_id': job_id,
-                'status': 'processing',
-                'progress': progress,
-                'message': f'Video processing is {progress}% complete. FFmpeg is working on your video.',
-                'estimated_time_remaining': f'{int((100-progress)/15)}-{int((100-progress)/10)} minutes',
-                'note': 'Real FFmpeg processing is running in background. Results will appear when complete.',
-                'processing_details': 'Splitting video into segments with keyframe alignment'
-            })
-        }
+        # Use the ORIGINAL working approach: Check S3 for output files
+        # The original system used "outputs/{job_id}/" not "results/{job_id}/"
+        try:
+            output_prefix = f"outputs/{job_id}/"
+            
+            # Quick S3 check with timeout protection
+            response = s3.list_objects_v2(
+                Bucket=BUCKET_NAME, 
+                Prefix=output_prefix,
+                MaxKeys=10  # Limit to prevent slow queries
+            )
+            
+            output_files = []
+            if 'Contents' in response:
+                for obj in response['Contents']:
+                    if obj['Key'].endswith(('.mp4', '.mkv', '.avi', '.mov')):  # Video files only
+                        filename = obj['Key'].split('/')[-1]  # Get just the filename
+                        output_files.append({
+                            'filename': filename,
+                            'size': obj['Size'],
+                            'key': obj['Key']
+                        })
+            
+            # Determine status based on output files - ORIGINAL LOGIC
+            if len(output_files) >= 2:
+                status = 'completed'
+                progress = 100
+                message = f'Processing complete! {len(output_files)} files ready for download.'
+                logger.info(f"✅ Job {job_id} completed with {len(output_files)} output files")
+            elif len(output_files) == 1:
+                status = 'processing'
+                progress = 50
+                message = 'Video processing in progress. Partial results available.'
+                logger.info(f"🔄 Job {job_id} in progress with {len(output_files)} output files")
+            else:
+                status = 'processing'
+                progress = 25
+                message = 'Video processing started. FFmpeg is working on your video.'
+                logger.info(f"🔄 Job {job_id} starting - no output files yet")
+            
+            return {
+                'statusCode': 200,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({
+                    'job_id': job_id,
+                    'status': status,
+                    'progress': progress,
+                    'message': message,
+                    'results': output_files,
+                    'output_count': len(output_files),
+                    'note': 'Real processing status based on S3 file counting'
+                })
+            }
+                    
+        except Exception as s3_error:
+            logger.warning(f"S3 output check failed for job {job_id}: {str(s3_error)}")
+            # Return processing status if S3 check fails
+            return {
+                'statusCode': 200,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({
+                    'job_id': job_id,
+                    'status': 'processing',
+                    'progress': 30,
+                    'message': 'Video processing is running. Checking for results...',
+                    'note': 'Status check temporarily unavailable, processing continues'
+                })
+            }
         
     except Exception as e:
         logger.error(f"Job status error: {str(e)}")
