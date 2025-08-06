@@ -78,7 +78,6 @@ DEMO_USERS = {}
 s3 = boto3.client('s3')
 lambda_client = boto3.client('lambda')
 FFMPEG_LAMBDA_FUNCTION = 'ffmpeg-converter'
-FFMPEG_LAMBDA_FUNCTION = 'ffmpeg-converter'
 
 def get_cors_headers(origin=None):
     """Get CORS headers for API responses - temporary wildcard fix"""
