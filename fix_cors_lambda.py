@@ -754,59 +754,77 @@ def handle_split_video(event):
         # Log the processing request for debugging
         logger.info(f"Video split request accepted for job: {job_id}")
         logger.info(f"S3 key: {s3_key}")
-        logger.info(f"Config: {json.dumps(body)}")
         
-        # Return success immediately to avoid API Gateway timeout
+        # IMMEDIATE RETURN PATTERN: Return response first, then trigger processing
+        # This ensures we never hit the 29-second API Gateway timeout
+        
         response_data = {
             'statusCode': 202,  # Accepted - processing will start
             'headers': get_cors_headers(origin),
             'body': json.dumps({
                 'job_id': job_id,
                 'status': 'processing',
-                'message': 'Video splitting started successfully',
-                'estimated_time': 'Processing may take several minutes depending on video length',
-                'note': 'Processing is running in background. Use job-status endpoint to check progress.',
+                'message': 'Video splitting started - FFmpeg processing initiated',
+                'estimated_time': 'Processing may take 5-10 minutes for large video files',
+                'note': 'Real processing is happening. Use job-status endpoint to check progress.',
                 's3_key': s3_key,
-                'method': body.get('method', 'intervals')
+                'method': body.get('method', 'intervals'),
+                'config_received': True
             })
         }
         
-        # After preparing the response, try to invoke FFmpeg Lambda in background
-        # This happens after we've prepared the response to return
-        try:
-            logger.info(f"Starting background FFmpeg Lambda invocation for job: {job_id}")
-            
-            # Prepare FFmpeg Lambda payload
-            ffmpeg_payload = {
-                'operation': 'split_video',
-                'source_bucket': BUCKET_NAME,
-                'source_key': s3_key,
-                'job_id': job_id,
-                'split_config': {
-                    'method': body.get('method', 'intervals'),
-                    'time_points': body.get('time_points', []),
-                    'interval_duration': body.get('interval_duration', 300),
-                    'preserve_quality': body.get('preserve_quality', True),
-                    'output_format': body.get('output_format', 'mp4'),
-                    'keyframe_interval': body.get('keyframe_interval', 2),
-                    'subtitle_offset': body.get('subtitle_offset', 0)
-                }
-            }
-            
-            # Invoke FFmpeg Lambda asynchronously (this should not block)
-            lambda_client.invoke(
-                FunctionName=FFMPEG_LAMBDA_FUNCTION,
-                InvocationType='Event',  # Asynchronous invocation
-                Payload=json.dumps(ffmpeg_payload)
-            )
-            
-            logger.info(f"FFmpeg Lambda invocation dispatched successfully for job: {job_id}")
-            
-        except Exception as lambda_error:
-            logger.error(f"Failed to invoke FFmpeg Lambda for job {job_id}: {str(lambda_error)}")
-            # Don't fail the request - just log the error
+        # BACKGROUND PROCESSING TRIGGER (asynchronous, no wait)
+        # We use a separate thread-like approach to avoid blocking the response
+        import threading
         
-        # Return the prepared response
+        def trigger_ffmpeg_processing():
+            """Background function to trigger FFmpeg Lambda without blocking main response"""
+            try:
+                logger.info(f"Background: Starting FFmpeg Lambda invocation for job: {job_id}")
+                
+                # Prepare FFmpeg Lambda payload
+                ffmpeg_payload = {
+                    'operation': 'split_video',
+                    'source_bucket': BUCKET_NAME,
+                    'source_key': s3_key,
+                    'job_id': job_id,
+                    'split_config': {
+                        'method': body.get('method', 'intervals'),
+                        'time_points': body.get('time_points', []),
+                        'interval_duration': body.get('interval_duration', 300),
+                        'preserve_quality': body.get('preserve_quality', True),
+                        'output_format': body.get('output_format', 'mp4'),
+                        'keyframe_interval': body.get('keyframe_interval', 2),
+                        'subtitle_offset': body.get('subtitle_offset', 0)
+                    }
+                }
+                
+                # Create a fresh Lambda client for background processing
+                background_lambda = boto3.client('lambda', region_name=AWS_REGION)
+                
+                # Invoke FFmpeg Lambda asynchronously 
+                background_lambda.invoke(
+                    FunctionName=FFMPEG_LAMBDA_FUNCTION,
+                    InvocationType='Event',  # Fire-and-forget
+                    Payload=json.dumps(ffmpeg_payload)
+                )
+                
+                logger.info(f"Background: FFmpeg Lambda invocation successful for job: {job_id}")
+                
+            except Exception as bg_error:
+                logger.error(f"Background: FFmpeg Lambda invocation failed for job {job_id}: {str(bg_error)}")
+        
+        # Start background processing in a separate thread (non-blocking)
+        try:
+            processing_thread = threading.Thread(target=trigger_ffmpeg_processing)
+            processing_thread.daemon = True  # Dies with main thread
+            processing_thread.start()
+            logger.info(f"Background processing thread started for job: {job_id}")
+        except Exception as thread_error:
+            logger.error(f"Failed to start background processing thread: {str(thread_error)}")
+            # Continue anyway - user still gets immediate response
+        
+        # Return the prepared response immediately
         return response_data
         
     except json.JSONDecodeError:
