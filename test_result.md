@@ -130,6 +130,9 @@ backend:
       - working: false
         agent: "testing"
         comment: "❌ MAIN LAMBDA TIMEOUT FIX FAILED: URGENT timeout fix testing shows that increasing main Lambda timeout from 30s→900s did NOT resolve the issue. POST /api/split-video still times out after 29.04s with HTTP 504. The timeout is NOT coming from the main Lambda function but from another component (likely FFmpeg Lambda, API Gateway, or other service). The consistent 29-second timeout pattern indicates a 30-second limit elsewhere in the architecture that needs to be identified and increased."
+      - working: false
+        agent: "testing"
+        comment: "❌ REVIEW TESTING CONFIRMS TIMEOUT ISSUE PERSISTS: Focused testing of POST /api/split-video shows it still times out after ~29s with HTTP 504 Gateway Timeout instead of returning HTTP 202 (Accepted) immediately as expected for async processing. The endpoint should return a job_id immediately and process in background, but continues to timeout. CORS headers are working properly (Access-Control-Allow-Origin: *). This confirms the split video endpoint is not behaving as expected per the review request - it should return 202 immediately, not timeout after 29 seconds."
 
   - task: "CORS Configuration Fix for working.tads-video-splitter.com"
     implemented: true
