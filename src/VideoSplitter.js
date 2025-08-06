@@ -319,14 +319,21 @@ const VideoSplitter = () => {
     }
   };
 
-  // Get video stream URL for preview - using working master branch approach
+  // Get video stream URL for preview
   const getVideoStream = async (key) => {
     try {
       console.log('Getting video stream for key:', key);
       
-      // Add timestamp for cache busting like the working version
+      // Encode the S3 key properly for the URL path
+      // But avoid double encoding if it's already encoded
+      let encodedKey = key;
+      if (!key.includes('%')) {
+        encodedKey = encodeURIComponent(key);
+      }
+      
+      // Add timestamp for cache busting
       const timestamp = Date.now();
-      const response = await fetch(`${API_BASE}/api/video-stream/${key}?t=${timestamp}`, {
+      const response = await fetch(`${API_BASE}/api/video-stream/${encodedKey}?t=${timestamp}`, {
         headers: {
           'Authorization': `Bearer ${accessToken}`
         }
