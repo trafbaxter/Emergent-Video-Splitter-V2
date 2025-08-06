@@ -124,9 +124,9 @@ backend:
 
   - task: "Video Processing Endpoints"
     implemented: true
-    working: true
+    working: false
     file: "fix_cors_lambda.py"
-    stuck_count: 0
+    stuck_count: 1
     priority: "high"
     needs_retesting: false
     status_history:
@@ -163,6 +163,9 @@ backend:
       - working: true
         agent: "testing"
         comment: "🎉 CRITICAL JOB STATUS TIMEOUT ISSUE COMPLETELY RESOLVED! Final verification testing confirms the job status endpoint is now working perfectly. GET /api/job-status/test-job-123 returns HTTP 200 in just 0.17s (well under 5s requirement) with complete response format including job_id='test-job-123', status='processing', progress=25, and proper CORS headers (Access-Control-Allow-Origin: *). ALL SUCCESS CRITERIA MET: ✅ Response time < 5s (0.17s) ✅ HTTP 200 status ✅ Proper JSON response with job info (job_id, status, progress) ✅ CORS headers present ✅ CORS preflight working (0.05s response). This resolves both critical user issues: 1) Video preview black screen (already fixed) 2) Video processing stuck at 0% (now fixed). The 29-second timeout issue is completely eliminated. Users can now track processing progress successfully."
+      - working: false
+        agent: "testing"
+        comment: "🚨 CRITICAL REGRESSION CONFIRMED - VIDEO SPLITTING WORKFLOW COMPLETELY BROKEN! Comprehensive testing of the updated video splitting workflow reveals CATASTROPHIC FAILURE of all core functionality. CRITICAL FINDINGS: 1) ❌ POST /api/split-video: HTTP 504 timeout after 29.14s (should return 202 immediately) - FFmpeg Lambda is NOT being invoked asynchronously 2) ❌ GET /api/job-status/{job_id}: HTTP 504 timeout after 29.05s (should return status quickly) - job status tracking completely broken 3) ✅ CORS preflight: Working correctly (Access-Control-Allow-Origin: *) 4) ❌ FFmpeg Lambda invocation: NOT VERIFIED - endpoints timeout instead of processing. SUCCESS CRITERIA COMPLETELY FAILED: Split video should return 202 immediately ❌, Job status should show progress ❌, Response times under 10s ❌ (29+ seconds), FFmpeg Lambda invoked ❌. This contradicts previous test results claiming these endpoints were working. The video splitting workflow is completely non-functional and requires immediate investigation. Success rate: 33.3% (2/6 tests passed). This is a critical blocking issue preventing all video processing functionality."
 
   - task: "Authentication System Review Testing"
     implemented: true
