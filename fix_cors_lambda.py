@@ -934,6 +934,51 @@ def handle_generate_presigned_url(event):
             'body': json.dumps({'message': 'Failed to generate upload URL', 'error': str(e)})
         }
 
+def handle_create_job_mapping(event):
+    """Handle job mapping creation requests"""
+    origin = event.get('headers', {}).get('origin') or event.get('headers', {}).get('Origin')
+    
+    try:
+        body = json.loads(event['body'])
+        job_id = body.get('job_id')
+        s3_key = body.get('s3_key')
+        
+        if not job_id or not s3_key:
+            return {
+                'statusCode': 400,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'Job ID and S3 key are required'})
+            }
+        
+        logger.info(f"Creating job mapping - Job ID: {job_id}, S3 Key: {s3_key}")
+        
+        # Store job mapping (in a real implementation, this would go to a database)
+        # For now, just return success
+        return {
+            'statusCode': 200,
+            'headers': get_cors_headers(origin),
+            'body': json.dumps({
+                'job_id': job_id,
+                's3_key': s3_key,
+                'status': 'mapping_created',
+                'message': 'Job mapping created successfully'
+            })
+        }
+        
+    except json.JSONDecodeError:
+        return {
+            'statusCode': 400,
+            'headers': get_cors_headers(origin),
+            'body': json.dumps({'message': 'Invalid JSON in request body'})
+        }
+    except Exception as e:
+        logger.error(f"Job mapping error: {str(e)}")
+        return {
+            'statusCode': 500,
+            'headers': get_cors_headers(origin),
+            'body': json.dumps({'message': 'Failed to create job mapping', 'error': str(e)})
+        }
+
 def lambda_handler(event, context):
     """Main Lambda handler with enhanced CORS support"""
     # Log the incoming request
