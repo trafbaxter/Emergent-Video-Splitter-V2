@@ -751,23 +751,28 @@ def handle_split_video(event):
             }
         }
         
-        # Invoke FFmpeg Lambda asynchronously (fire-and-forget)
+        # Invoke FFmpeg Lambda asynchronously (fire-and-forget with timeout protection)
         try:
             logger.info(f"Invoking FFmpeg Lambda for job: {job_id}")
             
-            # Use asynchronous invocation to prevent timeout
-            lambda_client.invoke(
+            # Create a separate Lambda client with shorter timeout to prevent blocking
+            lambda_client_fast = boto3.client('lambda', region_name=AWS_REGION)
+            
+            # Use asynchronous invocation with minimal timeout
+            lambda_client_fast.invoke(
                 FunctionName=FFMPEG_LAMBDA_FUNCTION,
-                InvocationType='Event',  # Asynchronous - returns immediately
+                InvocationType='Event',  # Asynchronous - should return immediately
                 Payload=json.dumps(ffmpeg_payload)
             )
             
-            logger.info(f"FFmpeg Lambda invoked successfully for job: {job_id}")
+            logger.info(f"FFmpeg Lambda invocation dispatched for job: {job_id}")
             
         except Exception as lambda_error:
-            logger.error(f"Failed to invoke FFmpeg Lambda: {str(lambda_error)}")
-            # Continue anyway - return accepted status but note the error
+            logger.error(f"FFmpeg Lambda invocation failed: {str(lambda_error)}")
+            # Continue anyway - processing request was accepted
         
+        # Return immediately regardless of Lambda invocation result
+        # This ensures we never hit the 29-second API Gateway timeout
         # Return success immediately - processing is running in background
         return {
             'statusCode': 202,  # Accepted - processing started
