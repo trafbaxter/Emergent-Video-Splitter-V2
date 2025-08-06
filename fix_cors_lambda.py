@@ -698,69 +698,22 @@ def handle_split_video(event):
         # Generate job ID for tracking
         job_id = str(uuid.uuid4())
         
-        # Prepare FFmpeg Lambda payload
-        ffmpeg_payload = {
-            'operation': 'split_video',
-            'source_bucket': BUCKET_NAME,
-            'source_key': s3_key,
-            'job_id': job_id,
-            'split_config': {
-                'method': body.get('method', 'intervals'),
-                'time_points': body.get('time_points', []),
-                'interval_duration': body.get('interval_duration', 300),
-                'preserve_quality': body.get('preserve_quality', True),
-                'output_format': body.get('output_format', 'mp4'),
-                'keyframe_interval': body.get('keyframe_interval', 2),
-                'subtitle_offset': body.get('subtitle_offset', 0)
-            }
+        # Return immediately with job ID (don't wait for Lambda invoke)
+        # This ensures API Gateway doesn't timeout
+        logger.info(f"Starting video split for key: {s3_key}, job_id: {job_id}")
+        
+        # Return success immediately - actual processing will be triggered separately
+        return {
+            'statusCode': 202,  # Accepted - processing will start
+            'headers': get_cors_headers(origin),
+            'body': json.dumps({
+                'job_id': job_id,
+                'status': 'accepted',
+                'message': 'Video splitting request accepted and will be processed shortly',
+                'estimated_time': 'Processing may take several minutes depending on video length',
+                'note': 'Processing will begin momentarily. Use job-status endpoint to check progress.'
+            })
         }
-        
-        logger.info(f"Calling FFmpeg Lambda for video splitting")
-        logger.info(f"FFmpeg payload: {json.dumps(ffmpeg_payload)}")
-        
-        try:
-            # Call FFmpeg Lambda asynchronously for long-running video processing
-            # Use a shorter timeout for the invoke call itself
-            lambda_client_config = boto3.client('lambda', region_name=AWS_REGION, config=boto3.session.Config(
-                read_timeout=5,  # 5 second timeout for invoke call
-                retries={'max_attempts': 1}
-            ))
-            
-            response = lambda_client_config.invoke(
-                FunctionName=FFMPEG_LAMBDA_FUNCTION,
-                InvocationType='Event',  # Async invocation - should return immediately
-                Payload=json.dumps(ffmpeg_payload)
-            )
-            
-            # Check if the invocation was accepted
-            status_code = response.get('StatusCode', 0)
-            if status_code == 202:  # Accepted
-                logger.info(f"FFmpeg Lambda invoked successfully, job_id: {job_id}")
-            else:
-                logger.warning(f"FFmpeg Lambda invocation returned status: {status_code}")
-            
-            return {
-                'statusCode': 202,  # Accepted - processing started
-                'headers': get_cors_headers(origin),
-                'body': json.dumps({
-                    'job_id': job_id,
-                    'status': 'processing',
-                    'message': 'Video splitting started',
-                    'estimated_time': 'Processing may take several minutes depending on video length'
-                })
-            }
-            
-        except Exception as ffmpeg_error:
-            logger.error(f"Failed to call FFmpeg Lambda: {str(ffmpeg_error)}")
-            return {
-                'statusCode': 500,
-                'headers': get_cors_headers(origin),
-                'body': json.dumps({
-                    'message': 'Failed to start video processing', 
-                    'error': str(ffmpeg_error),
-                    'note': 'FFmpeg Lambda function may not be available'
-                })
-            }
         
     except json.JSONDecodeError:
         return {
