@@ -751,80 +751,65 @@ def handle_split_video(event):
             }
         }
         
-        # Log the processing request for debugging
-        logger.info(f"Video split request accepted for job: {job_id}")
-        logger.info(f"S3 key: {s3_key}")
+        # S3-BASED JOB QUEUE: Write job details to S3 for background processing
+        # This creates a decoupled system where S3 events can trigger actual processing
         
-        # IMMEDIATE RETURN PATTERN: Return response first, then trigger processing
-        # This ensures we never hit the 29-second API Gateway timeout
+        logger.info(f"Creating job queue entry for job: {job_id}, S3 key: {s3_key}")
         
+        # STEP 1: Return immediate 202 response (no blocking operations)
         response_data = {
-            'statusCode': 202,  # Accepted - processing will start
+            'statusCode': 202,
             'headers': get_cors_headers(origin),
             'body': json.dumps({
                 'job_id': job_id,
-                'status': 'processing',
-                'message': 'Video splitting started - FFmpeg processing initiated',
-                'estimated_time': 'Processing may take 5-10 minutes for large video files',
-                'note': 'Real processing is happening. Use job-status endpoint to check progress.',
+                'status': 'queued',
+                'message': 'Video splitting job created successfully',
+                'estimated_time': 'Processing will begin within 1-2 minutes. Check status for updates.',
+                'note': 'Job queued for background processing. Use job-status endpoint to check progress.',
                 's3_key': s3_key,
                 'method': body.get('method', 'intervals'),
                 'config_received': True
             })
         }
         
-        # BACKGROUND PROCESSING TRIGGER (asynchronous, no wait)
-        # We use a separate thread-like approach to avoid blocking the response
-        import threading
-        
-        def trigger_ffmpeg_processing():
-            """Background function to trigger FFmpeg Lambda without blocking main response"""
-            try:
-                logger.info(f"Background: Starting FFmpeg Lambda invocation for job: {job_id}")
-                
-                # Prepare FFmpeg Lambda payload
-                ffmpeg_payload = {
-                    'operation': 'split_video',
-                    'source_bucket': BUCKET_NAME,
-                    'source_key': s3_key,
-                    'job_id': job_id,
-                    'split_config': {
-                        'method': body.get('method', 'intervals'),
-                        'time_points': body.get('time_points', []),
-                        'interval_duration': body.get('interval_duration', 300),
-                        'preserve_quality': body.get('preserve_quality', True),
-                        'output_format': body.get('output_format', 'mp4'),
-                        'keyframe_interval': body.get('keyframe_interval', 2),
-                        'subtitle_offset': body.get('subtitle_offset', 0)
-                    }
-                }
-                
-                # Create a fresh Lambda client for background processing
-                background_lambda = boto3.client('lambda', region_name=AWS_REGION)
-                
-                # Invoke FFmpeg Lambda asynchronously 
-                background_lambda.invoke(
-                    FunctionName=FFMPEG_LAMBDA_FUNCTION,
-                    InvocationType='Event',  # Fire-and-forget
-                    Payload=json.dumps(ffmpeg_payload)
-                )
-                
-                logger.info(f"Background: FFmpeg Lambda invocation successful for job: {job_id}")
-                
-            except Exception as bg_error:
-                logger.error(f"Background: FFmpeg Lambda invocation failed for job {job_id}: {str(bg_error)}")
-        
-        # Start background processing in a separate thread (non-blocking)
+        # STEP 2: Create job file in S3 queue for background processing
         try:
-            processing_thread = threading.Thread(target=trigger_ffmpeg_processing)
-            processing_thread.daemon = True  # Dies with main thread
-            processing_thread.start()
-            logger.info(f"Background processing thread started for job: {job_id}")
-        except Exception as thread_error:
-            logger.error(f"Failed to start background processing thread: {str(thread_error)}")
+            job_details = {
+                'job_id': job_id,
+                'created_at': datetime.now().isoformat(),
+                'source_bucket': BUCKET_NAME,
+                'source_key': s3_key,
+                'split_config': {
+                    'method': body.get('method', 'intervals'),
+                    'time_points': body.get('time_points', []),
+                    'interval_duration': body.get('interval_duration', 300),
+                    'preserve_quality': body.get('preserve_quality', True),
+                    'output_format': body.get('output_format', 'mp4'),
+                    'keyframe_interval': body.get('keyframe_interval', 2),
+                    'subtitle_offset': body.get('subtitle_offset', 0)
+                },
+                'status': 'queued',
+                'output_bucket': BUCKET_NAME,
+                'output_prefix': f'outputs/{job_id}/'
+            }
+            
+            # Write job file to S3 queue
+            job_key = f'jobs/{job_id}.json'
+            s3.put_object(
+                Bucket=BUCKET_NAME,
+                Key=job_key,
+                Body=json.dumps(job_details, indent=2),
+                ContentType='application/json'
+            )
+            
+            logger.info(f"✅ Job file created: s3://{BUCKET_NAME}/{job_key}")
+            logger.info(f"✅ Job {job_id} queued for background processing")
+            
+        except Exception as queue_error:
+            logger.error(f"❌ Failed to create job queue entry: {str(queue_error)}")
             # Continue anyway - user still gets immediate response
         
-        # Return the prepared response immediately
+        # Return immediately - processing will happen via S3 event trigger
         return response_data
         
     except json.JSONDecodeError:
