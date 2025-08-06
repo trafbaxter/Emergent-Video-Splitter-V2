@@ -517,7 +517,11 @@ def handle_video_stream(event):
             return {
                 'statusCode': 200,
                 'headers': get_cors_headers(origin),
-                'body': json.dumps({'stream_url': stream_url})
+                'body': json.dumps({
+                    'stream_url': stream_url,
+                    's3_key': s3_key,
+                    'expires_in': 3600
+                })
             }
             
         except Exception as s3_error:
