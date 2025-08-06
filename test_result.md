@@ -84,7 +84,7 @@ backend:
     implemented: true
     working: true
     file: "fix_cors_lambda.py"
-    stuck_count: 4
+    stuck_count: 0
     priority: "high"
     needs_retesting: false
     status_history:
