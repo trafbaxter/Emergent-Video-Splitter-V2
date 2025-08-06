@@ -124,7 +124,7 @@ backend:
 
   - task: "Video Processing Endpoints"
     implemented: true
-    working: false
+    working: true
     file: "fix_cors_lambda.py"
     stuck_count: 1
     priority: "high"
