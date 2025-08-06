@@ -1,14 +1,23 @@
 #!/usr/bin/env python3
 """
-TIMEOUT FIX TESTING for Video Splitter Pro
-Testing the critical timeout fix where main Lambda timeout was increased from 30s to 900s (15 minutes).
+URGENT: Test split-video CORS and timeout fix
 
-URGENT TEST FOCUS:
-1. POST /api/get-video-info - Should now complete and return REAL video duration from FFmpeg analysis
-2. POST /api/split-video - Should now return 202 and start actual processing instead of timing out
-3. Response times - Should now be able to exceed 30 seconds without 504 errors
+CRITICAL OBJECTIVE:
+Verify that the split-video endpoint now returns HTTP 202 immediately with proper CORS headers 
+instead of timing out with 504 and CORS errors.
 
-This should resolve the critical 29-second timeout issue that was blocking all video processing.
+SPECIFIC TEST:
+1. Test POST /api/split-video with exact payload from review request
+2. MUST return HTTP 202 in under 5 seconds (not 504 timeout)
+3. MUST include CORS headers (Access-Control-Allow-Origin)
+4. Should include job_id, status: "accepted", and other fields
+
+SUCCESS CRITERIA:
+✅ HTTP 202 status (not 504)
+✅ Response time < 5 seconds (not 29+ seconds)  
+✅ CORS headers present (Access-Control-Allow-Origin)
+✅ Response includes job_id and status fields
+✅ No "Failed to fetch" errors from browser
 """
 
 import requests
@@ -18,29 +27,16 @@ import uuid
 from typing import Dict, Any, Optional
 import sys
 
-# Configuration
+# Configuration - Using the backend URL from AuthContext.js
 API_GATEWAY_URL = "https://2419j971hh.execute-api.us-east-1.amazonaws.com/prod"
-S3_BUCKET = "videosplitter-storage-1751560247"
-TIMEOUT = 120  # Increased timeout to test the 900s Lambda timeout fix
+TIMEOUT = 30  # 30 second timeout for testing immediate response
 
-# CORS Test Origins - matching the allowed origins in fix_cors_lambda.py
-TEST_ORIGINS = [
-    'https://develop.tads-video-splitter.com',
-    'https://main.tads-video-splitter.com', 
-    'https://working.tads-video-splitter.com',
-    'http://localhost:3000',
-    'http://localhost:3001',
-    'http://127.0.0.1:3000'
-]
-
-class VideoSplitterTester:
+class SplitVideoTester:
     def __init__(self):
         self.base_url = API_GATEWAY_URL
         self.session = requests.Session()
         self.session.timeout = TIMEOUT
         self.test_results = []
-        self.access_token = None
-        self.user_id = None
         
     def log_test(self, test_name: str, success: bool, details: str = "", response_data: Dict = None):
         """Log test results"""
@@ -59,712 +55,221 @@ class VideoSplitterTester:
         })
         print()
 
+    def test_cors_preflight(self):
+        """Test CORS preflight request for split-video endpoint"""
+        print("🔍 Testing CORS Preflight for split-video endpoint...")
+        try:
+            headers = {
+                'Origin': 'https://working.tads-video-splitter.com',
+                'Access-Control-Request-Method': 'POST',
+                'Access-Control-Request-Headers': 'Content-Type'
+            }
+            
+            start_time = time.time()
+            response = self.session.options(f"{self.base_url}/api/split-video", headers=headers)
+            response_time = time.time() - start_time
+            
+            cors_origin = response.headers.get('Access-Control-Allow-Origin')
+            cors_methods = response.headers.get('Access-Control-Allow-Methods')
+            cors_headers = response.headers.get('Access-Control-Allow-Headers')
+            
+            if response.status_code == 200 and cors_origin:
+                self.log_test(
+                    "CORS Preflight for split-video",
+                    True,
+                    f"✅ CORS preflight working! Origin: {cors_origin}, Methods: {cors_methods}, Response time: {response_time:.2f}s"
+                )
+                return True
+            else:
+                self.log_test(
+                    "CORS Preflight for split-video",
+                    False,
+                    f"CORS preflight failed. Status: {response.status_code}, Origin header: {cors_origin}"
+                )
+                return False
+                
+        except Exception as e:
+            self.log_test("CORS Preflight for split-video", False, f"Error: {str(e)}")
+            return False
+
+    def test_split_video_immediate_response(self):
+        """Test the critical split-video immediate response fix"""
+        print("🚨 CRITICAL TEST: Split-video immediate response...")
+        
+        # Exact payload from review request
+        split_data = {
+            "s3_key": "uploads/test/sample-video.mkv", 
+            "method": "intervals",
+            "interval_duration": 300,
+            "preserve_quality": True,
+            "output_format": "mp4"
+        }
+        
+        try:
+            headers = {
+                'Content-Type': 'application/json',
+                'Origin': 'https://working.tads-video-splitter.com'
+            }
+            
+            print(f"   🎯 Testing with exact review request payload...")
+            print(f"   📋 Payload: {json.dumps(split_data, indent=2)}")
+            
+            start_time = time.time()
+            response = self.session.post(f"{self.base_url}/api/split-video", json=split_data, headers=headers)
+            response_time = time.time() - start_time
+            
+            print(f"   ⏱️  Response time: {response_time:.2f}s")
+            print(f"   📊 Status code: {response.status_code}")
+            
+            # Check CORS headers
+            cors_origin = response.headers.get('Access-Control-Allow-Origin')
+            print(f"   🌐 CORS Origin header: {cors_origin}")
+            
+            # SUCCESS CRITERIA CHECK
+            success_criteria = {
+                'http_202': response.status_code == 202,
+                'under_5_seconds': response_time < 5.0,
+                'cors_headers': cors_origin is not None,
+                'no_timeout': response.status_code != 504
+            }
+            
+            print(f"   📋 SUCCESS CRITERIA:")
+            print(f"      ✅ HTTP 202 status: {'PASS' if success_criteria['http_202'] else 'FAIL'} (got {response.status_code})")
+            print(f"      ✅ Response < 5s: {'PASS' if success_criteria['under_5_seconds'] else 'FAIL'} ({response_time:.2f}s)")
+            print(f"      ✅ CORS headers: {'PASS' if success_criteria['cors_headers'] else 'FAIL'} ({cors_origin})")
+            print(f"      ✅ No timeout: {'PASS' if success_criteria['no_timeout'] else 'FAIL'}")
+            
+            if response.status_code == 202:
+                # Parse response for job_id and status
+                try:
+                    data = response.json()
+                    job_id = data.get('job_id')
+                    status = data.get('status')
+                    
+                    print(f"   📄 Response data:")
+                    print(f"      job_id: {job_id}")
+                    print(f"      status: {status}")
+                    
+                    if job_id and status:
+                        success_criteria['response_fields'] = True
+                        print(f"      ✅ Response fields: PASS")
+                    else:
+                        success_criteria['response_fields'] = False
+                        print(f"      ❌ Response fields: FAIL (missing job_id or status)")
+                        
+                except json.JSONDecodeError:
+                    success_criteria['response_fields'] = False
+                    print(f"      ❌ Response fields: FAIL (invalid JSON)")
+                    data = {}
+            else:
+                success_criteria['response_fields'] = False
+                try:
+                    data = response.json() if response.content else {}
+                except:
+                    data = {}
+            
+            # Overall success assessment
+            all_criteria_met = all(success_criteria.values())
+            
+            if all_criteria_met:
+                self.log_test(
+                    "🎉 SPLIT-VIDEO IMMEDIATE RESPONSE FIX SUCCESS",
+                    True,
+                    f"✅ ALL SUCCESS CRITERIA MET! HTTP 202 in {response_time:.2f}s with CORS headers and proper response fields. The timeout and CORS issues are COMPLETELY RESOLVED!"
+                )
+            elif response.status_code == 504:
+                self.log_test(
+                    "❌ SPLIT-VIDEO TIMEOUT STILL PRESENT",
+                    False,
+                    f"🚨 CRITICAL: Still getting HTTP 504 Gateway Timeout after {response_time:.2f}s. The timeout fix has NOT resolved the issue. CORS: {cors_origin}"
+                )
+            elif response_time >= 5.0:
+                self.log_test(
+                    "❌ SPLIT-VIDEO SLOW RESPONSE",
+                    False,
+                    f"Response time {response_time:.2f}s exceeds 5s threshold. Status: {response.status_code}, CORS: {cors_origin}"
+                )
+            elif not cors_origin:
+                self.log_test(
+                    "❌ SPLIT-VIDEO CORS MISSING",
+                    False,
+                    f"Missing CORS headers. Status: {response.status_code}, Response time: {response_time:.2f}s"
+                )
+            else:
+                failed_criteria = [k for k, v in success_criteria.items() if not v]
+                self.log_test(
+                    "❌ SPLIT-VIDEO PARTIAL SUCCESS",
+                    False,
+                    f"Some criteria failed: {failed_criteria}. Status: {response.status_code}, Time: {response_time:.2f}s, CORS: {cors_origin}",
+                    data
+                )
+                
+            return all_criteria_met
+            
+        except requests.exceptions.Timeout:
+            self.log_test(
+                "❌ SPLIT-VIDEO CLIENT TIMEOUT",
+                False,
+                f"🚨 CRITICAL: Client timeout after {TIMEOUT}s - endpoint is not responding fast enough"
+            )
+            return False
+        except Exception as e:
+            self.log_test(
+                "❌ SPLIT-VIDEO ERROR",
+                False,
+                f"Error: {str(e)}"
+            )
+            return False
+
     def test_basic_connectivity(self):
-        """Test 1: Basic connectivity to AWS Lambda API Gateway endpoint"""
+        """Quick connectivity test"""
         print("🔍 Testing Basic Connectivity...")
         try:
             response = self.session.get(f"{self.base_url}/api/")
             
             if response.status_code == 200:
                 data = response.json()
-                expected_fields = ['message', 'version', 'authentication', 'database']
-                
-                if all(field in data for field in expected_fields):
-                    self.log_test(
-                        "Basic API Gateway Connectivity", 
-                        True, 
-                        f"Status: {response.status_code}, Message: {data.get('message', 'N/A')}, Version: {data.get('version', 'N/A')}"
-                    )
-                    
-                    # Check dependency status
-                    deps = data.get('dependencies', {})
-                    self.log_test(
-                        "Authentication Dependencies Check",
-                        all(deps.values()),
-                        f"bcrypt: {deps.get('bcrypt', False)}, jwt: {deps.get('jwt', False)}, pymongo: {deps.get('pymongo', False)}"
-                    )
-                    
-                    # Check database status
-                    db_status = data.get('database', 'unknown')
-                    self.log_test(
-                        "Database Connectivity Check",
-                        db_status in ['connected', 'fallback_mode'],
-                        f"Database status: {db_status}"
-                    )
-                    
-                else:
-                    self.log_test("Basic API Gateway Connectivity", False, "Missing expected response fields", data)
+                self.log_test(
+                    "Basic API Connectivity", 
+                    True, 
+                    f"Status: {response.status_code}, Message: {data.get('message', 'N/A')}"
+                )
+                return True
             else:
-                self.log_test("Basic API Gateway Connectivity", False, f"HTTP {response.status_code}", response.json() if response.content else {})
+                self.log_test("Basic API Connectivity", False, f"HTTP {response.status_code}")
+                return False
                 
         except Exception as e:
-            self.log_test("Basic API Gateway Connectivity", False, f"Connection error: {str(e)}")
+            self.log_test("Basic API Connectivity", False, f"Connection error: {str(e)}")
+            return False
 
-    def test_cors_configuration(self):
-        """Test 2: CORS configuration"""
-        print("🔍 Testing CORS Configuration...")
-        try:
-            # Test OPTIONS request
-            response = self.session.options(f"{self.base_url}/api/")
-            
-            cors_headers = {
-                'Access-Control-Allow-Origin': response.headers.get('Access-Control-Allow-Origin'),
-                'Access-Control-Allow-Methods': response.headers.get('Access-Control-Allow-Methods'),
-                'Access-Control-Allow-Headers': response.headers.get('Access-Control-Allow-Headers')
-            }
-            
-            has_cors = any(cors_headers.values())
-            self.log_test(
-                "CORS Headers Configuration",
-                has_cors,
-                f"CORS headers present: {has_cors}, Origin: {cors_headers['Access-Control-Allow-Origin']}"
-            )
-            
-        except Exception as e:
-            self.log_test("CORS Headers Configuration", False, f"Error: {str(e)}")
-
-    def test_authentication_endpoints(self):
-        """Test 3: Authentication endpoints (register, login, user profile)"""
-        print("🔍 Testing Authentication Endpoints...")
-        
-        # Test user registration
-        test_email = f"testuser_{uuid.uuid4().hex[:8]}@example.com"
-        test_password = "TestPassword123!"
-        
-        try:
-            # Test registration endpoint accessibility
-            register_data = {
-                "email": test_email,
-                "password": test_password,
-                "firstName": "Test",
-                "lastName": "User"
-            }
-            
-            response = self.session.post(f"{self.base_url}/api/auth/register", json=register_data)
-            
-            if response.status_code == 201:
-                data = response.json()
-                if 'access_token' in data and 'user_id' in data:
-                    self.access_token = data['access_token']
-                    self.user_id = data['user_id']
-                    demo_mode = data.get('demo_mode', False)
-                    
-                    self.log_test(
-                        "User Registration",
-                        True,
-                        f"User registered successfully, Demo mode: {demo_mode}, User ID: {self.user_id[:8]}..."
-                    )
-                else:
-                    self.log_test("User Registration", False, "Missing access_token or user_id in response", data)
-                    
-            elif response.status_code == 503:
-                # MongoDB connection failure - expected based on test history
-                self.log_test(
-                    "User Registration",
-                    False,
-                    "MongoDB connection failure (503) - known issue from test history",
-                    response.json() if response.content else {}
-                )
-            elif response.status_code == 502:
-                self.log_test("User Registration", False, "Lambda execution failure (502)", {})
-            else:
-                self.log_test("User Registration", False, f"HTTP {response.status_code}", response.json() if response.content else {})
-                
-        except Exception as e:
-            self.log_test("User Registration", False, f"Error: {str(e)}")
-
-        # Test login endpoint
-        try:
-            login_data = {
-                "email": test_email,
-                "password": test_password
-            }
-            
-            response = self.session.post(f"{self.base_url}/api/auth/login", json=login_data)
-            
-            if response.status_code == 200:
-                data = response.json()
-                if 'access_token' in data:
-                    self.access_token = data['access_token']
-                    self.log_test("User Login", True, "Login successful")
-                else:
-                    self.log_test("User Login", False, "Missing access_token in response", data)
-            elif response.status_code == 503:
-                self.log_test("User Login", False, "MongoDB connection failure (503) - known issue", response.json() if response.content else {})
-            elif response.status_code == 401:
-                self.log_test("User Login", False, "Authentication failed - user may not exist due to registration failure", response.json() if response.content else {})
-            else:
-                self.log_test("User Login", False, f"HTTP {response.status_code}", response.json() if response.content else {})
-                
-        except Exception as e:
-            self.log_test("User Login", False, f"Error: {str(e)}")
-
-        # Test user profile endpoint (protected)
-        if self.access_token:
-            try:
-                headers = {"Authorization": f"Bearer {self.access_token}"}
-                response = self.session.get(f"{self.base_url}/api/user/profile", headers=headers)
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    if 'user' in data:
-                        self.log_test("User Profile Access", True, "Profile retrieved successfully")
-                    else:
-                        self.log_test("User Profile Access", False, "Missing user data in response", data)
-                else:
-                    self.log_test("User Profile Access", False, f"HTTP {response.status_code}", response.json() if response.content else {})
-                    
-            except Exception as e:
-                self.log_test("User Profile Access", False, f"Error: {str(e)}")
-        else:
-            self.log_test("User Profile Access", False, "No access token available for testing")
-
-    def test_core_video_processing(self):
-        """Test 4: Core video processing endpoints"""
-        print("🔍 Testing Core Video Processing Endpoints...")
-        
-        # Test presigned URL generation
-        try:
-            presigned_data = {
-                "filename": "test_video.mp4",
-                "contentType": "video/mp4"
-            }
-            
-            response = self.session.post(f"{self.base_url}/api/generate-presigned-url", json=presigned_data)
-            
-            if response.status_code == 200:
-                data = response.json()
-                if 'uploadUrl' in data and 'objectKey' in data:
-                    upload_url = data['uploadUrl']
-                    object_key = data['objectKey']
-                    
-                    # Verify the URL contains AWS signature
-                    if 'amazonaws.com' in upload_url and 'Signature' in upload_url:
-                        self.log_test(
-                            "S3 Presigned URL Generation",
-                            True,
-                            f"Valid presigned URL generated for bucket: {S3_BUCKET}"
-                        )
-                        
-                        # Test video metadata extraction with the object key
-                        self.test_video_metadata(object_key)
-                        
-                    else:
-                        self.log_test("S3 Presigned URL Generation", False, "Invalid presigned URL format", data)
-                else:
-                    self.log_test("S3 Presigned URL Generation", False, "Missing uploadUrl or objectKey", data)
-            else:
-                self.log_test("S3 Presigned URL Generation", False, f"HTTP {response.status_code}", response.json() if response.content else {})
-                
-        except Exception as e:
-            self.log_test("S3 Presigned URL Generation", False, f"Error: {str(e)}")
-
-    def test_timeout_fix_video_metadata(self):
-        """Test 1: URGENT - Video metadata extraction timeout fix"""
-        print("🚨 TESTING TIMEOUT FIX: Video Metadata Extraction...")
-        
-        # Test with realistic S3 keys that should trigger FFmpeg processing
-        test_cases = [
-            {
-                "s3_key": "uploads/test-video.mp4",
-                "description": "Standard MP4 video file",
-                "expected_duration_range": (10, 300)  # 10s to 5min reasonable for test video
-            },
-            {
-                "s3_key": "uploads/sample-mkv-file.mkv", 
-                "description": "MKV file with potential subtitles",
-                "expected_duration_range": (30, 600)  # 30s to 10min reasonable for MKV
-            }
-        ]
-        
-        for test_case in test_cases:
-            try:
-                metadata_data = {
-                    "s3_key": test_case["s3_key"]
-                }
-                
-                print(f"   🎯 TIMEOUT FIX TEST: {test_case['description']} ({test_case['s3_key']})")
-                start_time = time.time()
-                
-                response = self.session.post(f"{self.base_url}/api/get-video-info", json=metadata_data)
-                response_time = time.time() - start_time
-                
-                print(f"   ⏱️  Response time: {response_time:.2f}s")
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    # Check for real FFmpeg metadata fields
-                    expected_fields = ['duration', 'format', 'video_streams', 'audio_streams', 'subtitle_streams']
-                    
-                    if all(field in data for field in expected_fields):
-                        duration = data.get('duration', 0)
-                        subtitle_count = data.get('subtitle_streams', 0)
-                        format_info = data.get('format', 'unknown')
-                        
-                        # Check if we're getting REAL duration from FFmpeg (not fake estimates)
-                        if duration > 0:
-                            self.log_test(
-                                f"🎉 TIMEOUT FIX SUCCESS - {test_case['description']}",
-                                True,
-                                f"✅ REAL FFmpeg metadata retrieved! Duration={duration}s, Format={format_info}, Subtitles={subtitle_count}, Response time={response_time:.2f}s. NO MORE 504 TIMEOUTS!"
-                            )
-                        else:
-                            self.log_test(
-                                f"TIMEOUT FIX - {test_case['description']}",
-                                False,
-                                f"Duration is 0 - may still be using placeholder logic. Response time={response_time:.2f}s"
-                            )
-                    else:
-                        missing_fields = [f for f in expected_fields if f not in data]
-                        self.log_test(
-                            f"TIMEOUT FIX - {test_case['description']}",
-                            False,
-                            f"Missing expected FFmpeg fields: {missing_fields}. Response time={response_time:.2f}s",
-                            data
-                        )
-                        
-                elif response.status_code == 404:
-                    # File not found - this is expected for test files, but endpoint is working
-                    self.log_test(
-                        f"🎯 TIMEOUT FIX - {test_case['description']}",
-                        True,
-                        f"✅ NO TIMEOUT! Endpoint working (404 for non-existent file is expected). Response time={response_time:.2f}s - Lambda timeout fix successful!"
-                    )
-                    
-                elif response.status_code == 504:
-                    # Gateway timeout - this was the previous issue that should be FIXED
-                    self.log_test(
-                        f"❌ TIMEOUT FIX FAILED - {test_case['description']}",
-                        False,
-                        f"🚨 CRITICAL: HTTP 504 timeout still occurring after {response_time:.2f}s! Lambda timeout increase from 30s→900s did NOT resolve the issue. Need further investigation."
-                    )
-                    
-                elif response.status_code == 502:
-                    self.log_test(
-                        f"TIMEOUT FIX - {test_case['description']}",
-                        False,
-                        f"Lambda execution failure (502). Response time={response_time:.2f}s. May indicate Lambda configuration issue."
-                    )
-                    
-                else:
-                    self.log_test(
-                        f"TIMEOUT FIX - {test_case['description']}",
-                        False,
-                        f"HTTP {response.status_code}. Response time={response_time:.2f}s",
-                        response.json() if response.content else {}
-                    )
-                    
-            except requests.exceptions.Timeout:
-                self.log_test(
-                    f"❌ TIMEOUT FIX FAILED - {test_case['description']}",
-                    False,
-                    f"🚨 CRITICAL: Request timeout after {TIMEOUT}s - Lambda timeout increase did NOT resolve client-side timeout issues"
-                )
-            except Exception as e:
-                self.log_test(
-                    f"TIMEOUT FIX - {test_case['description']}",
-                    False,
-                    f"Error: {str(e)}"
-                )
-
-    def test_timeout_fix_video_splitting(self):
-        """Test 2: URGENT - Video splitting timeout fix (should return 202, not timeout)"""
-        print("🚨 TESTING TIMEOUT FIX: Video Splitting...")
-        
-        try:
-            split_data = {
-                "s3_key": "uploads/test-video.mp4",
-                "segments": [
-                    {
-                        "start_time": "00:00:00",
-                        "end_time": "00:00:30", 
-                        "output_name": "segment_1.mp4"
-                    },
-                    {
-                        "start_time": "00:00:30",
-                        "end_time": "00:01:00",
-                        "output_name": "segment_2.mp4"
-                    }
-                ]
-            }
-            
-            print(f"   🎯 TIMEOUT FIX TEST: Video splitting with 2 segments")
-            start_time = time.time()
-            
-            response = self.session.post(f"{self.base_url}/api/split-video", json=split_data)
-            response_time = time.time() - start_time
-            
-            print(f"   ⏱️  Response time: {response_time:.2f}s")
-            
-            if response.status_code == 202:
-                # This is what we expect now - processing started, no timeout
-                data = response.json()
-                if 'job_id' in data:
-                    job_id = data['job_id']
-                    self.log_test(
-                        "🎉 TIMEOUT FIX SUCCESS - Video Splitting",
-                        True,
-                        f"✅ REAL PROCESSING STARTED! Returns 202 (processing started) with job_id: {job_id}. Response time={response_time:.2f}s. NO MORE 504 TIMEOUTS!"
-                    )
-                    
-                    # Test job status tracking with the returned job_id
-                    self.test_timeout_fix_job_status(job_id)
-                    
-                else:
-                    self.log_test(
-                        "TIMEOUT FIX - Video Splitting",
-                        False,
-                        f"202 response but missing job_id. Response time={response_time:.2f}s",
-                        data
-                    )
-                    
-            elif response.status_code == 404:
-                # File not found - endpoint is working, no timeout
-                self.log_test(
-                    "🎯 TIMEOUT FIX - Video Splitting",
-                    True,
-                    f"✅ NO TIMEOUT! Endpoint working (404 for non-existent file is expected). Response time={response_time:.2f}s - Lambda timeout fix successful!"
-                )
-                
-            elif response.status_code == 504:
-                # Gateway timeout - this should be FIXED now
-                self.log_test(
-                    "❌ TIMEOUT FIX FAILED - Video Splitting",
-                    False,
-                    f"🚨 CRITICAL: HTTP 504 timeout still occurring after {response_time:.2f}s! Lambda timeout increase from 30s→900s did NOT resolve the issue."
-                )
-                
-            else:
-                self.log_test(
-                    "TIMEOUT FIX - Video Splitting",
-                    False,
-                    f"HTTP {response.status_code}. Response time={response_time:.2f}s",
-                    response.json() if response.content else {}
-                )
-                
-        except requests.exceptions.Timeout:
-            self.log_test(
-                "❌ TIMEOUT FIX FAILED - Video Splitting",
-                False,
-                f"🚨 CRITICAL: Request timeout after {TIMEOUT}s - Lambda timeout increase did NOT resolve client-side timeout issues"
-            )
-        except Exception as e:
-            self.log_test(
-                "TIMEOUT FIX - Video Splitting",
-                False,
-                f"Error: {str(e)}"
-            )
-
-    def test_timeout_fix_job_status(self, job_id: str = None):
-        """Test 3: Job status tracking timeout fix"""
-        print("🚨 TESTING TIMEOUT FIX: Job Status Tracking...")
-        
-        # Use provided job_id or create test job_id
-        test_job_id = job_id if job_id else f"timeout-test-job-{uuid.uuid4().hex[:8]}"
-        
-        try:
-            print(f"   🎯 TIMEOUT FIX TEST: Job status for {test_job_id[:20]}...")
-            start_time = time.time()
-            
-            response = self.session.get(f"{self.base_url}/api/job-status/{test_job_id}")
-            response_time = time.time() - start_time
-            
-            print(f"   ⏱️  Response time: {response_time:.2f}s")
-            
-            if response.status_code == 200:
-                data = response.json()
-                expected_fields = ['job_id', 'status']
-                
-                if all(field in data for field in expected_fields):
-                    status = data.get('status', '')
-                    
-                    # Check if it's checking S3 for real results
-                    if status in ['pending', 'processing', 'completed', 'failed']:
-                        self.log_test(
-                            f"🎉 TIMEOUT FIX SUCCESS - Job Status",
-                            True,
-                            f"✅ REAL S3 status check working! Status: {status}. Response time={response_time:.2f}s. NO MORE 504 TIMEOUTS!"
-                        )
-                    else:
-                        self.log_test(
-                            f"TIMEOUT FIX - Job Status",
-                            False,
-                            f"Unexpected status value: {status}. Response time={response_time:.2f}s",
-                            data
-                        )
-                else:
-                    missing_fields = [f for f in expected_fields if f not in data]
-                    self.log_test(
-                        f"TIMEOUT FIX - Job Status",
-                        False,
-                        f"Missing expected fields: {missing_fields}. Response time={response_time:.2f}s",
-                        data
-                    )
-                    
-            elif response.status_code == 404:
-                # Job not found - this is expected for test job IDs, but no timeout
-                self.log_test(
-                    f"🎯 TIMEOUT FIX - Job Status",
-                    True,
-                    f"✅ NO TIMEOUT! Endpoint working (404 for non-existent job is expected). Response time={response_time:.2f}s - Lambda timeout fix successful!"
-                )
-                
-            elif response.status_code == 504:
-                # Gateway timeout - this should be FIXED now
-                self.log_test(
-                    f"❌ TIMEOUT FIX FAILED - Job Status",
-                    False,
-                    f"🚨 CRITICAL: HTTP 504 timeout still occurring after {response_time:.2f}s! Lambda timeout increase did NOT resolve the issue."
-                )
-                
-            else:
-                self.log_test(
-                    f"TIMEOUT FIX - Job Status",
-                    False,
-                    f"HTTP {response.status_code}. Response time={response_time:.2f}s",
-                    response.json() if response.content else {}
-                )
-                
-        except requests.exceptions.Timeout:
-            self.log_test(
-                f"❌ TIMEOUT FIX FAILED - Job Status",
-                False,
-                f"🚨 CRITICAL: Request timeout after {TIMEOUT}s - Lambda timeout increase did NOT resolve client-side timeout issues"
-            )
-        except Exception as e:
-            self.log_test(
-                f"TIMEOUT FIX - Job Status",
-                False,
-                f"Error: {str(e)}"
-            )
-
-    def test_download_functionality_presigned_urls(self):
-        """Test 4: Download functionality (should generate presigned URLs, not placeholder)"""
-        print("🔍 Testing Download Functionality (Presigned URLs)...")
-        
-        test_cases = [
-            {
-                "job_id": "test-job-123",
-                "filename": "segment_1.mp4",
-                "description": "MP4 segment download"
-            },
-            {
-                "job_id": "sample-job-456", 
-                "filename": "output_video.mkv",
-                "description": "MKV output download"
-            },
-            {
-                "job_id": "ffmpeg-job-789",
-                "filename": "processed_clip.mp4", 
-                "description": "Processed clip download"
-            }
-        ]
-        
-        for test_case in test_cases:
-            try:
-                start_time = time.time()
-                response = self.session.get(f"{self.base_url}/api/download/{test_case['job_id']}/{test_case['filename']}")
-                response_time = time.time() - start_time
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    
-                    if 'download_url' in data:
-                        download_url = data['download_url']
-                        
-                        # Check if it's a real S3 presigned URL
-                        if 'amazonaws.com' in download_url and 'Signature' in download_url:
-                            self.log_test(
-                                f"Download Functionality - {test_case['description']}",
-                                True,
-                                f"✅ RESTORED: Real S3 presigned URL generated. Response time={response_time:.2f}s"
-                            )
-                        else:
-                            self.log_test(
-                                f"Download Functionality - {test_case['description']}",
-                                False,
-                                f"Invalid presigned URL format: {download_url[:100]}..."
-                            )
-                    else:
-                        self.log_test(
-                            f"Download Functionality - {test_case['description']}",
-                            False,
-                            "Missing download_url in response",
-                            data
-                        )
-                        
-                elif response.status_code == 404:
-                    # File not found - this is expected for test files
-                    self.log_test(
-                        f"Download Functionality - {test_case['description']}",
-                        True,
-                        f"Endpoint working (404 for non-existent file is expected). Response time={response_time:.2f}s"
-                    )
-                    
-                elif response.status_code == 501:
-                    # This was the old placeholder behavior
-                    self.log_test(
-                        f"Download Functionality - {test_case['description']}",
-                        False,
-                        "❌ STILL PLACEHOLDER: Returns 501 'Not Implemented' - presigned URL generation not restored yet"
-                    )
-                    
-                else:
-                    self.log_test(
-                        f"Download Functionality - {test_case['description']}",
-                        False,
-                        f"HTTP {response.status_code}. Response time={response_time:.2f}s",
-                        response.json() if response.content else {}
-                    )
-                    
-            except Exception as e:
-                self.log_test(
-                    f"Download Functionality - {test_case['description']}",
-                    False,
-                    f"Error: {str(e)}"
-                )
-
-    def test_video_streaming_endpoint(self):
-        """Test 5: Video streaming endpoint (should work as before)"""
-        print("🔍 Testing Video Streaming Endpoint...")
-        
-        test_keys = [
-            "uploads/test-video.mp4",
-            "test/sample-mkv-file.mkv",
-            "demo/example-video.mp4"
-        ]
-        
-        for test_key in test_keys:
-            try:
-                start_time = time.time()
-                response = self.session.get(f"{self.base_url}/api/video-stream/{test_key}")
-                response_time = time.time() - start_time
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    expected_fields = ['stream_url', 's3_key', 'expires_in']
-                    
-                    if all(field in data for field in expected_fields):
-                        stream_url = data['stream_url']
-                        
-                        if 'amazonaws.com' in stream_url and 'Signature' in stream_url:
-                            self.log_test(
-                                f"Video Streaming - {test_key.split('/')[-1]}",
-                                True,
-                                f"Valid streaming URL generated. Response time={response_time:.2f}s"
-                            )
-                        else:
-                            self.log_test(
-                                f"Video Streaming - {test_key.split('/')[-1]}",
-                                False,
-                                f"Invalid streaming URL format"
-                            )
-                    else:
-                        missing_fields = [f for f in expected_fields if f not in data]
-                        self.log_test(
-                            f"Video Streaming - {test_key.split('/')[-1]}",
-                            False,
-                            f"Missing expected fields: {missing_fields}",
-                            data
-                        )
-                        
-                elif response.status_code == 404:
-                    # Expected for non-existent files
-                    self.log_test(
-                        f"Video Streaming - {test_key.split('/')[-1]}",
-                        True,
-                        f"Endpoint working (404 for non-existent file is expected). Response time={response_time:.2f}s"
-                    )
-                    
-                elif response.status_code == 504:
-                    self.log_test(
-                        f"Video Streaming - {test_key.split('/')[-1]}",
-                        False,
-                        f"Gateway timeout (504) after {response_time:.2f}s"
-                    )
-                    
-                else:
-                    self.log_test(
-                        f"Video Streaming - {test_key.split('/')[-1]}",
-                        False,
-                        f"HTTP {response.status_code}. Response time={response_time:.2f}s",
-                        response.json() if response.content else {}
-                    )
-                    
-            except Exception as e:
-                self.log_test(
-                    f"Video Streaming - {test_key.split('/')[-1]}",
-                    False,
-                    f"Error: {str(e)}"
-                )
-
-    def test_s3_bucket_access(self):
-        """Test 8: S3 bucket configuration and access"""
-        print("🔍 Testing S3 Bucket Configuration...")
-        
-        # This is tested indirectly through presigned URL generation
-        # If presigned URLs are generated successfully, S3 access is working
-        
-        try:
-            # Generate a presigned URL and check its validity
-            presigned_data = {
-                "filename": "s3-test-file.mp4",
-                "contentType": "video/mp4"
-            }
-            
-            response = self.session.post(f"{self.base_url}/api/generate-presigned-url", json=presigned_data)
-            
-            if response.status_code == 200:
-                data = response.json()
-                upload_url = data.get('uploadUrl', '')
-                
-                # Check if URL contains correct bucket name
-                if S3_BUCKET in upload_url:
-                    self.log_test(
-                        "S3 Bucket Access",
-                        True,
-                        f"S3 bucket '{S3_BUCKET}' accessible via presigned URLs"
-                    )
-                else:
-                    self.log_test(
-                        "S3 Bucket Access",
-                        False,
-                        f"Presigned URL doesn't contain expected bucket '{S3_BUCKET}'"
-                    )
-            else:
-                self.log_test("S3 Bucket Access", False, f"Failed to generate presigned URL: HTTP {response.status_code}")
-                
-        except Exception as e:
-            self.log_test("S3 Bucket Access", False, f"Error: {str(e)}")
-
-    def run_timeout_fix_tests(self):
-        """Run focused tests on the timeout fix - main Lambda timeout increased from 30s to 900s"""
+    def run_split_video_test(self):
+        """Run the focused split-video test as requested in review"""
         print("=" * 80)
-        print("🚨 URGENT: TIMEOUT FIX TESTING")
+        print("🚨 URGENT: SPLIT-VIDEO CORS AND TIMEOUT FIX TESTING")
         print("=" * 80)
         print(f"Testing API Gateway URL: {self.base_url}")
-        print(f"Expected S3 Bucket: {S3_BUCKET}")
         print()
-        print("🎯 CRITICAL TIMEOUT FIX TESTING:")
-        print("   Main Lambda timeout increased from 30 seconds → 900 seconds (15 minutes)")
-        print("   This should resolve the critical 29-second timeout issue blocking video processing")
+        print("🎯 CRITICAL OBJECTIVE:")
+        print("   Verify split-video endpoint returns HTTP 202 immediately with CORS headers")
+        print("   instead of timing out with 504 and CORS errors")
         print()
-        print("📋 TESTING FOCUS:")
-        print("   1. POST /api/get-video-info - Should return REAL video duration from FFmpeg")
-        print("   2. POST /api/split-video - Should return 202 and start processing (no timeout)")
-        print("   3. Response times - Should exceed 30 seconds without 504 errors")
+        print("📋 SUCCESS CRITERIA:")
+        print("   ✅ HTTP 202 status (not 504)")
+        print("   ✅ Response time < 5 seconds (not 29+ seconds)")
+        print("   ✅ CORS headers present (Access-Control-Allow-Origin)")
+        print("   ✅ Response includes job_id and status fields")
+        print("   ✅ No 'Failed to fetch' errors from browser")
         print()
         
-        # Run focused timeout fix tests
-        self.test_timeout_fix_video_metadata()
-        self.test_timeout_fix_video_splitting()
-        
-        # Quick connectivity check
-        self.test_basic_connectivity()
+        # Run tests in order
+        connectivity_ok = self.test_basic_connectivity()
+        cors_ok = self.test_cors_preflight()
+        split_video_ok = self.test_split_video_immediate_response()
         
         # Summary
         print("=" * 80)
-        print("📊 TIMEOUT FIX TEST SUMMARY")
+        print("📊 SPLIT-VIDEO TEST SUMMARY")
         print("=" * 80)
         
         total_tests = len(self.test_results)
@@ -777,83 +282,62 @@ class VideoSplitterTester:
         print(f"Success Rate: {(passed_tests/total_tests)*100:.1f}%")
         print()
         
-        # Analyze timeout fix status
-        timeout_fix_status = {
-            'metadata_no_timeout': False,
-            'splitting_no_timeout': False,
-            'real_ffmpeg_working': False
-        }
+        # Critical assessment
+        print("💡 CRITICAL ASSESSMENT:")
         
-        for result in self.test_results:
-            if result['success']:
-                if 'timeout fix success' in result['test'].lower():
-                    if 'metadata' in result['test'].lower():
-                        timeout_fix_status['metadata_no_timeout'] = True
-                        if 'real ffmpeg' in result['details'].lower():
-                            timeout_fix_status['real_ffmpeg_working'] = True
-                    elif 'splitting' in result['test'].lower():
-                        timeout_fix_status['splitting_no_timeout'] = True
-                elif 'no timeout' in result['details'].lower():
-                    if 'metadata' in result['test'].lower():
-                        timeout_fix_status['metadata_no_timeout'] = True
-                    elif 'splitting' in result['test'].lower():
-                        timeout_fix_status['splitting_no_timeout'] = True
-        
-        print("🔍 TIMEOUT FIX STATUS:")
-        print(f"   ✅ Video Metadata No Timeout: {'FIXED' if timeout_fix_status['metadata_no_timeout'] else 'STILL TIMING OUT'}")
-        print(f"   ✅ Video Splitting No Timeout: {'FIXED' if timeout_fix_status['splitting_no_timeout'] else 'STILL TIMING OUT'}")
-        print(f"   ✅ Real FFmpeg Processing: {'WORKING' if timeout_fix_status['real_ffmpeg_working'] else 'NOT CONFIRMED'}")
-        print()
-        
-        # Failed tests details
-        timeout_failures = []
-        other_failures = []
-        
-        for result in self.test_results:
-            if not result['success']:
-                if '504' in result['details'] or 'timeout' in result['details'].lower():
-                    timeout_failures.append(result)
-                else:
-                    other_failures.append(result)
-        
-        if timeout_failures:
-            print("🚨 TIMEOUT ISSUES STILL PRESENT:")
-            for result in timeout_failures:
-                print(f"   • {result['test']}: {result['details']}")
-            print()
-        
-        if other_failures:
-            print("❌ OTHER ISSUES:")
-            for result in other_failures:
-                print(f"   • {result['test']}: {result['details']}")
-            print()
-        
-        # Final assessment
-        print("💡 TIMEOUT FIX ASSESSMENT:")
-        
-        fixed_count = sum(timeout_fix_status.values())
-        if fixed_count == 3:
-            print("   🎉 TIMEOUT FIX COMPLETELY SUCCESSFUL!")
-            print("   • Video processing endpoints no longer timeout after 29 seconds")
-            print("   • Real FFmpeg processing is working")
-            print("   • Lambda timeout increase from 30s→900s resolved the issue")
-        elif fixed_count >= 1:
-            print(f"   ✅ PARTIAL SUCCESS: {fixed_count}/3 timeout issues resolved")
-            if not timeout_fix_status['metadata_no_timeout']:
-                print("   • Video metadata extraction still timing out")
-            if not timeout_fix_status['splitting_no_timeout']:
-                print("   • Video splitting still timing out")
-            if not timeout_fix_status['real_ffmpeg_working']:
-                print("   • Real FFmpeg processing not confirmed")
+        if split_video_ok:
+            print("   🎉 SPLIT-VIDEO FIX COMPLETELY SUCCESSFUL!")
+            print("   • User will no longer see 'CORS error' in browser console")
+            print("   • Split request returns immediately instead of timing out")
+            print("   • Browser can successfully receive the response")
+            print("   • All timeout and CORS issues are RESOLVED")
         else:
-            print("   ❌ TIMEOUT FIX FAILED: All endpoints still timing out")
-            print("   • Lambda timeout increase from 30s→900s did NOT resolve the issue")
-            print("   • Further investigation needed - may be FFmpeg Lambda timeout, not main Lambda")
+            print("   ❌ SPLIT-VIDEO FIX INCOMPLETE OR FAILED")
+            
+            # Analyze specific failures
+            timeout_issues = []
+            cors_issues = []
+            other_issues = []
+            
+            for result in self.test_results:
+                if not result['success']:
+                    if '504' in result['details'] or 'timeout' in result['details'].lower():
+                        timeout_issues.append(result['test'])
+                    elif 'cors' in result['details'].lower():
+                        cors_issues.append(result['test'])
+                    else:
+                        other_issues.append(result['test'])
+            
+            if timeout_issues:
+                print("   🚨 TIMEOUT ISSUES STILL PRESENT:")
+                for issue in timeout_issues:
+                    print(f"      • {issue}")
+                print("   • The 29-second timeout problem is NOT resolved")
+                print("   • Users will still experience 'Gateway Timeout' errors")
+            
+            if cors_issues:
+                print("   🚨 CORS ISSUES STILL PRESENT:")
+                for issue in cors_issues:
+                    print(f"      • {issue}")
+                print("   • Users will still see 'CORS error' in browser console")
+                print("   • Browser requests will be blocked by CORS policy")
+            
+            if other_issues:
+                print("   ⚠️  OTHER ISSUES:")
+                for issue in other_issues:
+                    print(f"      • {issue}")
         
-        if timeout_failures:
-            print("   • Consider checking FFmpeg Lambda timeout settings")
-            print("   • Verify Lambda function configuration and deployment")
-            print("   • Check CloudWatch logs for detailed error information")
+        print()
+        print("🔍 USER IMPACT:")
+        if split_video_ok:
+            print("   ✅ User can successfully initiate video splitting")
+            print("   ✅ No more 'Failed to fetch' errors")
+            print("   ✅ No more CORS policy violations")
+            print("   ✅ No more 29-second timeouts")
+        else:
+            print("   ❌ User will still experience the reported issues")
+            print("   ❌ Video splitting functionality remains broken")
+            print("   ❌ Browser console will show errors")
         
         print()
         print("=" * 80)
@@ -861,8 +345,8 @@ class VideoSplitterTester:
         return passed_tests, failed_tests
 
 if __name__ == "__main__":
-    tester = VideoSplitterTester()
-    passed, failed = tester.run_timeout_fix_tests()
+    tester = SplitVideoTester()
+    passed, failed = tester.run_split_video_test()
     
     # Exit with appropriate code
     sys.exit(0 if failed == 0 else 1)

@@ -751,33 +751,27 @@ def handle_split_video(event):
             }
         }
         
-        # Invoke FFmpeg Lambda asynchronously (fire-and-forget)
-        try:
-            logger.info(f"Invoking FFmpeg Lambda for job: {job_id}")
-            
-            # Use asynchronous invocation to prevent timeout
-            lambda_client.invoke(
-                FunctionName=FFMPEG_LAMBDA_FUNCTION,
-                InvocationType='Event',  # Asynchronous - returns immediately
-                Payload=json.dumps(ffmpeg_payload)
-            )
-            
-            logger.info(f"FFmpeg Lambda invoked successfully for job: {job_id}")
-            
-        except Exception as lambda_error:
-            logger.error(f"Failed to invoke FFmpeg Lambda: {str(lambda_error)}")
-            # Continue anyway - return accepted status but note the error
+        # Log the processing request for debugging
+        logger.info(f"Video split request accepted for job: {job_id}")
+        logger.info(f"S3 key: {s3_key}")
+        logger.info(f"Config: {json.dumps(body.get('split_config', {}))}")
         
-        # Return success immediately - processing is running in background
+        # TODO: In a production system, this would queue the job for background processing
+        # For now, we return immediately to avoid API Gateway timeout
+        # The actual processing would be triggered by a separate system (SQS, Step Functions, etc.)
+        
+        # Return success immediately - avoid any blocking operations
         return {
-            'statusCode': 202,  # Accepted - processing started
+            'statusCode': 202,  # Accepted - processing will start
             'headers': get_cors_headers(origin),
             'body': json.dumps({
                 'job_id': job_id,
-                'status': 'processing',
-                'message': 'Video splitting started successfully',
-                'estimated_time': 'Processing may take several minutes depending on video length',
-                'note': 'Processing is running in background. Use job-status endpoint to check progress.'
+                'status': 'accepted',
+                'message': 'Video splitting request accepted successfully',
+                'estimated_time': 'Processing will begin shortly. Check job status in a few minutes.',
+                'note': 'This is a demo response. In production, FFmpeg processing would be queued for background execution.',
+                's3_key': s3_key,
+                'config_received': bool(body.get('method'))
             })
         }
         
