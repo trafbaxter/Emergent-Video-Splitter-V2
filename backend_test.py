@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-FINAL TEST: Complete DynamoDB migration verification after IAM permissions fix
-Tests the Lambda function's DynamoDB implementation for user authentication and data storage.
+SQS-BASED VIDEO PROCESSING SYSTEM TEST
+Tests the complete SQS-based video processing system with the function signature fix for FFmpeg Lambda.
+Focus: Testing if the Lambda error "split_video() missing 1 required positional argument" is resolved.
 """
 
 import requests
