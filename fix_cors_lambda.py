@@ -726,11 +726,11 @@ def handle_login(event):
         }
 
 def handle_user_profile(event):
-    """Handle user profile requests"""
+    """Handle user profile request"""
     origin = event.get('headers', {}).get('origin') or event.get('headers', {}).get('Origin')
     
     try:
-        # Extract token from Authorization header
+        # Extract and verify token
         auth_header = event.get('headers', {}).get('authorization') or event.get('headers', {}).get('Authorization')
         if not auth_header or not auth_header.startswith('Bearer '):
             return {
@@ -749,7 +749,7 @@ def handle_user_profile(event):
                 'body': json.dumps({'message': 'Invalid or expired token'})
             }
         
-        # Get user from database
+        # Get user details from database
         user = get_user_by_email(payload['email'])
         if not user:
             return {
@@ -758,27 +758,31 @@ def handle_user_profile(event):
                 'body': json.dumps({'message': 'User not found'})
             }
         
-        response_data = {
-            'user': {
-                'email': user['email'],
-                'firstName': user.get('first_name', ''),
-                'lastName': user.get('last_name', ''),
-                'userId': user['user_id']
-            }
+        # Return user profile with role information
+        user_profile = {
+            'email': user['email'],
+            'firstName': user.get('first_name', ''),
+            'lastName': user.get('last_name', ''),
+            'role': user.get('user_role', 'user'),  # Include role field
+            'userId': user['user_id'],
+            'emailVerified': user.get('email_verified', False),
+            'totpEnabled': user.get('totp_enabled', False),
+            'createdAt': user.get('created_at'),
+            'lastLogin': user.get('last_login')
         }
         
         return {
             'statusCode': 200,
             'headers': get_cors_headers(origin),
-            'body': json.dumps(response_data)
+            'body': json.dumps({'user': user_profile}, cls=DecimalEncoder)
         }
         
     except Exception as e:
-        logger.error(f"Profile error: {str(e)}")
+        logger.error(f"User profile error: {str(e)}")
         return {
             'statusCode': 500,
-            'headers': get_cors_headers(origin),
-            'body': json.dumps({'message': 'Failed to get profile', 'error': str(e)})
+            'headers': get_cors_headers(origin),  
+            'body': json.dumps({'message': 'Failed to get user profile', 'error': str(e)})
         }
 
 def handle_video_stream(event):
