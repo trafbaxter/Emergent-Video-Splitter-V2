@@ -457,6 +457,7 @@ const VideoSplitter = () => {
         
         if (data.job_id) {
           console.log('About to start polling with job_id:', data.job_id);
+          setProcessingJobId(data.job_id); // Save the processing job ID for downloads
           try {
             // Start polling for progress using the actual processing job ID
             console.log('Calling pollProgress function...');
