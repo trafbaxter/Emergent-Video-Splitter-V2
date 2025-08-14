@@ -359,7 +359,6 @@ def handle_register(event):
             'access_token': access_token,
             'refresh_token': refresh_token,
             'user_id': user_id,
-            'demo_mode': not get_mongo_client(),
             'user': {
                 'email': email,
                 'firstName': first_name,
