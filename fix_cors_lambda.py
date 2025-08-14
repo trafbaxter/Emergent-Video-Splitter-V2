@@ -249,8 +249,34 @@ def send_email_notification(to_email: str, subject: str, body_text: str, body_ht
         return False
     
     try:
-        # Use a verified sender email
-        sender_email = "admin@videosplitter.com"  # This should be verified in SES
+        # Use a verified sender email - check available verified addresses
+        verified_senders = ['taddobbins@gmail.com', 'trafbaxter@gmail.com', 'admin@videosplitter.com']
+        sender_email = None
+        
+        # Try to get verified email addresses and use the first available
+        try:
+            response = ses_client.list_verified_email_addresses()
+            verified_emails = response['VerifiedEmailAddresses']
+            logger.info(f"📧 Available verified emails: {verified_emails}")
+            
+            # Use the first verified email as sender
+            for email in verified_senders:
+                if email in verified_emails:
+                    sender_email = email
+                    break
+            
+            if not sender_email and verified_emails:
+                sender_email = verified_emails[0]
+                
+        except Exception as verify_error:
+            logger.warning(f"Could not get verified emails: {verify_error}")
+            sender_email = 'taddobbins@gmail.com'  # Fallback to known verified address
+        
+        if not sender_email:
+            logger.error("❌ No verified sender email available")
+            return False
+        
+        logger.info(f"📧 Sending email from {sender_email} to {to_email}")
         
         message = {
             'Subject': {'Data': subject},
