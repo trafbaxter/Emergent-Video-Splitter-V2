@@ -50,6 +50,26 @@ except ImportError:
 BUCKET_NAME = 'videosplitter-storage-1751560247'
 AWS_REGION = os.environ.get('AWS_REGION', 'us-east-1')
 
+try:
+    import pyotp
+    import qrcode
+    from io import BytesIO
+    import base64
+    TOTP_AVAILABLE = True
+    logger.info("✅ TOTP libraries loaded successfully")
+except ImportError:
+    TOTP_AVAILABLE = False
+    logger.warning("⚠️ TOTP libraries not available")
+
+try:
+    import boto3
+    ses_client = boto3.client('ses', region_name=AWS_REGION)
+    SES_AVAILABLE = True
+    logger.info("✅ SES client initialized successfully")
+except ImportError:
+    SES_AVAILABLE = False
+    logger.warning("⚠️ SES not available")
+
 # SQS Configuration
 SQS_QUEUE_URL = 'https://sqs.us-east-1.amazonaws.com/756530070939/video-processing-queue'
 
@@ -178,7 +198,7 @@ def verify_token(token: str, token_type: str = "access") -> Optional[dict]:
         return None
 
 def get_user_by_email(email: str) -> Optional[dict]:
-    """Get user by email from DynamoDB"""
+    """Get user by email from DynamoDB (includes soft delete check)"""
     try:
         response = users_table.query(
             IndexName='EmailIndex',
@@ -187,6 +207,10 @@ def get_user_by_email(email: str) -> Optional[dict]:
         
         if response['Items']:
             user = response['Items'][0]
+            # Check if user is soft deleted
+            if user.get('deleted', False):
+                logger.info(f"❌ User {email} is deleted")
+                return None
             logger.info(f"✅ DynamoDB: Found user with email {email}")
             return user
         else:
@@ -196,6 +220,168 @@ def get_user_by_email(email: str) -> Optional[dict]:
     except Exception as e:
         logger.error(f"DynamoDB error getting user by email: {str(e)}")
         return None
+
+def get_user_by_id(user_id: str) -> Optional[dict]:
+    """Get user by ID from DynamoDB (includes soft delete check)"""
+    try:
+        response = users_table.get_item(Key={'user_id': user_id})
+        
+        if 'Item' in response:
+            user = response['Item']
+            # Check if user is soft deleted
+            if user.get('deleted', False):
+                logger.info(f"❌ User {user_id} is deleted")
+                return None
+            logger.info(f"✅ DynamoDB: Found user with ID {user_id}")
+            return user
+        else:
+            logger.info(f"❌ DynamoDB: No user found with ID {user_id}")
+            return None
+            
+    except Exception as e:
+        logger.error(f"DynamoDB error getting user by ID: {str(e)}")
+        return None
+
+def send_email_notification(to_email: str, subject: str, body_text: str, body_html: str = None):
+    """Send email notification using AWS SES"""
+    if not SES_AVAILABLE:
+        logger.warning("⚠️ SES not available, email not sent")
+        return False
+    
+    try:
+        # Use a verified sender email
+        sender_email = "admin@videosplitter.com"  # This should be verified in SES
+        
+        message = {
+            'Subject': {'Data': subject},
+            'Body': {'Text': {'Data': body_text}}
+        }
+        
+        if body_html:
+            message['Body']['Html'] = {'Data': body_html}
+        
+        response = ses_client.send_email(
+            Source=sender_email,
+            Destination={'ToAddresses': [to_email]},
+            Message=message
+        )
+        
+        logger.info(f"✅ Email sent to {to_email}: {response['MessageId']}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"❌ Failed to send email to {to_email}: {str(e)}")
+        return False
+
+def generate_totp_secret():
+    """Generate a new TOTP secret"""
+    if not TOTP_AVAILABLE:
+        return None
+    return pyotp.random_base32()
+
+def generate_qr_code(user_email: str, totp_secret: str):
+    """Generate QR code for TOTP setup"""
+    if not TOTP_AVAILABLE:
+        return None
+    
+    try:
+        totp = pyotp.TOTP(totp_secret)
+        provisioning_uri = totp.provisioning_uri(
+            user_email,
+            issuer_name="Video Splitter Pro"
+        )
+        
+        qr = qrcode.QRCode(version=1, box_size=10, border=5)
+        qr.add_data(provisioning_uri)
+        qr.make(fit=True)
+        
+        img = qr.make_image(fill_color="black", back_color="white")
+        
+        # Convert to base64
+        buffer = BytesIO()
+        img.save(buffer, format='PNG')
+        img_str = base64.b64encode(buffer.getvalue()).decode()
+        
+        return f"data:image/png;base64,{img_str}"
+        
+    except Exception as e:
+        logger.error(f"Failed to generate QR code: {str(e)}")
+        return None
+
+def verify_totp_code(totp_secret: str, code: str):
+    """Verify TOTP code"""
+    if not TOTP_AVAILABLE or not totp_secret:
+        return False
+    
+    try:
+        totp = pyotp.TOTP(totp_secret)
+        return totp.verify(code, valid_window=1)  # Allow 1 window tolerance
+    except Exception as e:
+        logger.error(f"TOTP verification error: {str(e)}")
+        return False
+
+def generate_password_reset_token():
+    """Generate a secure password reset token"""
+    return str(uuid.uuid4())
+
+def is_user_locked(user: dict):
+    """Check if user account is locked"""
+    locked_until = user.get('locked_until')
+    if not locked_until:
+        return False
+    
+    try:
+        from datetime import datetime
+        lock_time = datetime.fromisoformat(locked_until.replace('Z', '+00:00'))
+        return datetime.utcnow() < lock_time.replace(tzinfo=None)
+    except Exception:
+        return False
+
+def increment_failed_login(user_id: str):
+    """Increment failed login attempts and lock account if needed"""
+    try:
+        current_user = get_user_by_id(user_id)
+        if not current_user:
+            return
+        
+        failed_attempts = current_user.get('failed_login_attempts', 0) + 1
+        
+        # Lock account after 5 failed attempts for 30 minutes
+        lock_until = None
+        if failed_attempts >= 5:
+            lock_until = (datetime.utcnow() + timedelta(minutes=30)).isoformat()
+        
+        users_table.update_item(
+            Key={'user_id': user_id},
+            UpdateExpression='SET failed_login_attempts = :attempts, locked_until = :lock, updated_at = :updated',
+            ExpressionAttributeValues={
+                ':attempts': failed_attempts,
+                ':lock': lock_until,
+                ':updated': datetime.utcnow().isoformat()
+            }
+        )
+        
+        if lock_until:
+            logger.warning(f"🔒 User {user_id} locked after {failed_attempts} failed attempts")
+        
+    except Exception as e:
+        logger.error(f"Error incrementing failed login: {str(e)}")
+
+def reset_failed_login(user_id: str):
+    """Reset failed login attempts after successful login"""
+    try:
+        users_table.update_item(
+            Key={'user_id': user_id},
+            UpdateExpression='SET failed_login_attempts = :zero, locked_until = :null, last_login = :now, updated_at = :updated',
+            ExpressionAttributeValues={
+                ':zero': 0,
+                ':null': None,
+                ':now': datetime.utcnow().isoformat(),
+                ':updated': datetime.utcnow().isoformat()
+            }
+        )
+    except Exception as e:
+        logger.error(f"Error resetting failed login: {str(e)}")
 
 def create_user(user_data: dict) -> str:
     """Create new user in DynamoDB"""
@@ -278,6 +464,10 @@ def handle_health_check(event):
             'POST /api/auth/login', 
             'POST /api/auth/refresh',
             'GET /api/user/profile',
+            'GET /api/admin/users',
+            'POST /api/admin/users',
+            'POST /api/admin/users/approve',
+            'DELETE /api/admin/users/{user_id}',
             'POST /api/generate-presigned-url',
             'POST /api/get-video-info',
             'GET /api/check-metadata/{s3_key}',
@@ -295,7 +485,7 @@ def handle_health_check(event):
     }
 
 def handle_register(event):
-    """Handle user registration"""
+    """Handle user registration with approval workflow"""
     origin = event.get('headers', {}).get('origin') or event.get('headers', {}).get('Origin')
     
     try:
@@ -328,25 +518,51 @@ def handle_register(event):
             'password': hashed_password,
             'first_name': first_name,
             'last_name': last_name,
-            'email_verified': True  # For demo purposes
+            'user_role': 'user',  # Default role
+            'approval_status': 'pending',  # Require admin approval
+            'deleted': False,
+            'totp_enabled': False,
+            'totp_secret': None,
+            'force_password_change': False,
+            'email_verified': False,  # Will be verified later
+            'failed_login_attempts': 0,
+            'locked_until': None,
+            'password_reset_token': None,
+            'password_reset_expires': None,
+            'created_at': datetime.utcnow().isoformat(),
+            'updated_at': datetime.utcnow().isoformat()
         }
         
         user_id = create_user(user_data)
         
-        # Create tokens
-        token_data = {'user_id': user_id, 'email': email}
-        access_token = create_access_token(token_data)
-        refresh_token = create_refresh_token(token_data)
+        # Send notification email to user about pending approval
+        email_subject = "Account Registration - Pending Approval"
+        email_body = f"""
+Hello {first_name},
+
+Thank you for registering with Video Splitter Pro!
+
+Your account has been created and is currently pending administrator approval. You will receive another email once your account has been approved and you can begin using the system.
+
+Account Details:
+- Email: {email}
+- Registration Date: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC
+
+Please do not reply to this email.
+
+Best regards,
+Video Splitter Pro Team
+        """.strip()
         
+        send_email_notification(email, email_subject, email_body)
+        
+        # Don't create tokens - user needs approval first
         response_data = {
-            'access_token': access_token,
-            'refresh_token': refresh_token,
+            'message': 'Registration successful! Your account is pending administrator approval.',
             'user_id': user_id,
-            'user': {
-                'email': email,
-                'firstName': first_name,
-                'lastName': last_name
-            }
+            'status': 'pending_approval',
+            'email': email,
+            'note': 'You will receive an email notification once your account is approved.'
         }
         
         return {
@@ -370,13 +586,14 @@ def handle_register(event):
         }
 
 def handle_login(event):
-    """Handle user login"""
+    """Handle user login with approval workflow and account locks"""
     origin = event.get('headers', {}).get('origin') or event.get('headers', {}).get('Origin')
     
     try:
         body = json.loads(event['body'])
         email = body.get('email')
         password = body.get('password')
+        totp_code = body.get('totpCode')  # Optional TOTP code
         
         if not email or not password:
             return {
@@ -394,16 +611,84 @@ def handle_login(event):
                 'body': json.dumps({'message': 'Invalid credentials'})
             }
         
+        # Check approval status
+        approval_status = user.get('approval_status', 'pending')
+        if approval_status == 'pending':
+            return {
+                'statusCode': 403,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({
+                    'message': 'Account pending approval',
+                    'status': 'pending_approval',
+                    'note': 'Your account is awaiting administrator approval. You will receive an email once approved.'
+                })
+            }
+        elif approval_status == 'rejected':
+            return {
+                'statusCode': 403,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({
+                    'message': 'Account access denied',
+                    'status': 'rejected',
+                    'note': 'Your account registration has been rejected. Please contact an administrator for more information.'
+                })
+            }
+        
+        # Check if account is locked
+        if is_user_locked(user):
+            return {
+                'statusCode': 423,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({
+                    'message': 'Account temporarily locked',
+                    'status': 'locked',
+                    'note': 'Your account has been temporarily locked due to multiple failed login attempts. Please try again later.'
+                })
+            }
+        
         # Verify password
         if not verify_password(password, user['password']):
+            increment_failed_login(user['user_id'])
             return {
                 'statusCode': 401,
                 'headers': get_cors_headers(origin),
                 'body': json.dumps({'message': 'Invalid credentials'})
             }
         
+        # Check if 2FA is enabled
+        if user.get('totp_enabled', False):
+            if not totp_code:
+                return {
+                    'statusCode': 200,
+                    'headers': get_cors_headers(origin),
+                    'body': json.dumps({
+                        'message': '2FA code required',
+                        'requires_2fa': True,
+                        'user_id': user['user_id']  # Temporary for 2FA validation
+                    })
+                }
+            
+            # Verify TOTP code
+            if not verify_totp_code(user.get('totp_secret'), totp_code):
+                increment_failed_login(user['user_id'])
+                return {
+                    'statusCode': 401,
+                    'headers': get_cors_headers(origin),
+                    'body': json.dumps({'message': 'Invalid 2FA code'})
+                }
+        
+        # Check if password change is required
+        force_password_change = user.get('force_password_change', False)
+        
+        # Reset failed login attempts
+        reset_failed_login(user['user_id'])
+        
         # Create tokens
-        token_data = {'user_id': user['user_id'], 'email': email}
+        token_data = {
+            'user_id': user['user_id'], 
+            'email': email,
+            'role': user.get('user_role', 'user')
+        }
         access_token = create_access_token(token_data)
         refresh_token = create_refresh_token(token_data)
         
@@ -413,8 +698,11 @@ def handle_login(event):
             'user': {
                 'email': user['email'],
                 'firstName': user.get('first_name', ''),
-                'lastName': user.get('last_name', '')
-            }
+                'lastName': user.get('last_name', ''),
+                'role': user.get('user_role', 'user'),
+                'userId': user['user_id']
+            },
+            'force_password_change': force_password_change
         }
         
         return {
@@ -1271,6 +1559,451 @@ def handle_create_job_mapping(event):
             'body': json.dumps({'message': 'Failed to create job mapping', 'error': str(e)})
         }
 
+def handle_admin_users_list(event):
+    """Handle admin request to list all users"""
+    origin = event.get('headers', {}).get('origin') or event.get('headers', {}).get('Origin')
+    
+    try:
+        # Extract and verify admin token
+        auth_header = event.get('headers', {}).get('authorization') or event.get('headers', {}).get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return {
+                'statusCode': 401,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'Missing or invalid authorization header'})
+            }
+        
+        token = auth_header.replace('Bearer ', '')
+        payload = verify_token(token)
+        
+        if not payload:
+            return {
+                'statusCode': 401,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'Invalid or expired token'})
+            }
+        
+        # Get admin user and verify role
+        admin_user = get_user_by_email(payload['email'])
+        if not admin_user or admin_user.get('user_role') != 'admin':
+            return {
+                'statusCode': 403,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'Admin access required'})
+            }
+        
+        # Get all users (including deleted ones for admin view)
+        try:
+            response = users_table.scan()
+            users = response['Items']
+            
+            # Format user data for admin view
+            user_list = []
+            for user in users:
+                user_info = {
+                    'user_id': user['user_id'],
+                    'email': user['email'],
+                    'first_name': user.get('first_name', ''),
+                    'last_name': user.get('last_name', ''),
+                    'user_role': user.get('user_role', 'user'),
+                    'approval_status': user.get('approval_status', 'pending'),
+                    'deleted': user.get('deleted', False),
+                    'totp_enabled': user.get('totp_enabled', False),
+                    'force_password_change': user.get('force_password_change', False),
+                    'created_at': user.get('created_at'),
+                    'last_login': user.get('last_login'),
+                    'failed_login_attempts': user.get('failed_login_attempts', 0),
+                    'locked_until': user.get('locked_until')
+                }
+                user_list.append(user_info)
+            
+            # Sort by creation date
+            user_list.sort(key=lambda x: x.get('created_at', ''), reverse=True)
+            
+            return {
+                'statusCode': 200,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({
+                    'users': user_list,
+                    'total_users': len(user_list),
+                    'active_users': len([u for u in user_list if not u['deleted']]),
+                    'pending_approval': len([u for u in user_list if u['approval_status'] == 'pending'])
+                }, cls=DecimalEncoder)
+            }
+            
+        except Exception as db_error:
+            logger.error(f"Database error getting users: {str(db_error)}")
+            return {
+                'statusCode': 500,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'Failed to retrieve users', 'error': str(db_error)})
+            }
+        
+    except Exception as e:
+        logger.error(f"Admin users list error: {str(e)}")
+        return {
+            'statusCode': 500,
+            'headers': get_cors_headers(origin),
+            'body': json.dumps({'message': 'Failed to get users list', 'error': str(e)})
+        }
+
+def handle_admin_approve_user(event):
+    """Handle admin request to approve/reject user"""
+    origin = event.get('headers', {}).get('origin') or event.get('headers', {}).get('Origin')
+    
+    try:
+        # Extract and verify admin token
+        auth_header = event.get('headers', {}).get('authorization') or event.get('headers', {}).get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return {
+                'statusCode': 401,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'Missing or invalid authorization header'})
+            }
+        
+        token = auth_header.replace('Bearer ', '')
+        payload = verify_token(token)
+        
+        if not payload:
+            return {
+                'statusCode': 401,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'Invalid or expired token'})
+            }
+        
+        # Get admin user and verify role
+        admin_user = get_user_by_email(payload['email'])
+        if not admin_user or admin_user.get('user_role') != 'admin':
+            return {
+                'statusCode': 403,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'Admin access required'})
+            }
+        
+        # Parse request body
+        body = json.loads(event['body'])
+        user_id = body.get('user_id')
+        action = body.get('action')  # 'approve' or 'reject'
+        notes = body.get('notes', '')
+        
+        if not user_id or action not in ['approve', 'reject']:
+            return {
+                'statusCode': 400,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'Valid user_id and action (approve/reject) are required'})
+            }
+        
+        # Get user to approve/reject
+        target_user = get_user_by_id(user_id)
+        if not target_user:
+            return {
+                'statusCode': 404,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'User not found'})
+            }
+        
+        # Update user approval status
+        new_status = 'approved' if action == 'approve' else 'rejected'
+        
+        users_table.update_item(
+            Key={'user_id': user_id},
+            UpdateExpression='SET approval_status = :status, approved_by = :admin, approved_at = :now, updated_at = :updated, admin_notes = :notes',
+            ExpressionAttributeValues={
+                ':status': new_status,
+                ':admin': admin_user['user_id'],
+                ':now': datetime.utcnow().isoformat(),
+                ':updated': datetime.utcnow().isoformat(),
+                ':notes': notes
+            }
+        )
+        
+        # Send notification email to user
+        email_subject = f"Account {action.capitalize()}d - Video Splitter Pro"
+        if action == 'approve':
+            email_body = f"""
+Hello {target_user.get('first_name', '')},
+
+Great news! Your Video Splitter Pro account has been approved and is now active.
+
+You can now log in to the system using your registered email address: {target_user['email']}
+
+Welcome to Video Splitter Pro!
+
+Best regards,
+Video Splitter Pro Team
+            """.strip()
+        else:
+            email_body = f"""
+Hello {target_user.get('first_name', '')},
+
+We regret to inform you that your Video Splitter Pro account registration has been rejected.
+
+{f'Reason: {notes}' if notes else ''}
+
+If you believe this is an error, please contact an administrator for further assistance.
+
+Best regards,
+Video Splitter Pro Team
+            """.strip()
+        
+        send_email_notification(target_user['email'], email_subject, email_body)
+        
+        return {
+            'statusCode': 200,
+            'headers': get_cors_headers(origin),
+            'body': json.dumps({
+                'message': f'User {action}d successfully',
+                'user_id': user_id,
+                'action': action,
+                'email_sent': True
+            })
+        }
+        
+    except json.JSONDecodeError:
+        return {
+            'statusCode': 400,
+            'headers': get_cors_headers(origin),
+            'body': json.dumps({'message': 'Invalid JSON in request body'})
+        }
+    except Exception as e:
+        logger.error(f"Admin approve user error: {str(e)}")
+        return {
+            'statusCode': 500,
+            'headers': get_cors_headers(origin),
+            'body': json.dumps({'message': 'Failed to update user approval', 'error': str(e)})
+        }
+
+def handle_admin_create_user(event):
+    """Handle admin request to create a new user"""
+    origin = event.get('headers', {}).get('origin') or event.get('headers', {}).get('Origin')
+    
+    try:
+        # Extract and verify admin token
+        auth_header = event.get('headers', {}).get('authorization') or event.get('headers', {}).get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return {
+                'statusCode': 401,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'Missing or invalid authorization header'})
+            }
+        
+        token = auth_header.replace('Bearer ', '')
+        payload = verify_token(token)
+        
+        if not payload:
+            return {
+                'statusCode': 401,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'Invalid or expired token'})
+            }
+        
+        # Get admin user and verify role
+        admin_user = get_user_by_email(payload['email'])
+        if not admin_user or admin_user.get('user_role') != 'admin':
+            return {
+                'statusCode': 403,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'Admin access required'})
+            }
+        
+        # Parse request body
+        body = json.loads(event['body'])
+        email = body.get('email')
+        password = body.get('password')
+        first_name = body.get('firstName', '')
+        last_name = body.get('lastName', '')
+        user_role = body.get('role', 'user')
+        force_password_change = body.get('forcePasswordChange', True)
+        
+        if not email or not password:
+            return {
+                'statusCode': 400,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'Email and password are required'})
+            }
+        
+        if user_role not in ['user', 'admin']:
+            return {
+                'statusCode': 400,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'Role must be either "user" or "admin"'})
+            }
+        
+        # Check if user already exists
+        existing_user = get_user_by_email(email)
+        if existing_user:
+            return {
+                'statusCode': 409,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'User already exists'})
+            }
+        
+        # Hash password and create user
+        hashed_password = hash_password(password)
+        user_data = {
+            'email': email,
+            'password': hashed_password,
+            'first_name': first_name,
+            'last_name': last_name,
+            'user_role': user_role,
+            'approval_status': 'approved',  # Admin-created users are auto-approved
+            'deleted': False,
+            'totp_enabled': False,
+            'totp_secret': None,
+            'force_password_change': force_password_change,
+            'email_verified': True,
+            'failed_login_attempts': 0,
+            'locked_until': None,
+            'password_reset_token': None,
+            'password_reset_expires': None,
+            'created_at': datetime.utcnow().isoformat(),
+            'updated_at': datetime.utcnow().isoformat(),
+            'created_by': admin_user['user_id'],
+            'approved_by': admin_user['user_id'],
+            'approved_at': datetime.utcnow().isoformat()
+        }
+        
+        user_id = create_user(user_data)
+        
+        # Send welcome email to new user
+        email_subject = "Welcome to Video Splitter Pro - Account Created"
+        email_body = f"""
+Hello {first_name},
+
+Your Video Splitter Pro account has been created by an administrator.
+
+Account Details:
+- Email: {email}
+- Role: {user_role.capitalize()}
+- Temporary Password: {password}
+
+{'IMPORTANT: You will be required to change your password upon first login.' if force_password_change else ''}
+
+You can now log in to the system at your convenience.
+
+Best regards,
+Video Splitter Pro Team
+        """.strip()
+        
+        send_email_notification(email, email_subject, email_body)
+        
+        return {
+            'statusCode': 201,
+            'headers': get_cors_headers(origin),
+            'body': json.dumps({
+                'message': 'User created successfully',
+                'user_id': user_id,
+                'email': email,
+                'role': user_role,
+                'email_sent': True
+            })
+        }
+        
+    except json.JSONDecodeError:
+        return {
+            'statusCode': 400,
+            'headers': get_cors_headers(origin),
+            'body': json.dumps({'message': 'Invalid JSON in request body'})
+        }
+    except Exception as e:
+        logger.error(f"Admin create user error: {str(e)}")
+        return {
+            'statusCode': 500,
+            'headers': get_cors_headers(origin),
+            'body': json.dumps({'message': 'Failed to create user', 'error': str(e)})
+        }
+
+def handle_admin_delete_user(event):
+    """Handle admin request to soft delete a user"""
+    origin = event.get('headers', {}).get('origin') or event.get('headers', {}).get('Origin')
+    
+    try:
+        # Extract and verify admin token
+        auth_header = event.get('headers', {}).get('authorization') or event.get('headers', {}).get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return {
+                'statusCode': 401,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'Missing or invalid authorization header'})
+            }
+        
+        token = auth_header.replace('Bearer ', '')
+        payload = verify_token(token)
+        
+        if not payload:
+            return {
+                'statusCode': 401,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'Invalid or expired token'})
+            }
+        
+        # Get admin user and verify role
+        admin_user = get_user_by_email(payload['email'])
+        if not admin_user or admin_user.get('user_role') != 'admin':
+            return {
+                'statusCode': 403,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'Admin access required'})
+            }
+        
+        # Extract user ID from path
+        path = event.get('path', '')
+        user_id = path.split('/api/admin/users/')[-1].split('/')[0]
+        
+        if not user_id:
+            return {
+                'statusCode': 400,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'User ID is required'})
+            }
+        
+        # Prevent admin from deleting themselves
+        if user_id == admin_user['user_id']:
+            return {
+                'statusCode': 400,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'Cannot delete your own account'})
+            }
+        
+        # Get user to delete
+        target_user = get_user_by_id(user_id)
+        if not target_user:
+            return {
+                'statusCode': 404,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'User not found'})
+            }
+        
+        # Soft delete user
+        users_table.update_item(
+            Key={'user_id': user_id},
+            UpdateExpression='SET deleted = :deleted, deleted_by = :admin, deleted_at = :now, updated_at = :updated',
+            ExpressionAttributeValues={
+                ':deleted': True,
+                ':admin': admin_user['user_id'],
+                ':now': datetime.utcnow().isoformat(),
+                ':updated': datetime.utcnow().isoformat()
+            }
+        )
+        
+        return {
+            'statusCode': 200,
+            'headers': get_cors_headers(origin),
+            'body': json.dumps({
+                'message': 'User deleted successfully',
+                'user_id': user_id,
+                'action': 'soft_delete'
+            })
+        }
+        
+    except Exception as e:
+        logger.error(f"Admin delete user error: {str(e)}")
+        return {
+            'statusCode': 500,
+            'headers': get_cors_headers(origin),
+            'body': json.dumps({'message': 'Failed to delete user', 'error': str(e)})
+        }
+
 def lambda_handler(event, context):
     """Main Lambda handler with enhanced CORS support"""
     # Log the incoming request
@@ -1297,6 +2030,16 @@ def lambda_handler(event, context):
             return handle_login(event)
         elif path == '/api/user/profile':
             return handle_user_profile(event)
+        # Admin routes
+        elif path == '/api/admin/users' and http_method == 'GET':
+            return handle_admin_users_list(event)
+        elif path == '/api/admin/users/approve' and http_method == 'POST':
+            return handle_admin_approve_user(event)
+        elif path == '/api/admin/users' and http_method == 'POST':
+            return handle_admin_create_user(event)
+        elif path.startswith('/api/admin/users/') and http_method == 'DELETE':
+            return handle_admin_delete_user(event)
+        # Video processing routes
         elif path == '/api/generate-presigned-url':
             return handle_generate_presigned_url(event)
         elif path == '/api/create-job-mapping':
