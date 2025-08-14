@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Backend Test for MongoDB to DynamoDB Migration
+FINAL TEST: Complete DynamoDB migration verification after IAM permissions fix
 Tests the Lambda function's DynamoDB implementation for user authentication and data storage.
 """
 
@@ -17,12 +17,13 @@ class DynamoDBMigrationTester:
     def __init__(self):
         self.api_base = API_BASE
         self.test_results = []
-        self.test_user_email = f"dynamodb-test-{uuid.uuid4().hex[:8]}@example.com"
+        # Use the exact test user from review request
+        self.test_user_email = "final-test@example.com"
         self.test_user_data = {
             "email": self.test_user_email,
             "password": "TestPassword123!",
-            "firstName": "DynamoDB",
-            "lastName": "User",
+            "firstName": "Final",
+            "lastName": "Test",
             "confirmPassword": "TestPassword123!"
         }
         
