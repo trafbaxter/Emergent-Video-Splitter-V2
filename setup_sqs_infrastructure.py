@@ -76,8 +76,7 @@ def create_sqs_infrastructure():
                 EventSourceArn=queue_arn,
                 FunctionName=FFMPEG_LAMBDA_FUNCTION,
                 BatchSize=1,  # Process one video at a time
-                MaximumBatchingWindowInSeconds=0,  # Process immediately
-                StartingPosition='LATEST'
+                MaximumBatchingWindowInSeconds=0  # Process immediately
             )
             print("✅ Lambda trigger configured successfully")
         except lambda_client.exceptions.ResourceConflictException:
