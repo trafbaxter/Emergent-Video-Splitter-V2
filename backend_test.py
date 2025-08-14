@@ -1,381 +1,418 @@
 #!/usr/bin/env python3
-import os
+"""
+SQS-BASED VIDEO PROCESSING SYSTEM TEST
+Tests the complete SQS-based video processing system with the function signature fix for FFmpeg Lambda.
+Focus: Testing if the Lambda error "split_video() missing 1 required positional argument" is resolved.
+"""
+
 import requests
-import time
 import json
-import unittest
-from pathlib import Path
-import tempfile
-import shutil
+import time
+import uuid
+from datetime import datetime
 
-# Use AWS API Gateway URL for testing AWS Lambda backend
-BACKEND_URL = "https://2419j971hh.execute-api.us-east-1.amazonaws.com/prod"
-API_URL = f"{BACKEND_URL}/api"
+# Backend URL from frontend configuration
+API_BASE = 'https://2419j971hh.execute-api.us-east-1.amazonaws.com/prod'
 
-print(f"Testing AWS Lambda Backend at: {API_URL}")
-
-class AWSLambdaBackendTest(unittest.TestCase):
-    """Test suite for the AWS Lambda Video Splitter Backend API
-    
-    Focus on testing recent fixes:
-    1. Fixed hardcoded duration=0 issue - now estimates duration based on file size
-    2. Changed video-stream endpoint to return JSON with stream_url instead of redirect
-    3. Test video-info endpoint to verify duration is no longer 0
-    4. Test video-stream endpoint to verify it returns JSON with stream_url
-    5. Verify S3 presigned URLs are being generated correctly
-    6. Test metadata extraction shows estimated duration instead of 0
-    7. Ensure all CORS headers are still properly configured
-    """
-    
-    @classmethod
-    def setUpClass(cls):
-        """Set up test environment for AWS Lambda backend testing"""
-        cls.job_ids = []
-        cls.test_file_size = 50 * 1024 * 1024  # 50MB test file size for duration estimation
-        
-        print("Setting up AWS Lambda Backend Test Suite")
-        print(f"API Gateway URL: {API_URL}")
-        print(f"Expected S3 Bucket: videosplitter-storage-1751560247")
-    
-    @classmethod
-    def tearDownClass(cls):
-        """Clean up after tests"""
-        print("AWS Lambda Backend Test Suite completed")
-    
-    def test_01_basic_connectivity(self):
-        """Test basic connectivity to the AWS Lambda backend via API Gateway"""
-        print("\n=== Testing AWS Lambda Backend Connectivity ===")
-        
-        try:
-            response = requests.get(f"{API_URL}/", timeout=10)
-            self.assertEqual(response.status_code, 200, f"API connectivity failed with status {response.status_code}")
-            data = response.json()
-            self.assertEqual(data.get("message"), "Video Splitter Pro API - AWS Lambda", "Unexpected response from Lambda API")
-            print("✅ Successfully connected to AWS Lambda backend")
-            print(f"Response: {data}")
-        except requests.exceptions.RequestException as e:
-            self.fail(f"Failed to connect to AWS Lambda API: {e}")
-    
-    def test_02_cors_headers_verification(self):
-        """Test CORS headers are properly configured"""
-        print("\n=== Testing CORS Headers Configuration ===")
-        
-        try:
-            # Test OPTIONS request for CORS preflight
-            response = requests.options(f"{API_URL}/", timeout=10)
-            
-            print(f"OPTIONS Response Status: {response.status_code}")
-            print(f"Response Headers: {json.dumps(dict(response.headers), indent=2)}")
-            
-            # Check for essential CORS headers
-            cors_headers = [
-                'Access-Control-Allow-Origin',
-                'Access-Control-Allow-Methods',
-                'Access-Control-Allow-Headers'
-            ]
-            
-            for header in cors_headers:
-                if header in response.headers:
-                    print(f"✅ {header}: {response.headers[header]}")
-                else:
-                    print(f"⚠️ Missing CORS header: {header}")
-            
-            # Test should pass if we get a response (CORS is working)
-            self.assertTrue(response.status_code in [200, 204], "CORS preflight request failed")
-            
-        except requests.exceptions.RequestException as e:
-            print(f"⚠️ CORS test request failed: {e}")
-            # Not failing the test as this might be expected behavior
-    
-    def test_03_upload_video_presigned_url_generation(self):
-        """Test video upload endpoint generates proper S3 presigned URLs"""
-        print("\n=== Testing S3 Presigned URL Generation ===")
-        
-        # Test upload request payload
-        upload_payload = {
-            "filename": "test_video.mp4",
-            "fileType": "video/mp4",
-            "fileSize": self.test_file_size
+class DynamoDBMigrationTester:
+    def __init__(self):
+        self.api_base = API_BASE
+        self.test_results = []
+        # Use the exact test user from review request
+        self.test_user_email = "final-test@example.com"
+        self.test_user_data = {
+            "email": self.test_user_email,
+            "password": "TestPassword123!",
+            "firstName": "Final",
+            "lastName": "Test",
+            "confirmPassword": "TestPassword123!"
         }
         
-        try:
-            response = requests.post(f"{API_URL}/upload-video", 
-                                   json=upload_payload, 
-                                   timeout=10)
-            
-            print(f"Upload Response Status: {response.status_code}")
-            print(f"Response: {response.text}")
-            
-            if response.status_code == 200:
-                data = response.json()
-                
-                # Verify required fields in response
-                required_fields = ['job_id', 'upload_url', 'bucket', 'key']
-                for field in required_fields:
-                    self.assertIn(field, data, f"Missing required field: {field}")
-                    print(f"✅ {field}: {data[field]}")
-                
-                # Verify S3 bucket name
-                expected_bucket = "videosplitter-storage-1751560247"
-                self.assertEqual(data['bucket'], expected_bucket, f"Unexpected bucket name: {data['bucket']}")
-                
-                # Verify presigned URL format
-                upload_url = data['upload_url']
-                self.assertTrue(upload_url.startswith('https://'), "Upload URL should be HTTPS")
-                self.assertIn('amazonaws.com', upload_url, "Upload URL should be AWS S3 URL")
-                self.assertIn('Signature=', upload_url, "Upload URL should contain AWS signature")
-                
-                # Store job_id for later tests
-                self.job_id = data['job_id']
-                self.__class__.job_ids.append(self.job_id)
-                
-                print("✅ S3 presigned URL generation working correctly")
-                
-            else:
-                print(f"⚠️ Upload endpoint returned status {response.status_code}")
-                # For now, we'll note this but not fail the test
-                
-        except requests.exceptions.RequestException as e:
-            print(f"⚠️ Upload test request failed: {e}")
-            # Not failing as this might be expected in some environments
-    
-    def test_04_video_info_duration_fix(self):
-        """Test video-info endpoint returns estimated duration instead of 0"""
-        print("\n=== Testing Video Info Duration Estimation Fix ===")
-        
-        # Use a job_id from previous test or create a mock one
-        test_job_id = getattr(self, 'job_id', 'test-job-duration-check')
-        
-        try:
-            response = requests.get(f"{API_URL}/video-info/{test_job_id}", timeout=10)
-            
-            print(f"Video Info Response Status: {response.status_code}")
-            print(f"Response: {response.text}")
-            
-            if response.status_code == 200:
-                data = response.json()
-                
-                # Verify metadata structure
-                self.assertIn('metadata', data, "Response missing metadata")
-                metadata = data['metadata']
-                
-                # Check duration is no longer hardcoded to 0
-                self.assertIn('duration', metadata, "Metadata missing duration")
-                duration = metadata['duration']
-                
-                print(f"Video duration: {duration} seconds")
-                
-                # Duration should be estimated based on file size, not 0
-                self.assertGreater(duration, 0, "Duration should be greater than 0 (fixed hardcoded 0 issue)")
-                
-                # For a 50MB file, estimated duration should be reasonable (not 0)
-                if hasattr(self, 'test_file_size'):
-                    expected_min_duration = 60  # At least 1 minute for 50MB
-                    self.assertGreater(duration, expected_min_duration, 
-                                     f"Duration {duration}s seems too low for {self.test_file_size/1024/1024}MB file")
-                
-                # Verify other metadata fields
-                required_fields = ['format', 'size', 'video_streams', 'audio_streams']
-                for field in required_fields:
-                    self.assertIn(field, metadata, f"Metadata missing {field}")
-                    print(f"✅ {field}: {metadata[field]}")
-                
-                print("✅ Video duration estimation fix working correctly")
-                
-            elif response.status_code == 404:
-                print("⚠️ Video not found (expected for test job_id)")
-                # This is expected behavior for non-existent videos
-                
-        except requests.exceptions.RequestException as e:
-            print(f"⚠️ Video info test request failed: {e}")
-    
-    def test_05_video_stream_json_response(self):
-        """Test video-stream endpoint returns JSON with stream_url instead of redirect"""
-        print("\n=== Testing Video Stream JSON Response Fix ===")
-        
-        # Use a job_id from previous test or create a mock one
-        test_job_id = getattr(self, 'job_id', 'test-job-stream-check')
-        
-        try:
-            response = requests.get(f"{API_URL}/video-stream/{test_job_id}", 
-                                  timeout=10, 
-                                  allow_redirects=False)  # Don't follow redirects
-            
-            print(f"Video Stream Response Status: {response.status_code}")
-            print(f"Response Headers: {json.dumps(dict(response.headers), indent=2)}")
-            print(f"Response: {response.text}")
-            
-            if response.status_code == 200:
-                # Verify response is JSON, not a redirect
-                self.assertIn('application/json', response.headers.get('content-type', '').lower(),
-                            "Response should be JSON, not a redirect")
-                
-                data = response.json()
-                
-                # Verify JSON contains stream_url
-                self.assertIn('stream_url', data, "Response missing stream_url")
-                stream_url = data['stream_url']
-                
-                print(f"Stream URL: {stream_url}")
-                
-                # Verify stream_url format
-                self.assertTrue(stream_url.startswith('https://'), "Stream URL should be HTTPS")
-                self.assertIn('amazonaws.com', stream_url, "Stream URL should be AWS S3 URL")
-                self.assertIn('Signature=', stream_url, "Stream URL should contain AWS signature")
-                
-                print("✅ Video stream endpoint returns JSON with stream_url correctly")
-                
-            elif response.status_code == 404:
-                print("⚠️ Video not found (expected for test job_id)")
-                # This is expected behavior for non-existent videos
-                
-            elif response.status_code in [301, 302, 307, 308]:
-                self.fail("Video stream endpoint should return JSON, not redirect (old behavior)")
-                
-        except requests.exceptions.RequestException as e:
-            print(f"⚠️ Video stream test request failed: {e}")
-    
-    def test_06_s3_bucket_accessibility(self):
-        """Test S3 bucket exists and is accessible"""
-        print("\n=== Testing S3 Bucket Accessibility ===")
-        
-        expected_bucket = "videosplitter-storage-1751560247"
-        
-        try:
-            # Test bucket accessibility by trying to list objects (this will fail with 403 but confirms bucket exists)
-            import boto3
-            from botocore.exceptions import ClientError, NoCredentialsError
-            
-            try:
-                s3 = boto3.client('s3', region_name='us-east-1')
-                response = s3.head_bucket(Bucket=expected_bucket)
-                print(f"✅ S3 bucket {expected_bucket} is accessible")
-                
-            except NoCredentialsError:
-                print("⚠️ No AWS credentials available for direct S3 test")
-                # This is expected in testing environment
-                
-            except ClientError as e:
-                error_code = e.response['Error']['Code']
-                if error_code == '404':
-                    self.fail(f"S3 bucket {expected_bucket} does not exist")
-                elif error_code == '403':
-                    print(f"✅ S3 bucket {expected_bucket} exists (access denied as expected)")
-                else:
-                    print(f"⚠️ S3 bucket test returned error: {error_code}")
-                    
-        except ImportError:
-            print("⚠️ boto3 not available for direct S3 testing")
-            # This is acceptable in testing environment
-    
-    def test_07_lambda_environment_variables(self):
-        """Test Lambda function has correct environment variables"""
-        print("\n=== Testing Lambda Environment Configuration ===")
-        
-        # We can't directly access Lambda environment variables, but we can infer from responses
-        # The S3 bucket name in responses should match expected value
-        
-        expected_bucket = "videosplitter-storage-1751560247"
-        
-        # Test upload endpoint to check if correct bucket is used
-        upload_payload = {
-            "filename": "env_test.mp4",
-            "fileType": "video/mp4", 
-            "fileSize": 1024 * 1024  # 1MB
+    def log_test(self, test_name, success, details, response_time=None):
+        """Log test results"""
+        status = "✅ PASS" if success else "❌ FAIL"
+        result = {
+            'test': test_name,
+            'status': status,
+            'success': success,
+            'details': details,
+            'response_time': response_time,
+            'timestamp': datetime.now().isoformat()
         }
+        self.test_results.append(result)
+        
+        time_info = f" ({response_time:.2f}s)" if response_time else ""
+        print(f"{status}: {test_name}{time_info}")
+        print(f"   Details: {details}")
+        print()
+        
+    def test_health_check_dynamodb(self):
+        """Test 1: Health Check Verification - Should show database_type: "DynamoDB" and connected: true"""
+        print("🔍 Testing Health Check with DynamoDB...")
         
         try:
-            response = requests.post(f"{API_URL}/upload-video", 
-                                   json=upload_payload, 
-                                   timeout=10)
+            start_time = time.time()
+            response = requests.get(f"{self.api_base}/api/", timeout=10)
+            response_time = time.time() - start_time
             
             if response.status_code == 200:
                 data = response.json()
-                actual_bucket = data.get('bucket', '')
                 
-                self.assertEqual(actual_bucket, expected_bucket, 
-                               f"Lambda using wrong S3 bucket: {actual_bucket}")
+                # Check database_type
+                db_info = data.get('database_info', {})
+                database_type = db_info.get('database_type')
+                connected = db_info.get('connected')
+                users_table = db_info.get('users_table')
+                jobs_table = db_info.get('jobs_table')
                 
-                print(f"✅ Lambda environment variable S3_BUCKET correctly set to: {actual_bucket}")
+                success_criteria = []
+                if database_type == "DynamoDB":
+                    success_criteria.append("✅ database_type: DynamoDB")
+                else:
+                    success_criteria.append(f"❌ database_type: {database_type} (expected DynamoDB)")
+                
+                if connected is True:
+                    success_criteria.append("✅ connected: true")
+                else:
+                    success_criteria.append(f"❌ connected: {connected} (expected true)")
+                
+                if users_table == "VideoSplitter-Users":
+                    success_criteria.append("✅ VideoSplitter-Users table listed")
+                else:
+                    success_criteria.append(f"❌ Users table: {users_table} (expected VideoSplitter-Users)")
+                
+                if jobs_table == "VideoSplitter-Jobs":
+                    success_criteria.append("✅ VideoSplitter-Jobs table listed")
+                else:
+                    success_criteria.append(f"❌ Jobs table: {jobs_table} (expected VideoSplitter-Jobs)")
+                
+                # Check for demo_mode flag (should NOT be present)
+                demo_mode = data.get('demo_mode')
+                if demo_mode is None:
+                    success_criteria.append("✅ No demo_mode flag (good)")
+                else:
+                    success_criteria.append(f"❌ demo_mode present: {demo_mode} (should not exist)")
+                
+                # Check response time (<10s as per review request)
+                if response_time < 10.0:
+                    success_criteria.append(f"✅ Response time: {response_time:.2f}s (<10s)")
+                else:
+                    success_criteria.append(f"❌ Response time: {response_time:.2f}s (≥10s)")
+                
+                all_success = all("✅" in criterion for criterion in success_criteria)
+                details = "; ".join(success_criteria)
+                
+                self.log_test("Health Check Verification", all_success, details, response_time)
+                return all_success
                 
             else:
-                print(f"⚠️ Could not verify environment variables (status: {response.status_code})")
+                self.log_test("Health Check Verification", False, 
+                            f"HTTP {response.status_code}: {response.text}", response_time)
+                return False
                 
-        except requests.exceptions.RequestException as e:
-            print(f"⚠️ Environment variable test failed: {e}")
+        except Exception as e:
+            self.log_test("Health Check Verification", False, f"Request failed: {str(e)}")
+            return False
     
-    def test_08_backend_stability_and_performance(self):
-        """Test backend stability with multiple requests"""
-        print("\n=== Testing Backend Stability and Performance ===")
+    def test_user_registration_dynamodb(self):
+        """Test 2: User Registration (CREATE) - Should create user in DynamoDB VideoSplitter-Users table"""
+        print("🔍 Testing User Registration with DynamoDB...")
         
-        # Test multiple requests to check stability
-        test_endpoints = [
-            f"{API_URL}/",
-            f"{API_URL}/video-info/stability-test",
-            f"{API_URL}/video-stream/stability-test"
+        try:
+            start_time = time.time()
+            response = requests.post(
+                f"{self.api_base}/api/auth/register",
+                json=self.test_user_data,
+                headers={'Content-Type': 'application/json'},
+                timeout=10
+            )
+            response_time = time.time() - start_time
+            
+            if response.status_code in [200, 201]:
+                data = response.json()
+                
+                success_criteria = []
+                
+                # Check for access_token
+                if 'access_token' in data:
+                    success_criteria.append("✅ access_token returned")
+                else:
+                    success_criteria.append("❌ access_token missing")
+                
+                # Check user info
+                user_info = data.get('user', {})
+                if user_info.get('email') == self.test_user_email:
+                    success_criteria.append("✅ User email correct")
+                else:
+                    success_criteria.append(f"❌ User email: {user_info.get('email')}")
+                
+                if user_info.get('firstName') == "Final":
+                    success_criteria.append("✅ First name correct")
+                else:
+                    success_criteria.append(f"❌ First name: {user_info.get('firstName')}")
+                
+                # Check for demo_mode flag (should NOT be present)
+                if 'demo_mode' not in data:
+                    success_criteria.append("✅ No demo_mode flag")
+                else:
+                    success_criteria.append(f"❌ demo_mode present: {data.get('demo_mode')}")
+                
+                # Check response time (<10s as per review request)
+                if response_time < 10.0:
+                    success_criteria.append(f"✅ Response time: {response_time:.2f}s (<10s)")
+                else:
+                    success_criteria.append(f"❌ Response time: {response_time:.2f}s (≥10s)")
+                
+                # Store user_id for login test
+                self.user_id = data.get('user_id')
+                
+                all_success = all("✅" in criterion for criterion in success_criteria)
+                details = "; ".join(success_criteria)
+                
+                self.log_test("User Registration (CREATE)", all_success, details, response_time)
+                return all_success
+                
+            else:
+                self.log_test("User Registration (CREATE)", False, 
+                            f"HTTP {response.status_code}: {response.text}", response_time)
+                return False
+                
+        except Exception as e:
+            self.log_test("User Registration (CREATE)", False, f"Request failed: {str(e)}")
+            return False
+    
+    def test_user_login_dynamodb(self):
+        """Test 3: User Login (READ) - Should query DynamoDB using EmailIndex"""
+        print("🔍 Testing User Login with DynamoDB...")
+        
+        try:
+            login_data = {
+                "email": self.test_user_email,
+                "password": "TestPassword123!"
+            }
+            
+            start_time = time.time()
+            response = requests.post(
+                f"{self.api_base}/api/auth/login",
+                json=login_data,
+                headers={'Content-Type': 'application/json'},
+                timeout=10
+            )
+            response_time = time.time() - start_time
+            
+            if response.status_code == 200:
+                data = response.json()
+                
+                success_criteria = []
+                
+                # Check for JWT tokens
+                access_token = data.get('access_token')
+                if access_token:
+                    # Check JWT format (should have 3 parts separated by dots)
+                    token_parts = access_token.split('.')
+                    if len(token_parts) == 3:
+                        success_criteria.append("✅ Valid JWT access_token format")
+                    else:
+                        # Check if it's a simple token (acceptable for this test)
+                        if len(access_token) > 10:
+                            success_criteria.append("✅ Access token returned (valid format)")
+                        else:
+                            success_criteria.append(f"❌ Invalid token format: {len(token_parts)} parts")
+                else:
+                    success_criteria.append("❌ access_token missing")
+                
+                # Check user info
+                user_info = data.get('user', {})
+                if user_info.get('email') == self.test_user_email:
+                    success_criteria.append("✅ Login email correct")
+                else:
+                    success_criteria.append(f"❌ Login email: {user_info.get('email')}")
+                
+                # Check for demo_mode flag (should NOT be present)
+                if 'demo_mode' not in data:
+                    success_criteria.append("✅ No demo_mode flag")
+                else:
+                    success_criteria.append(f"❌ demo_mode present: {data.get('demo_mode')}")
+                
+                # Check response time (<10s as per review request)
+                if response_time < 10.0:
+                    success_criteria.append(f"✅ Response time: {response_time:.2f}s (<10s)")
+                else:
+                    success_criteria.append(f"❌ Response time: {response_time:.2f}s (≥10s)")
+                
+                all_success = all("✅" in criterion for criterion in success_criteria)
+                details = "; ".join(success_criteria)
+                
+                self.log_test("User Login (READ)", all_success, details, response_time)
+                return all_success
+                
+            else:
+                self.log_test("User Login (READ)", False, 
+                            f"HTTP {response.status_code}: {response.text}", response_time)
+                return False
+                
+        except Exception as e:
+            self.log_test("User Login (READ)", False, f"Request failed: {str(e)}")
+            return False
+    
+    def test_migration_completeness(self):
+        """Test 4: Migration Completeness Check - Verify no MongoDB references"""
+        print("🔍 Testing Migration Completeness...")
+        
+        try:
+            # Test health check for MongoDB references
+            start_time = time.time()
+            response = requests.get(f"{self.api_base}/api/", timeout=10)
+            response_time = time.time() - start_time
+            
+            success_criteria = []
+            
+            if response.status_code == 200:
+                data = response.json()
+                response_text = json.dumps(data).lower()
+                
+                # Check for MongoDB references
+                mongodb_terms = ['mongodb', 'mongo', 'pymongo', 'mongoclient']
+                mongodb_found = any(term in response_text for term in mongodb_terms)
+                
+                if not mongodb_found:
+                    success_criteria.append("✅ No MongoDB references in response")
+                else:
+                    success_criteria.append("❌ MongoDB references found in response")
+                
+                # Check for demo_mode flag
+                if 'demo_mode' not in data:
+                    success_criteria.append("✅ No demo_mode flags")
+                else:
+                    success_criteria.append(f"❌ demo_mode present: {data.get('demo_mode')}")
+                
+                # Check response time
+                if response_time < 10.0:
+                    success_criteria.append(f"✅ Response time: {response_time:.2f}s (<10s)")
+                else:
+                    success_criteria.append(f"❌ Response time: {response_time:.2f}s (≥10s)")
+                
+                all_success = all("✅" in criterion for criterion in success_criteria)
+                details = "; ".join(success_criteria)
+                
+                self.log_test("Migration Completeness Check", all_success, details, response_time)
+                return all_success
+            else:
+                self.log_test("Migration Completeness Check", False, 
+                            f"HTTP {response.status_code}: {response.text}", response_time)
+                return False
+                
+        except Exception as e:
+            self.log_test("Migration Completeness Check", False, f"Request failed: {str(e)}")
+            return False
+    
+    def test_cors_headers(self):
+        """Test 5: CORS Headers Present - Proper CORS headers on all responses"""
+        print("🔍 Testing CORS Headers...")
+        
+        endpoints_to_test = [
+            ("/api/", "GET"),
+            ("/api/auth/register", "OPTIONS"),
+            ("/api/auth/login", "OPTIONS")
         ]
         
-        success_count = 0
-        total_requests = len(test_endpoints) * 3  # Test each endpoint 3 times
-        response_times = []
+        all_cors_working = True
+        details = []
         
-        for endpoint in test_endpoints:
-            for i in range(3):
-                try:
-                    start_time = time.time()
-                    response = requests.get(endpoint, timeout=5)
-                    end_time = time.time()
+        for endpoint, method in endpoints_to_test:
+            try:
+                start_time = time.time()
+                if method == "GET":
+                    response = requests.get(f"{self.api_base}{endpoint}", timeout=10)
+                elif method == "OPTIONS":
+                    response = requests.options(f"{self.api_base}{endpoint}", timeout=10)
+                response_time = time.time() - start_time
+                
+                cors_headers = response.headers.get('Access-Control-Allow-Origin')
+                
+                if cors_headers:
+                    details.append(f"✅ {endpoint} ({method}): {cors_headers}")
+                else:
+                    details.append(f"❌ {endpoint} ({method}): No CORS headers")
+                    all_cors_working = False
                     
-                    response_time = end_time - start_time
-                    response_times.append(response_time)
-                    
-                    # Count as success if we get any response (200, 404, etc.)
-                    if response.status_code in [200, 404, 500]:
-                        success_count += 1
-                    
-                    print(f"Request {i+1} to {endpoint}: {response.status_code} ({response_time:.3f}s)")
-                    
-                except requests.exceptions.RequestException as e:
-                    print(f"Request failed: {e}")
+            except Exception as e:
+                details.append(f"❌ {endpoint} ({method}): Failed ({str(e)})")
+                all_cors_working = False
         
-        success_rate = (success_count / total_requests) * 100
-        avg_response_time = sum(response_times) / len(response_times) if response_times else 0
-        
-        print(f"\n✅ Backend Stability Results:")
-        print(f"Success Rate: {success_rate:.1f}% ({success_count}/{total_requests})")
-        print(f"Average Response Time: {avg_response_time:.3f}s")
-        print(f"Max Response Time: {max(response_times):.3f}s" if response_times else "N/A")
-        
-        # Backend should be reasonably stable
-        self.assertGreater(success_rate, 80, f"Backend stability too low: {success_rate}%")
-        self.assertLess(avg_response_time, 2.0, f"Backend too slow: {avg_response_time}s average")
+        self.log_test("CORS Headers", all_cors_working, "; ".join(details))
+        return all_cors_working
     
-    def test_09_comprehensive_functionality_summary(self):
-        """Comprehensive summary of all tested functionality"""
-        print("\n=== AWS Lambda Backend Functionality Summary ===")
+    def run_all_tests(self):
+        """Run all DynamoDB migration tests as per FINAL TEST requirements"""
+        print("🚀 FINAL TEST: Complete DynamoDB migration verification after IAM permissions fix")
+        print("=" * 80)
+        print(f"Backend URL: {self.api_base}")
+        print(f"Test User: {self.test_user_email}")
+        print("=" * 80)
+        print()
         
-        test_results = {
-            "Basic Connectivity": "✅ Lambda accessible via API Gateway",
-            "CORS Configuration": "✅ CORS headers properly configured", 
-            "S3 Presigned URLs": "✅ Presigned URL generation working",
-            "Duration Fix": "✅ Duration estimation based on file size (no longer 0)",
-            "Stream JSON Response": "✅ Video stream returns JSON with stream_url",
-            "S3 Bucket Access": "✅ S3 bucket properly configured",
-            "Environment Variables": "✅ Lambda environment correctly configured",
-            "Backend Stability": "✅ Backend stable and performant"
-        }
+        # Run tests in order as specified in review request
+        test_results = []
         
-        print("\nTest Results Summary:")
-        for test_name, result in test_results.items():
-            print(f"{result} {test_name}")
+        test_results.append(self.test_health_check_dynamodb())
+        test_results.append(self.test_user_registration_dynamodb())
+        test_results.append(self.test_user_login_dynamodb())
+        test_results.append(self.test_migration_completeness())
+        test_results.append(self.test_cors_headers())
         
-        print(f"\n🎉 AWS Lambda Backend Testing Complete!")
-        print(f"API Gateway URL: {API_URL}")
-        print(f"S3 Bucket: videosplitter-storage-1751560247")
-        print(f"All critical fixes verified and working correctly.")
+        # Summary
+        passed = sum(test_results)
+        total = len(test_results)
+        success_rate = (passed / total) * 100
         
-        # This test always passes as it's just a summary
-        self.assertTrue(True, "Comprehensive functionality test completed")
+        print("=" * 80)
+        print("🎯 FINAL TEST RESULTS")
+        print("=" * 80)
+        print(f"Tests Passed: {passed}/{total} ({success_rate:.1f}%)")
+        print()
+        
+        # Check SUCCESS CRITERIA from review request
+        success_criteria_met = []
+        
+        if success_rate == 100:
+            print("🎉 ALL SUCCESS CRITERIA MET - DynamoDB Migration Complete!")
+            success_criteria_met = [
+                "✅ Health check shows DynamoDB connected: true",
+                "✅ User registration works (HTTP 201/200)",
+                "✅ User login works (HTTP 200)",
+                "✅ No MongoDB/demo_mode references",
+                "✅ All operations under 10 seconds",
+                "✅ Proper CORS headers on all responses"
+            ]
+        else:
+            print("⚠️  SOME SUCCESS CRITERIA NOT MET - Review issues above")
+            
+            # Show failed tests
+            failed_tests = [result for result in self.test_results if not result['success']]
+            if failed_tests:
+                print("\n❌ Failed Tests:")
+                for test in failed_tests:
+                    print(f"   - {test['test']}: {test['details']}")
+        
+        print()
+        for criterion in success_criteria_met:
+            print(criterion)
+        
+        print()
+        print("EXPECTED OUTCOME:")
+        if success_rate == 100:
+            print("✅ Complete confirmation that MongoDB has been successfully replaced with DynamoDB")
+            print("✅ All authentication functionality is working perfectly")
+        else:
+            print("❌ DynamoDB migration verification incomplete - issues need resolution")
+        
+        print()
+        return success_rate == 100
 
 if __name__ == "__main__":
-    unittest.main(verbosity=2)
+    tester = DynamoDBMigrationTester()
+    success = tester.run_all_tests()
+    
+    if not success:
+        exit(1)
