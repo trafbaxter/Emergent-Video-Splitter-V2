@@ -783,7 +783,7 @@ def handle_split_video(event):
                 'source_bucket': BUCKET_NAME,
                 'source_key': s3_key,
                 'split_config': {
-                    'method': frontend_method,
+                    'method': ffmpeg_method,
                     'time_points': body.get('time_points', []),
                     'interval_duration': body.get('interval_duration', 300),
                     'preserve_quality': body.get('preserve_quality', True),
