@@ -16,6 +16,14 @@ import uuid
 import re
 from datetime import datetime, timedelta
 from boto3.dynamodb.conditions import Key
+from decimal import Decimal
+
+class DecimalEncoder(json.JSONEncoder):
+    """JSON encoder for DynamoDB Decimal types"""
+    def default(self, obj):
+        if isinstance(obj, Decimal):
+            return float(obj)
+        return super(DecimalEncoder, self).default(obj)
 
 # Initialize logger
 logger = logging.getLogger()
@@ -910,7 +918,7 @@ def handle_job_status(event):
                             'completed_at': job_record.get('completed_at'),
                             'processing_time': job_record.get('processing_time'),
                             'note': 'Job completed via SQS processing'
-                        })
+                        }, cls=DecimalEncoder)
                     }
                 elif job_record.get('status') == 'failed':
                     return {
@@ -924,7 +932,7 @@ def handle_job_status(event):
                             'results': [],
                             'failed_at': job_record.get('failed_at'),
                             'note': 'Job failed during SQS processing'
-                        })
+                        }, cls=DecimalEncoder)
                     }
                 else:
                     # Job is still processing - check S3 for partial results
@@ -1029,22 +1037,24 @@ def handle_job_status(event):
                     'results': output_files,
                     'output_count': len(output_files),
                     'note': 'Real processing status based on S3 file counting'
-                })
+                }, cls=DecimalEncoder)
             }
                     
         except Exception as s3_error:
             logger.warning(f"S3 output check failed for job {job_id}: {str(s3_error)}")
-            # Return processing status if S3 check fails
+            # Return processing status if S3 check fails - preserve monotonic progress
+            fallback_progress = max(30, current_progress)  # Ensure progress never decreases
+            logger.info(f"Using fallback progress: {fallback_progress}% (current was {current_progress}%)")
             return {
                 'statusCode': 200,
                 'headers': get_cors_headers(origin),
                 'body': json.dumps({
                     'job_id': job_id,
                     'status': 'processing',
-                    'progress': 30,
+                    'progress': fallback_progress,
                     'message': 'Video processing is running. Checking for results...',
                     'note': 'Status check temporarily unavailable, processing continues'
-                })
+                }, cls=DecimalEncoder)
             }
         
     except Exception as e:
