@@ -267,10 +267,8 @@ def handle_health_check(event):
     origin = event.get('headers', {}).get('origin') or event.get('headers', {}).get('Origin')
     
     # Check database connection status
-    mongo_client = get_mongo_client()
-    db_status = "connected" if mongo_client else "fallback_mode"
-    if mongo_client:
-        mongo_client.close()
+    db_status_info = get_database_status()
+    db_status = "connected" if db_status_info['connected'] else "disconnected"
     
     response_data = {
         'message': 'Video Splitter Pro API - Enhanced CORS Version',
@@ -279,13 +277,14 @@ def handle_health_check(event):
         'authentication': {
             'jwt_available': JWT_AVAILABLE,
             'bcrypt_available': BCRYPT_AVAILABLE,
-            'mongodb_available': MONGODB_AVAILABLE
+            'dynamodb_available': True
         },
         'database': db_status,
+        'database_info': db_status_info,
         'dependencies': {
             'bcrypt': BCRYPT_AVAILABLE,
             'jwt': JWT_AVAILABLE,
-            'pymongo': MONGODB_AVAILABLE
+            'dynamodb': True
         },
         'cors': {
             'allowed_origins': ALLOWED_ORIGINS,
