@@ -16,6 +16,14 @@ import uuid
 import re
 from datetime import datetime, timedelta
 from boto3.dynamodb.conditions import Key
+from decimal import Decimal
+
+class DecimalEncoder(json.JSONEncoder):
+    """JSON encoder for DynamoDB Decimal types"""
+    def default(self, obj):
+        if isinstance(obj, Decimal):
+            return float(obj)
+        return super(DecimalEncoder, self).default(obj)
 
 # Initialize logger
 logger = logging.getLogger()
