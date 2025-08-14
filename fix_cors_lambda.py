@@ -50,6 +50,26 @@ except ImportError:
 BUCKET_NAME = 'videosplitter-storage-1751560247'
 AWS_REGION = os.environ.get('AWS_REGION', 'us-east-1')
 
+try:
+    import pyotp
+    import qrcode
+    from io import BytesIO
+    import base64
+    TOTP_AVAILABLE = True
+    logger.info("✅ TOTP libraries loaded successfully")
+except ImportError:
+    TOTP_AVAILABLE = False
+    logger.warning("⚠️ TOTP libraries not available")
+
+try:
+    import boto3
+    ses_client = boto3.client('ses', region_name=AWS_REGION)
+    SES_AVAILABLE = True
+    logger.info("✅ SES client initialized successfully")
+except ImportError:
+    SES_AVAILABLE = False
+    logger.warning("⚠️ SES not available")
+
 # SQS Configuration
 SQS_QUEUE_URL = 'https://sqs.us-east-1.amazonaws.com/756530070939/video-processing-queue'
 
