@@ -450,8 +450,16 @@ const VideoSplitter = () => {
       });
 
       if (response.ok) {
-        // Start polling for progress
-        pollProgress();
+        const data = await response.json();
+        console.log('Split response:', data);
+        
+        if (data.job_id) {
+          // Start polling for progress using the actual processing job ID
+          pollProgress(data.job_id);
+        } else {
+          console.error('No job_id in response:', data);
+          throw new Error('No job ID received from server');
+        }
       } else {
         const error = await response.json();
         throw new Error(error.message || 'Split failed');
