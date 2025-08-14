@@ -468,6 +468,7 @@ def handle_health_check(event):
             'POST /api/admin/users',
             'POST /api/admin/users/approve',
             'DELETE /api/admin/users/{user_id}',
+            'PUT /api/admin/users/{user_id}',
             'POST /api/generate-presigned-url',
             'POST /api/get-video-info',
             'GET /api/check-metadata/{s3_key}',
