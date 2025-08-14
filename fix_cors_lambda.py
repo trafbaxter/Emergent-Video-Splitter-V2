@@ -918,7 +918,7 @@ def handle_job_status(event):
                             'completed_at': job_record.get('completed_at'),
                             'processing_time': job_record.get('processing_time'),
                             'note': 'Job completed via SQS processing'
-                        })
+                        }, cls=DecimalEncoder)
                     }
                 elif job_record.get('status') == 'failed':
                     return {
