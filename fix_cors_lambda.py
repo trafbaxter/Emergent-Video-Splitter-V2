@@ -68,13 +68,6 @@ JWT_ALGORITHM = 'HS256'
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 REFRESH_TOKEN_EXPIRE_DAYS = 7
 
-# MongoDB configuration
-MONGO_URL = os.environ.get('MONGO_URL', 'mongodb://localhost:27017/')
-MONGODB_DB_NAME = os.environ.get('DB_NAME', 'videosplitter')
-
-# In-memory user storage for demo purposes (fallback when MongoDB not available)
-DEMO_USERS = {}
-
 # AWS clients
 s3 = boto3.client('s3')
 lambda_client = boto3.client('lambda')
