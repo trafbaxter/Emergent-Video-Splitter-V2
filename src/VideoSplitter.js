@@ -147,6 +147,7 @@ const VideoSplitter = () => {
   // Reset component state
   const resetState = () => {
     setJobId(null);
+    setProcessingJobId(null); // Clear processing job ID
     setVideoInfo(null);
     setVideoUrl(null);
     setTimePoints([]);
