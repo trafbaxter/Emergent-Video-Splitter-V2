@@ -254,29 +254,55 @@ class DynamoDBMigrationTester:
             self.log_test("User Login (READ)", False, f"Request failed: {str(e)}")
             return False
     
-    def test_cors_headers(self):
-        """Test 4: CORS Headers Present"""
-        print("🔍 Testing CORS Headers...")
+    def test_migration_completeness(self):
+        """Test 4: Migration Completeness Check - Verify no MongoDB references"""
+        print("🔍 Testing Migration Completeness...")
         
         try:
+            # Test health check for MongoDB references
             start_time = time.time()
             response = requests.get(f"{self.api_base}/api/", timeout=10)
             response_time = time.time() - start_time
             
-            cors_headers = response.headers.get('Access-Control-Allow-Origin')
+            success_criteria = []
             
-            if cors_headers:
-                success = True
-                details = f"CORS headers present: {cors_headers}"
+            if response.status_code == 200:
+                data = response.json()
+                response_text = json.dumps(data).lower()
+                
+                # Check for MongoDB references
+                mongodb_terms = ['mongodb', 'mongo', 'pymongo', 'mongoclient']
+                mongodb_found = any(term in response_text for term in mongodb_terms)
+                
+                if not mongodb_found:
+                    success_criteria.append("✅ No MongoDB references in response")
+                else:
+                    success_criteria.append("❌ MongoDB references found in response")
+                
+                # Check for demo_mode flag
+                if 'demo_mode' not in data:
+                    success_criteria.append("✅ No demo_mode flags")
+                else:
+                    success_criteria.append(f"❌ demo_mode present: {data.get('demo_mode')}")
+                
+                # Check response time
+                if response_time < 10.0:
+                    success_criteria.append(f"✅ Response time: {response_time:.2f}s (<10s)")
+                else:
+                    success_criteria.append(f"❌ Response time: {response_time:.2f}s (≥10s)")
+                
+                all_success = all("✅" in criterion for criterion in success_criteria)
+                details = "; ".join(success_criteria)
+                
+                self.log_test("Migration Completeness Check", all_success, details, response_time)
+                return all_success
             else:
-                success = False
-                details = "CORS headers missing"
-            
-            self.log_test("CORS Headers", success, details, response_time)
-            return success
-            
+                self.log_test("Migration Completeness Check", False, 
+                            f"HTTP {response.status_code}: {response.text}", response_time)
+                return False
+                
         except Exception as e:
-            self.log_test("CORS Headers", False, f"Request failed: {str(e)}")
+            self.log_test("Migration Completeness Check", False, f"Request failed: {str(e)}")
             return False
     
     def test_response_times(self):
