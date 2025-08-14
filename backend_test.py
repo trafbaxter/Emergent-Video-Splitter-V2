@@ -261,7 +261,7 @@ class DynamoDBMigrationTester:
         print("🔍 Testing Response Times...")
         
         endpoints_to_test = [
-            ("/api/health", "GET"),
+            ("/api/", "GET"),
         ]
         
         all_fast = True
