@@ -454,8 +454,18 @@ const VideoSplitter = () => {
         console.log('Split response:', data);
         
         if (data.job_id) {
-          // Start polling for progress using the actual processing job ID
-          pollProgress(data.job_id);
+          console.log('About to start polling with job_id:', data.job_id);
+          try {
+            // Start polling for progress using the actual processing job ID
+            console.log('Calling pollProgress function...');
+            pollProgress(data.job_id);
+            console.log('pollProgress function called successfully');
+          } catch (pollError) {
+            console.error('Error calling pollProgress:', pollError);
+            // Fallback: still try to continue with processing state
+            setProcessing(true);
+            alert('Job started but progress tracking may not work properly');
+          }
         } else {
           console.error('No job_id in response:', data);
           throw new Error('No job ID received from server');
@@ -474,29 +484,39 @@ const VideoSplitter = () => {
 
   // Poll for split progress
   const pollProgress = (processingJobId) => {
+    console.log('Starting progress polling for job_id:', processingJobId);
+    
     const poll = async () => {
       try {
+        console.log('Polling job status for:', processingJobId);
         const response = await fetch(`${API_BASE}/api/job-status/${processingJobId}`, {
           headers: {
             'Authorization': `Bearer ${accessToken}`
           }
         });
 
+        console.log('Job status response:', response.status, response.statusText);
+
         if (response.ok) {
           const data = await response.json();
+          console.log('Job status data:', data);
           setProgress(data.progress || 0);
 
           if (data.status === 'completed') {
+            console.log('Job completed! Results:', data.results);
             setSplitResults(data.results || []);
             setProcessing(false);
           } else if (data.status === 'failed') {
+            console.error('Job failed:', data.error);
             alert('Processing failed: ' + (data.error || 'Unknown error'));
             setProcessing(false);
           } else {
+            console.log('Job still processing, progress:', data.progress || 0, 'status:', data.status);
             // Continue polling
             setTimeout(poll, 2000);
           }
         } else {
+          console.warn('Job status request failed, retrying in 2 seconds');
           setTimeout(poll, 2000);
         }
       } catch (error) {
