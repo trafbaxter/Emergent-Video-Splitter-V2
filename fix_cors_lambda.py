@@ -964,18 +964,36 @@ def handle_job_status(event):
                 
                 # Update DynamoDB if job record exists
                 try:
+                    # Only update status and completion time, preserve existing detailed results from FFmpeg Lambda
                     jobs_table.update_item(
                         Key={'job_id': job_id},
-                        UpdateExpression='SET #status = :status, completed_at = :completed_at, results = :results',
+                        UpdateExpression='SET #status = :status, completed_at = :completed_at',
                         ExpressionAttributeNames={'#status': 'status'},
                         ExpressionAttributeValues={
                             ':status': 'completed',
-                            ':completed_at': datetime.now().isoformat(),
-                            ':results': output_files
+                            ':completed_at': datetime.now().isoformat()
                         }
                     )
+                    logger.info(f"✅ Job {job_id} marked as completed in DynamoDB")
                 except Exception as update_error:
                     logger.warning(f"Failed to update DynamoDB for completed job {job_id}: {update_error}")
+                
+                # Try to get detailed results from DynamoDB (set by FFmpeg Lambda)
+                try:
+                    detailed_response = jobs_table.get_item(Key={'job_id': job_id})
+                    if 'Item' in detailed_response and 'results' in detailed_response['Item']:
+                        detailed_results = detailed_response['Item']['results']
+                        if detailed_results and len(detailed_results) > 0 and 'duration' in detailed_results[0]:
+                            # Use detailed results from FFmpeg Lambda (includes duration, start_time, end_time)
+                            output_files = detailed_results
+                            logger.info(f"✅ Using detailed results from FFmpeg Lambda with duration info")
+                        else:
+                            # Fallback to S3 file listing results
+                            logger.info(f"⚠️ Using basic S3 file listing results (no duration info)")
+                    else:
+                        logger.info(f"⚠️ No detailed results in DynamoDB, using S3 file listing")
+                except Exception as detailed_error:
+                    logger.warning(f"Failed to get detailed results from DynamoDB: {detailed_error}")
                 
                 logger.info(f"✅ Job {job_id} completed with {len(output_files)} output files")
             elif len(output_files) == 1:
@@ -1056,7 +1074,7 @@ def handle_download_file(event):
         logger.info(f"Download request - Job ID: {job_id}, Filename: {filename}")
         
         # Generate download URL for the processed file
-        s3_key = f"results/{job_id}/{filename}"
+        s3_key = f"outputs/{job_id}/{filename}"
         
         try:
             # Check if file exists
