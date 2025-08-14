@@ -371,6 +371,7 @@ class MonotonicProgressTester:
         print()
         
         # Check SUCCESS CRITERIA from review request
+        success_criteria_met = []
         if success_rate == 100:
             print("🎉 ALL SUCCESS CRITERIA MET - Monotonic Progress Fix Working!")
             success_criteria_met = [
@@ -391,7 +392,7 @@ class MonotonicProgressTester:
                     print(f"   - {test['test']}: {test['details']}")
         
         print()
-        for criterion in success_criteria_met if success_rate == 100 else []:
+        for criterion in success_criteria_met:
             print(criterion)
         
         print()
