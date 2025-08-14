@@ -30,7 +30,7 @@ def create_sqs_infrastructure():
             QueueName=DLQ_NAME,
             Attributes={
                 'MessageRetentionPeriod': '1209600',  # 14 days
-                'VisibilityTimeoutSeconds': '30'
+                'VisibilityTimeout': '30'
             }
         )
         dlq_url = dlq_response['QueueUrl']
