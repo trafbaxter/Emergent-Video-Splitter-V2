@@ -99,22 +99,6 @@ def get_cors_headers(origin=None):
         'Access-Control-Allow-Credentials': 'false'  # Must be false when using '*'
     }
 
-def get_mongo_client():
-    """Get MongoDB client connection with fallback handling"""
-    if not MONGODB_AVAILABLE:
-        logger.warning("MongoDB client not available - pymongo not installed")
-        return None
-    
-    try:
-        client = MongoClient(MONGO_URL, serverSelectionTimeoutMS=3000)
-        # Test the connection
-        client.server_info()
-        logger.info("✅ MongoDB connection successful")
-        return client
-    except Exception as e:
-        logger.warning(f"MongoDB connection failed: {str(e)}")
-        logger.info("🔄 Falling back to in-memory storage for demo purposes")
-        return None
 
 def hash_password(password: str) -> str:
     """Hash password using bcrypt"""
