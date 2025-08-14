@@ -102,7 +102,8 @@ const VideoSplitter = () => {
   // Upload and processing state
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [jobId, setJobId] = useState(null);
+  const [jobId, setJobId] = useState(null); // S3 key for uploaded video
+  const [processingJobId, setProcessingJobId] = useState(null); // Job ID for processing
   const [videoInfo, setVideoInfo] = useState(null);
   const [processing, setProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -146,6 +147,7 @@ const VideoSplitter = () => {
   // Reset component state
   const resetState = () => {
     setJobId(null);
+    setProcessingJobId(null); // Clear processing job ID
     setVideoInfo(null);
     setVideoUrl(null);
     setTimePoints([]);
@@ -455,6 +457,7 @@ const VideoSplitter = () => {
         
         if (data.job_id) {
           console.log('About to start polling with job_id:', data.job_id);
+          setProcessingJobId(data.job_id); // Save the processing job ID for downloads
           try {
             // Start polling for progress using the actual processing job ID
             console.log('Calling pollProgress function...');
@@ -531,7 +534,7 @@ const VideoSplitter = () => {
   // Download split file
   const downloadFile = async (filename) => {
     try {
-      const response = await fetch(`${API_BASE}/api/download/${jobId}/${filename}`, {
+      const response = await fetch(`${API_BASE}/api/download/${processingJobId}/${filename}`, {
         headers: {
           'Authorization': `Bearer ${accessToken}`
         }
