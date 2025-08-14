@@ -455,8 +455,17 @@ const VideoSplitter = () => {
         
         if (data.job_id) {
           console.log('About to start polling with job_id:', data.job_id);
-          // Start polling for progress using the actual processing job ID
-          pollProgress(data.job_id);
+          try {
+            // Start polling for progress using the actual processing job ID
+            console.log('Calling pollProgress function...');
+            pollProgress(data.job_id);
+            console.log('pollProgress function called successfully');
+          } catch (pollError) {
+            console.error('Error calling pollProgress:', pollError);
+            // Fallback: still try to continue with processing state
+            setProcessing(true);
+            alert('Job started but progress tracking may not work properly');
+          }
         } else {
           console.error('No job_id in response:', data);
           throw new Error('No job ID received from server');
