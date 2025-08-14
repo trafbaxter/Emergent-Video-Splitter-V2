@@ -72,20 +72,16 @@ JWT_ALGORITHM = 'HS256'
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 REFRESH_TOKEN_EXPIRE_DAYS = 7
 
-# AWS clients
-s3 = boto3.client('s3')
-lambda_client = boto3.client('lambda')
+# AWS Lambda function names
 FFMPEG_LAMBDA_FUNCTION = 'ffmpeg-converter'
 
-# DynamoDB configuration
-DYNAMODB_REGION = os.environ.get('AWS_REGION', 'us-east-1')
+# DynamoDB configuration  
 USERS_TABLE = os.environ.get('USERS_TABLE', 'VideoSplitter-Users')
 JOBS_TABLE = os.environ.get('JOBS_TABLE', 'VideoSplitter-Jobs')
+DYNAMODB_REGION = os.environ.get('AWS_REGION', 'us-east-1')
 
-# DynamoDB clients
-dynamodb = boto3.resource('dynamodb', region_name=DYNAMODB_REGION)
-users_table = dynamodb.Table(USERS_TABLE)
-jobs_table = dynamodb.Table(JOBS_TABLE)
+# Create alias for s3 client to maintain compatibility
+s3 = s3_client
 
 def get_cors_headers(origin=None):
     """Get CORS headers for API responses - temporary wildcard fix"""
