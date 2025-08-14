@@ -360,7 +360,7 @@ class MonotonicProgressTester:
         test_results.append(self.test_s3_error_simulation())
         
         # Summary
-        passed = sum(test_results)
+        passed = sum(1 for result in test_results if result)
         total = len(test_results)
         success_rate = (passed / total) * 100
         
