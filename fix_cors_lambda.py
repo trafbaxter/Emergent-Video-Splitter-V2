@@ -468,6 +468,7 @@ def handle_health_check(event):
             'POST /api/admin/users',
             'POST /api/admin/users/approve',
             'DELETE /api/admin/users/{user_id}',
+            'PUT /api/admin/users/{user_id}',
             'POST /api/generate-presigned-url',
             'POST /api/get-video-info',
             'GET /api/check-metadata/{s3_key}',
@@ -2008,6 +2009,222 @@ def handle_admin_delete_user(event):
             'body': json.dumps({'message': 'Failed to delete user', 'error': str(e)})
         }
 
+def handle_admin_update_user(event):
+    """Handle admin request to update user details (role, password, etc.)"""
+    origin = event.get('headers', {}).get('origin') or event.get('headers', {}).get('Origin')
+    
+    try:
+        # Extract and verify admin token
+        auth_header = event.get('headers', {}).get('authorization') or event.get('headers', {}).get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return {
+                'statusCode': 401,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'Missing or invalid authorization header'})
+            }
+        
+        token = auth_header.replace('Bearer ', '')
+        payload = verify_token(token)
+        
+        if not payload:
+            return {
+                'statusCode': 401,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'Invalid or expired token'})
+            }
+        
+        # Get admin user and verify role
+        admin_user = get_user_by_email(payload['email'])
+        if not admin_user or admin_user.get('user_role') != 'admin':
+            return {
+                'statusCode': 403,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'Admin access required'})
+            }
+        
+        # Extract user ID from path
+        path = event.get('path', '')
+        user_id = path.split('/api/admin/users/')[-1].split('/')[0]
+        
+        if not user_id:
+            return {
+                'statusCode': 400,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'User ID is required'})
+            }
+        
+        # Parse request body
+        body = json.loads(event['body'])
+        update_type = body.get('type')  # 'role' or 'password'
+        
+        if update_type == 'role':
+            new_role = body.get('role')
+            if new_role not in ['user', 'admin']:
+                return {
+                    'statusCode': 400,
+                    'headers': get_cors_headers(origin),
+                    'body': json.dumps({'message': 'Role must be either "user" or "admin"'})
+                }
+            
+            # Prevent admin from demoting themselves
+            if user_id == admin_user['user_id'] and new_role != 'admin':
+                return {
+                    'statusCode': 400,
+                    'headers': get_cors_headers(origin),
+                    'body': json.dumps({'message': 'Cannot change your own admin role'})
+                }
+            
+            # Get target user
+            target_user = get_user_by_id(user_id)
+            if not target_user:
+                return {
+                    'statusCode': 404,
+                    'headers': get_cors_headers(origin),
+                    'body': json.dumps({'message': 'User not found'})
+                }
+            
+            # Update user role
+            users_table.update_item(
+                Key={'user_id': user_id},
+                UpdateExpression='SET user_role = :role, updated_at = :updated_at, updated_by = :admin',
+                ExpressionAttributeValues={
+                    ':role': new_role,
+                    ':updated_at': datetime.utcnow().isoformat(),
+                    ':admin': admin_user['user_id']
+                }
+            )
+            
+            # Send notification email
+            email_subject = f"Account Role Updated - Video Splitter Pro"
+            email_body = f"""
+Hello {target_user.get('first_name', '')},
+
+Your account role has been updated by an administrator.
+
+Account Details:
+- Email: {target_user['email']}
+- New Role: {new_role.capitalize()}
+- Updated by: {admin_user.get('first_name', '')} {admin_user.get('last_name', '')}
+- Date: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC
+
+{f'You now have administrator privileges and can access the admin dashboard.' if new_role == 'admin' else 'Your account is now a standard user account.'}
+
+Best regards,
+Video Splitter Pro Team
+            """.strip()
+            
+            send_email_notification(target_user['email'], email_subject, email_body)
+            
+            return {
+                'statusCode': 200,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({
+                    'message': f'User role updated to {new_role} successfully',
+                    'user_id': user_id,
+                    'new_role': new_role,
+                    'email_sent': True
+                })
+            }
+            
+        elif update_type == 'password':
+            new_password = body.get('password')
+            force_change = body.get('forcePasswordChange', True)
+            
+            if not new_password:
+                return {
+                    'statusCode': 400,
+                    'headers': get_cors_headers(origin),
+                    'body': json.dumps({'message': 'New password is required'})
+                }
+            
+            if len(new_password) < 8:
+                return {
+                    'statusCode': 400,
+                    'headers': get_cors_headers(origin),
+                    'body': json.dumps({'message': 'Password must be at least 8 characters long'})
+                }
+            
+            # Get target user
+            target_user = get_user_by_id(user_id)
+            if not target_user:
+                return {
+                    'statusCode': 404,
+                    'headers': get_cors_headers(origin),
+                    'body': json.dumps({'message': 'User not found'})
+                }
+            
+            # Hash new password
+            hashed_password = hash_password(new_password)
+            
+            # Update user password and force change flag
+            users_table.update_item(
+                Key={'user_id': user_id},
+                UpdateExpression='SET password = :password, force_password_change = :force, updated_at = :updated_at, updated_by = :admin, failed_login_attempts = :zero, locked_until = :null',
+                ExpressionAttributeValues={
+                    ':password': hashed_password,
+                    ':force': force_change,
+                    ':updated_at': datetime.utcnow().isoformat(),
+                    ':admin': admin_user['user_id'],
+                    ':zero': 0,
+                    ':null': None
+                }
+            )
+            
+            # Send notification email
+            email_subject = f"Password Reset - Video Splitter Pro"
+            email_body = f"""
+Hello {target_user.get('first_name', '')},
+
+Your account password has been reset by an administrator.
+
+Account Details:
+- Email: {target_user['email']}
+- New Password: {new_password}
+- Reset by: {admin_user.get('first_name', '')} {admin_user.get('last_name', '')}
+- Date: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC
+
+{f'IMPORTANT: You will be required to change this password when you log in.' if force_change else 'You can use this password to log in immediately.'}
+
+For security reasons, please log in and change your password as soon as possible.
+
+Best regards,
+Video Splitter Pro Team
+            """.strip()
+            
+            send_email_notification(target_user['email'], email_subject, email_body)
+            
+            return {
+                'statusCode': 200,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({
+                    'message': 'User password reset successfully',
+                    'user_id': user_id,
+                    'force_password_change': force_change,
+                    'email_sent': True
+                })
+            }
+            
+        else:
+            return {
+                'statusCode': 400,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'Invalid update type. Must be "role" or "password"'})
+            }
+        
+    except json.JSONDecodeError:
+        return {
+            'statusCode': 400,
+            'headers': get_cors_headers(origin),
+            'body': json.dumps({'message': 'Invalid JSON in request body'})
+        }
+    except Exception as e:
+        logger.error(f"Admin update user error: {str(e)}")
+        return {
+            'statusCode': 500,
+            'headers': get_cors_headers(origin),
+            'body': json.dumps({'message': 'Failed to update user', 'error': str(e)})
+        }
+
 def lambda_handler(event, context):
     """Main Lambda handler with enhanced CORS support"""
     # Log the incoming request
@@ -2043,6 +2260,8 @@ def lambda_handler(event, context):
             return handle_admin_create_user(event)
         elif path.startswith('/api/admin/users/') and http_method == 'DELETE':
             return handle_admin_delete_user(event)
+        elif path.startswith('/api/admin/users/') and http_method == 'PUT':
+            return handle_admin_update_user(event)
         # Video processing routes
         elif path == '/api/generate-presigned-url':
             return handle_generate_presigned_url(event)
