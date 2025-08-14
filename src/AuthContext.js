@@ -125,10 +125,20 @@ export const AuthProvider = ({ children }) => {
       const data = await response.json();
 
       if (response.ok) {
-        setAccessToken(data.access_token);
-        localStorage.setItem('access_token', data.access_token);
-        setUser(data.user);
-        return { success: true };
+        // Check if registration requires approval
+        if (data.status === 'pending_approval') {
+          return { 
+            success: true, 
+            status: 'pending_approval',
+            message: data.message 
+          };
+        } else {
+          // Auto-approved registration (shouldn't happen with new system, but handle it)
+          setAccessToken(data.access_token);
+          localStorage.setItem('access_token', data.access_token);
+          setUser(data.user);
+          return { success: true };
+        }
       } else {
         return { success: false, error: data.message || 'Registration failed' };
       }
