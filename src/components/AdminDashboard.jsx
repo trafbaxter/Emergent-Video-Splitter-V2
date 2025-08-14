@@ -857,4 +857,280 @@ const CreateUserModal = ({ onClose, onUserCreated, accessToken, API_BASE }) => {
   );
 };
 
+// Role Change Modal Component
+const RoleChangeModal = ({ user, onClose, onRoleChanged, actionLoading }) => {
+  const [selectedRole, setSelectedRole] = useState(user.user_role);
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (selectedRole === user.user_role) {
+      alert('Please select a different role');
+      return;
+    }
+    onRoleChanged(user.user_id, selectedRole);
+  };
+
+  return (
+    <div style={{
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: 'rgba(0,0,0,0.5)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 1000
+    }}>
+      <div style={{
+        backgroundColor: 'white',
+        padding: '30px',
+        borderRadius: '8px',
+        width: '90%',
+        maxWidth: '400px'
+      }}>
+        <h2 style={{ marginTop: 0 }}>Change User Role</h2>
+        
+        <div style={{ marginBottom: '15px' }}>
+          <strong>User:</strong> {user.first_name} {user.last_name} ({user.email})
+        </div>
+        
+        <div style={{ marginBottom: '15px' }}>
+          <strong>Current Role:</strong> {user.user_role}
+        </div>
+
+        <form onSubmit={handleSubmit}>
+          <div style={{ marginBottom: '20px' }}>
+            <label style={{ display: 'block', marginBottom: '10px', fontWeight: 'bold' }}>
+              New Role:
+            </label>
+            <div style={{ display: 'flex', gap: '15px' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                <input
+                  type="radio"
+                  value="user"
+                  checked={selectedRole === 'user'}
+                  onChange={(e) => setSelectedRole(e.target.value)}
+                />
+                User
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                <input
+                  type="radio"
+                  value="admin"
+                  checked={selectedRole === 'admin'}
+                  onChange={(e) => setSelectedRole(e.target.value)}
+                />
+                Admin
+              </label>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+            <button
+              type="button"
+              onClick={onClose}
+              style={{
+                padding: '10px 20px',
+                backgroundColor: '#6c757d',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer'
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={actionLoading}
+              style={{
+                padding: '10px 20px',
+                backgroundColor: actionLoading ? '#6c757d' : '#007bff',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: actionLoading ? 'not-allowed' : 'pointer'
+              }}
+            >
+              {actionLoading ? 'Updating...' : 'Update Role'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+// Password Reset Modal Component
+const PasswordResetModal = ({ user, onClose, onPasswordReset, actionLoading }) => {
+  const [password, setPassword] = useState('');
+  const [forceChange, setForceChange] = useState(true);
+  const [error, setError] = useState('');
+
+  const generatePassword = () => {
+    const chars = 'ABCDEFGHIJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz123456789';
+    let result = '';
+    for (let i = 0; i < 12; i++) {
+      result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    setPassword(result);
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    setError('');
+
+    if (!password) {
+      setError('Password is required');
+      return;
+    }
+
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters long');
+      return;
+    }
+
+    onPasswordReset(user.user_id, password, forceChange);
+  };
+
+  return (
+    <div style={{
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: 'rgba(0,0,0,0.5)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 1000
+    }}>
+      <div style={{
+        backgroundColor: 'white',
+        padding: '30px',
+        borderRadius: '8px',
+        width: '90%',
+        maxWidth: '500px'
+      }}>
+        <h2 style={{ marginTop: 0 }}>Reset User Password</h2>
+        
+        <div style={{ marginBottom: '15px' }}>
+          <strong>User:</strong> {user.first_name} {user.last_name} ({user.email})
+        </div>
+        
+        {error && (
+          <div style={{
+            padding: '10px',
+            backgroundColor: '#f8d7da',
+            color: '#721c24',
+            borderRadius: '4px',
+            marginBottom: '15px',
+            border: '1px solid #f5c6cb'
+          }}>
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit}>
+          <div style={{ marginBottom: '15px' }}>
+            <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
+              New Password *
+            </label>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <input
+                type="text"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Enter new password"
+                style={{
+                  flex: 1,
+                  padding: '10px',
+                  border: '1px solid #ccc',
+                  borderRadius: '4px',
+                  fontSize: '14px'
+                }}
+              />
+              <button
+                type="button"
+                onClick={generatePassword}
+                style={{
+                  padding: '10px 15px',
+                  backgroundColor: '#28a745',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '14px'
+                }}
+              >
+                Generate
+              </button>
+            </div>
+            <small style={{ color: '#666', fontSize: '12px' }}>
+              Password must be at least 8 characters long
+            </small>
+          </div>
+
+          <div style={{ marginBottom: '20px' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <input
+                type="checkbox"
+                checked={forceChange}
+                onChange={(e) => setForceChange(e.target.checked)}
+              />
+              <span>Force user to change password on next login</span>
+            </label>
+          </div>
+
+          <div style={{ 
+            backgroundColor: '#fff3cd', 
+            border: '1px solid #ffeaa7', 
+            borderRadius: '4px', 
+            padding: '10px', 
+            marginBottom: '20px',
+            fontSize: '14px',
+            color: '#856404'
+          }}>
+            <strong>Note:</strong> The user will receive an email with their new password.
+          </div>
+
+          <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+            <button
+              type="button"
+              onClick={onClose}
+              style={{
+                padding: '10px 20px',
+                backgroundColor: '#6c757d',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer'
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={actionLoading}
+              style={{
+                padding: '10px 20px',
+                backgroundColor: actionLoading ? '#6c757d' : '#dc3545',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: actionLoading ? 'not-allowed' : 'pointer'
+              }}
+            >
+              {actionLoading ? 'Resetting...' : 'Reset Password'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
 export default AdminDashboard;
