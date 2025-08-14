@@ -483,8 +483,18 @@ metadata:
   run_ui: false
 
 test_plan:
-  current_focus: []
-  stuck_tasks: []
+  current_focus:
+    - "Enhanced Authentication System - User Registration with Approval Workflow"
+    - "Enhanced Authentication System - Admin Authentication"
+    - "Enhanced Authentication System - Admin User Management Endpoints"
+    - "Enhanced Authentication System - User Login Restrictions"
+    - "Enhanced Authentication System - Account Locking"
+  stuck_tasks:
+    - "Enhanced Authentication System - User Registration with Approval Workflow"
+    - "Enhanced Authentication System - Admin Authentication"
+    - "Enhanced Authentication System - Admin User Management Endpoints"
+    - "Enhanced Authentication System - User Login Restrictions"
+    - "Enhanced Authentication System - Account Locking"
   test_all: false
   test_priority: "high_first"
 
