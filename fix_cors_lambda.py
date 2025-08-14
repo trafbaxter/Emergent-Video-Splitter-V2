@@ -1054,7 +1054,7 @@ def handle_job_status(event):
                     'progress': fallback_progress,
                     'message': 'Video processing is running. Checking for results...',
                     'note': 'Status check temporarily unavailable, processing continues'
-                })
+                }, cls=DecimalEncoder)
             }
         
     except Exception as e:
