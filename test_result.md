@@ -302,6 +302,18 @@ backend:
         agent: "testing"
         comment: "Frontend testing not required per instructions - backend CORS fix resolves frontend integration issues"
 
+  - task: "Split Video Button Frontend Bug Investigation"
+    implemented: true
+    working: false
+    file: "src/VideoSplitter.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: false
+        agent: "testing"
+        comment: "🎯 ROOT CAUSE IDENTIFIED: Split video button IS making API requests (backend confirmed working perfectly), but frontend has critical bugs in response handling. Issues: 1) startSplitting() function doesn't extract job_id from API response (lines 452-458) 2) pollProgress() uses wrong job_id (S3 key instead of processing job_id) 3) Job ID state variable confusion (used for both S3 key and processing job_id). IMPACT: API request succeeds (HTTP 202 with job_id in 0.20s) but response isn't processed, causing progress to stay at default 25%. User sees 'processing' but no real progress updates. SOLUTION: Extract job_id from response, use separate state variables for S3 key vs processing job_id, and pass correct job_id to polling function."
+
 metadata:
   created_by: "testing_agent"
   version: "1.0"
