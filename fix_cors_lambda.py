@@ -481,7 +481,7 @@ def handle_health_check(event):
     }
 
 def handle_register(event):
-    """Handle user registration"""
+    """Handle user registration with approval workflow"""
     origin = event.get('headers', {}).get('origin') or event.get('headers', {}).get('Origin')
     
     try:
@@ -514,25 +514,51 @@ def handle_register(event):
             'password': hashed_password,
             'first_name': first_name,
             'last_name': last_name,
-            'email_verified': True  # For demo purposes
+            'user_role': 'user',  # Default role
+            'approval_status': 'pending',  # Require admin approval
+            'deleted': False,
+            'totp_enabled': False,
+            'totp_secret': None,
+            'force_password_change': False,
+            'email_verified': False,  # Will be verified later
+            'failed_login_attempts': 0,
+            'locked_until': None,
+            'password_reset_token': None,
+            'password_reset_expires': None,
+            'created_at': datetime.utcnow().isoformat(),
+            'updated_at': datetime.utcnow().isoformat()
         }
         
         user_id = create_user(user_data)
         
-        # Create tokens
-        token_data = {'user_id': user_id, 'email': email}
-        access_token = create_access_token(token_data)
-        refresh_token = create_refresh_token(token_data)
+        # Send notification email to user about pending approval
+        email_subject = "Account Registration - Pending Approval"
+        email_body = f"""
+Hello {first_name},
+
+Thank you for registering with Video Splitter Pro!
+
+Your account has been created and is currently pending administrator approval. You will receive another email once your account has been approved and you can begin using the system.
+
+Account Details:
+- Email: {email}
+- Registration Date: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC
+
+Please do not reply to this email.
+
+Best regards,
+Video Splitter Pro Team
+        """.strip()
         
+        send_email_notification(email, email_subject, email_body)
+        
+        # Don't create tokens - user needs approval first
         response_data = {
-            'access_token': access_token,
-            'refresh_token': refresh_token,
+            'message': 'Registration successful! Your account is pending administrator approval.',
             'user_id': user_id,
-            'user': {
-                'email': email,
-                'firstName': first_name,
-                'lastName': last_name
-            }
+            'status': 'pending_approval',
+            'email': email,
+            'note': 'You will receive an email notification once your account is approved.'
         }
         
         return {
