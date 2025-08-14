@@ -192,45 +192,65 @@ def verify_token(token: str, token_type: str = "access") -> Optional[dict]:
         return None
 
 def get_user_by_email(email: str) -> Optional[dict]:
-    """Get user by email from database or fallback storage"""
-    client = get_mongo_client()
-    
-    if client:
-        try:
-            db = client[MONGODB_DB_NAME]
-            users = db.users
-            user = users.find_one({"email": email})
-            client.close()
+    """Get user by email from DynamoDB"""
+    try:
+        response = users_table.query(
+            IndexName='EmailIndex',
+            KeyConditionExpression='email = :email',
+            ExpressionAttributeValues={
+                ':email': email
+            }
+        )
+        
+        if response['Items']:
+            user = response['Items'][0]
+            logger.info(f"✅ DynamoDB: Found user with email {email}")
             return user
-        except Exception as e:
-            logger.error(f"Database error: {str(e)}")
-            client.close()
-    
-    # Fallback to in-memory storage
-    return DEMO_USERS.get(email)
+        else:
+            logger.info(f"❌ DynamoDB: No user found with email {email}")
+            return None
+            
+    except Exception as e:
+        logger.error(f"DynamoDB error getting user by email: {str(e)}")
+        return None
 
 def create_user(user_data: dict) -> str:
-    """Create new user in database or fallback storage"""
+    """Create new user in DynamoDB"""
     user_id = str(uuid.uuid4())
     user_data['user_id'] = user_id
     user_data['created_at'] = datetime.utcnow().isoformat()
     
-    client = get_mongo_client()
-    
-    if client:
-        try:
-            db = client[MONGODB_DB_NAME]
-            users = db.users
-            users.insert_one(user_data)
-            client.close()
-            return user_id
-        except Exception as e:
-            logger.error(f"Database error: {str(e)}")
-            client.close()
-    
-    # Fallback to in-memory storage
-    DEMO_USERS[user_data['email']] = user_data
-    return user_id
+    try:
+        users_table.put_item(Item=user_data)
+        logger.info(f"✅ DynamoDB: Created user {user_id} with email {user_data.get('email')}")
+        return user_id
+        
+    except Exception as e:
+        logger.error(f"DynamoDB error creating user: {str(e)}")
+        raise Exception(f"Failed to create user: {str(e)}")
+
+def get_database_status() -> dict:
+    """Get DynamoDB connection status"""
+    try:
+        # Test DynamoDB connection by describing the users table
+        table_info = users_table.table_status
+        
+        return {
+            'connected': True,
+            'database_type': 'DynamoDB',
+            'users_table': USERS_TABLE,
+            'jobs_table': JOBS_TABLE,
+            'table_status': table_info,
+            'region': DYNAMODB_REGION
+        }
+        
+    except Exception as e:
+        logger.error(f"DynamoDB connection test failed: {str(e)}")
+        return {
+            'connected': False,
+            'database_type': 'DynamoDB',
+            'error': str(e)
+        }
 
 def handle_options(event):
     """Handle OPTIONS requests for CORS preflight"""
