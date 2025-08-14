@@ -868,7 +868,7 @@ def handle_split_video(event):
         }
 
 def handle_job_status(event):
-    """Handle job status requests with real S3 file checking - original working approach"""
+    """Handle job status requests with DynamoDB + S3 hybrid checking"""
     origin = event.get('headers', {}).get('origin') or event.get('headers', {}).get('Origin')
     
     try:
@@ -888,8 +888,53 @@ def handle_job_status(event):
         
         logger.info(f"Job status request for: {job_id}")
         
-        # Use the ORIGINAL working approach: Check S3 for output files
-        # The original system used "outputs/{job_id}/" not "results/{job_id}/"
+        # STEP 1: Check DynamoDB for job record (SQS-based jobs)
+        try:
+            dynamodb_response = jobs_table.get_item(Key={'job_id': job_id})
+            
+            if 'Item' in dynamodb_response:
+                job_record = dynamodb_response['Item']
+                logger.info(f"Found job record in DynamoDB: {job_id}")
+                
+                # Check if job is marked as completed in DynamoDB
+                if job_record.get('status') == 'completed':
+                    return {
+                        'statusCode': 200,
+                        'headers': get_cors_headers(origin),
+                        'body': json.dumps({
+                            'job_id': job_id,
+                            'status': 'completed',
+                            'progress': 100,
+                            'message': job_record.get('message', 'Processing complete!'),
+                            'results': job_record.get('results', []),
+                            'completed_at': job_record.get('completed_at'),
+                            'processing_time': job_record.get('processing_time'),
+                            'note': 'Job completed via SQS processing'
+                        })
+                    }
+                elif job_record.get('status') == 'failed':
+                    return {
+                        'statusCode': 200,
+                        'headers': get_cors_headers(origin),
+                        'body': json.dumps({
+                            'job_id': job_id,
+                            'status': 'failed',
+                            'progress': 0,
+                            'message': job_record.get('error_message', 'Processing failed'),
+                            'results': [],
+                            'failed_at': job_record.get('failed_at'),
+                            'note': 'Job failed during SQS processing'
+                        })
+                    }
+                else:
+                    # Job is still processing - check S3 for partial results
+                    logger.info(f"Job {job_id} still processing, checking S3 for progress")
+        
+        except Exception as dynamodb_error:
+            logger.warning(f"DynamoDB check failed for job {job_id}: {dynamodb_error}")
+            # Fall back to S3-only checking
+        
+        # STEP 2: Check S3 for output files (works for both SQS and legacy S3-based jobs)
         try:
             output_prefix = f"outputs/{job_id}/"
             
@@ -911,11 +956,27 @@ def handle_job_status(event):
                             'key': obj['Key']
                         })
             
-            # Determine status based on output files - ORIGINAL LOGIC
+            # Determine status based on output files
             if len(output_files) >= 2:
                 status = 'completed'
                 progress = 100
                 message = f'Processing complete! {len(output_files)} files ready for download.'
+                
+                # Update DynamoDB if job record exists
+                try:
+                    jobs_table.update_item(
+                        Key={'job_id': job_id},
+                        UpdateExpression='SET #status = :status, completed_at = :completed_at, results = :results',
+                        ExpressionAttributeNames={'#status': 'status'},
+                        ExpressionAttributeValues={
+                            ':status': 'completed',
+                            ':completed_at': datetime.now().isoformat(),
+                            ':results': output_files
+                        }
+                    )
+                except Exception as update_error:
+                    logger.warning(f"Failed to update DynamoDB for completed job {job_id}: {update_error}")
+                
                 logger.info(f"✅ Job {job_id} completed with {len(output_files)} output files")
             elif len(output_files) == 1:
                 status = 'processing'
