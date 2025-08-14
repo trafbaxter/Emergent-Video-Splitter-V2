@@ -15,6 +15,7 @@ from botocore.exceptions import ClientError
 import uuid
 import re
 from datetime import datetime, timedelta
+from boto3.dynamodb.conditions import Key
 
 # Initialize logger
 logger = logging.getLogger()
@@ -36,14 +37,6 @@ try:
 except ImportError:
     BCRYPT_AVAILABLE = False
     logger.warning("⚠️ bcrypt library not available")
-
-try:
-    from pymongo import MongoClient
-    MONGODB_AVAILABLE = True
-    logger.info("✅ pymongo library loaded successfully")
-except ImportError:
-    MONGODB_AVAILABLE = False
-    logger.warning("⚠️ pymongo library not available")
 
 # Environment variables
 BUCKET_NAME = 'videosplitter-storage-1751560247'
@@ -67,17 +60,20 @@ JWT_ALGORITHM = 'HS256'
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 REFRESH_TOKEN_EXPIRE_DAYS = 7
 
-# MongoDB configuration
-MONGO_URL = os.environ.get('MONGO_URL', 'mongodb://localhost:27017/')
-MONGODB_DB_NAME = os.environ.get('DB_NAME', 'videosplitter')
-
-# In-memory user storage for demo purposes (fallback when MongoDB not available)
-DEMO_USERS = {}
-
 # AWS clients
 s3 = boto3.client('s3')
 lambda_client = boto3.client('lambda')
 FFMPEG_LAMBDA_FUNCTION = 'ffmpeg-converter'
+
+# DynamoDB configuration
+DYNAMODB_REGION = os.environ.get('AWS_REGION', 'us-east-1')
+USERS_TABLE = os.environ.get('USERS_TABLE', 'VideoSplitter-Users')
+JOBS_TABLE = os.environ.get('JOBS_TABLE', 'VideoSplitter-Jobs')
+
+# DynamoDB clients
+dynamodb = boto3.resource('dynamodb', region_name=DYNAMODB_REGION)
+users_table = dynamodb.Table(USERS_TABLE)
+jobs_table = dynamodb.Table(JOBS_TABLE)
 
 def get_cors_headers(origin=None):
     """Get CORS headers for API responses - temporary wildcard fix"""
@@ -89,22 +85,6 @@ def get_cors_headers(origin=None):
         'Access-Control-Allow-Credentials': 'false'  # Must be false when using '*'
     }
 
-def get_mongo_client():
-    """Get MongoDB client connection with fallback handling"""
-    if not MONGODB_AVAILABLE:
-        logger.warning("MongoDB client not available - pymongo not installed")
-        return None
-    
-    try:
-        client = MongoClient(MONGO_URL, serverSelectionTimeoutMS=3000)
-        # Test the connection
-        client.server_info()
-        logger.info("✅ MongoDB connection successful")
-        return client
-    except Exception as e:
-        logger.warning(f"MongoDB connection failed: {str(e)}")
-        logger.info("🔄 Falling back to in-memory storage for demo purposes")
-        return None
 
 def hash_password(password: str) -> str:
     """Hash password using bcrypt"""
@@ -182,45 +162,62 @@ def verify_token(token: str, token_type: str = "access") -> Optional[dict]:
         return None
 
 def get_user_by_email(email: str) -> Optional[dict]:
-    """Get user by email from database or fallback storage"""
-    client = get_mongo_client()
-    
-    if client:
-        try:
-            db = client[MONGODB_DB_NAME]
-            users = db.users
-            user = users.find_one({"email": email})
-            client.close()
+    """Get user by email from DynamoDB"""
+    try:
+        response = users_table.query(
+            IndexName='EmailIndex',
+            KeyConditionExpression=Key('email').eq(email)
+        )
+        
+        if response['Items']:
+            user = response['Items'][0]
+            logger.info(f"✅ DynamoDB: Found user with email {email}")
             return user
-        except Exception as e:
-            logger.error(f"Database error: {str(e)}")
-            client.close()
-    
-    # Fallback to in-memory storage
-    return DEMO_USERS.get(email)
+        else:
+            logger.info(f"❌ DynamoDB: No user found with email {email}")
+            return None
+            
+    except Exception as e:
+        logger.error(f"DynamoDB error getting user by email: {str(e)}")
+        return None
 
 def create_user(user_data: dict) -> str:
-    """Create new user in database or fallback storage"""
+    """Create new user in DynamoDB"""
     user_id = str(uuid.uuid4())
     user_data['user_id'] = user_id
     user_data['created_at'] = datetime.utcnow().isoformat()
     
-    client = get_mongo_client()
-    
-    if client:
-        try:
-            db = client[MONGODB_DB_NAME]
-            users = db.users
-            users.insert_one(user_data)
-            client.close()
-            return user_id
-        except Exception as e:
-            logger.error(f"Database error: {str(e)}")
-            client.close()
-    
-    # Fallback to in-memory storage
-    DEMO_USERS[user_data['email']] = user_data
-    return user_id
+    try:
+        users_table.put_item(Item=user_data)
+        logger.info(f"✅ DynamoDB: Created user {user_id} with email {user_data.get('email')}")
+        return user_id
+        
+    except Exception as e:
+        logger.error(f"DynamoDB error creating user: {str(e)}")
+        raise Exception(f"Failed to create user: {str(e)}")
+
+def get_database_status() -> dict:
+    """Get DynamoDB connection status"""
+    try:
+        # Test DynamoDB connection by describing the users table
+        table_info = users_table.table_status
+        
+        return {
+            'connected': True,
+            'database_type': 'DynamoDB',
+            'users_table': USERS_TABLE,
+            'jobs_table': JOBS_TABLE,
+            'table_status': table_info,
+            'region': DYNAMODB_REGION
+        }
+        
+    except Exception as e:
+        logger.error(f"DynamoDB connection test failed: {str(e)}")
+        return {
+            'connected': False,
+            'database_type': 'DynamoDB',
+            'error': str(e)
+        }
 
 def handle_options(event):
     """Handle OPTIONS requests for CORS preflight"""
@@ -237,10 +234,8 @@ def handle_health_check(event):
     origin = event.get('headers', {}).get('origin') or event.get('headers', {}).get('Origin')
     
     # Check database connection status
-    mongo_client = get_mongo_client()
-    db_status = "connected" if mongo_client else "fallback_mode"
-    if mongo_client:
-        mongo_client.close()
+    db_status_info = get_database_status()
+    db_status = "connected" if db_status_info['connected'] else "disconnected"
     
     response_data = {
         'message': 'Video Splitter Pro API - Enhanced CORS Version',
@@ -249,13 +244,14 @@ def handle_health_check(event):
         'authentication': {
             'jwt_available': JWT_AVAILABLE,
             'bcrypt_available': BCRYPT_AVAILABLE,
-            'mongodb_available': MONGODB_AVAILABLE
+            'dynamodb_available': True
         },
         'database': db_status,
+        'database_info': db_status_info,
         'dependencies': {
             'bcrypt': BCRYPT_AVAILABLE,
             'jwt': JWT_AVAILABLE,
-            'pymongo': MONGODB_AVAILABLE
+            'dynamodb': True
         },
         'cors': {
             'allowed_origins': ALLOWED_ORIGINS,
@@ -330,7 +326,6 @@ def handle_register(event):
             'access_token': access_token,
             'refresh_token': refresh_token,
             'user_id': user_id,
-            'demo_mode': not get_mongo_client(),
             'user': {
                 'email': email,
                 'firstName': first_name,
