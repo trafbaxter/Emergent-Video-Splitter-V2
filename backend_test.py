@@ -46,7 +46,7 @@ class DynamoDBMigrationTester:
         print()
         
     def test_health_check_dynamodb(self):
-        """Test 1: Health Check with DynamoDB"""
+        """Test 1: Health Check Verification - Should show database_type: "DynamoDB" and connected: true"""
         print("🔍 Testing Health Check with DynamoDB...")
         
         try:
@@ -92,19 +92,25 @@ class DynamoDBMigrationTester:
                 else:
                     success_criteria.append(f"❌ demo_mode present: {demo_mode} (should not exist)")
                 
+                # Check response time (<10s as per review request)
+                if response_time < 10.0:
+                    success_criteria.append(f"✅ Response time: {response_time:.2f}s (<10s)")
+                else:
+                    success_criteria.append(f"❌ Response time: {response_time:.2f}s (≥10s)")
+                
                 all_success = all("✅" in criterion for criterion in success_criteria)
                 details = "; ".join(success_criteria)
                 
-                self.log_test("Health Check DynamoDB", all_success, details, response_time)
+                self.log_test("Health Check Verification", all_success, details, response_time)
                 return all_success
                 
             else:
-                self.log_test("Health Check DynamoDB", False, 
+                self.log_test("Health Check Verification", False, 
                             f"HTTP {response.status_code}: {response.text}", response_time)
                 return False
                 
         except Exception as e:
-            self.log_test("Health Check DynamoDB", False, f"Request failed: {str(e)}")
+            self.log_test("Health Check Verification", False, f"Request failed: {str(e)}")
             return False
     
     def test_user_registration_dynamodb(self):
