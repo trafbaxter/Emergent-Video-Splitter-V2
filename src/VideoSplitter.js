@@ -473,10 +473,10 @@ const VideoSplitter = () => {
   };
 
   // Poll for split progress
-  const pollProgress = () => {
+  const pollProgress = (processingJobId) => {
     const poll = async () => {
       try {
-        const response = await fetch(`${API_BASE}/api/job-status/${jobId}`, {
+        const response = await fetch(`${API_BASE}/api/job-status/${processingJobId}`, {
           headers: {
             'Authorization': `Bearer ${accessToken}`
           }
