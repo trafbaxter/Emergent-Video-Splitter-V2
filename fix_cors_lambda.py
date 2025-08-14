@@ -67,8 +67,8 @@ FFMPEG_LAMBDA_FUNCTION = 'ffmpeg-converter'
 
 # DynamoDB configuration
 DYNAMODB_REGION = os.environ.get('AWS_REGION', 'us-east-1')
-USERS_TABLE = os.environ.get('USERS_TABLE', 'videosplitter-users')
-JOBS_TABLE = os.environ.get('JOBS_TABLE', 'videosplitter-jobs')
+USERS_TABLE = os.environ.get('USERS_TABLE', 'VideoSplitter-Users')
+JOBS_TABLE = os.environ.get('JOBS_TABLE', 'VideoSplitter-Jobs')
 
 # DynamoDB clients
 dynamodb = boto3.resource('dynamodb', region_name=DYNAMODB_REGION)
