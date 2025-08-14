@@ -1034,14 +1034,16 @@ def handle_job_status(event):
                     
         except Exception as s3_error:
             logger.warning(f"S3 output check failed for job {job_id}: {str(s3_error)}")
-            # Return processing status if S3 check fails
+            # Return processing status if S3 check fails - preserve monotonic progress
+            fallback_progress = max(30, current_progress)  # Ensure progress never decreases
+            logger.info(f"Using fallback progress: {fallback_progress}% (current was {current_progress}%)")
             return {
                 'statusCode': 200,
                 'headers': get_cors_headers(origin),
                 'body': json.dumps({
                     'job_id': job_id,
                     'status': 'processing',
-                    'progress': 30,
+                    'progress': fallback_progress,
                     'message': 'Video processing is running. Checking for results...',
                     'note': 'Status check temporarily unavailable, processing continues'
                 })
