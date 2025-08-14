@@ -2026,6 +2026,16 @@ def lambda_handler(event, context):
             return handle_login(event)
         elif path == '/api/user/profile':
             return handle_user_profile(event)
+        # Admin routes
+        elif path == '/api/admin/users' and http_method == 'GET':
+            return handle_admin_users_list(event)
+        elif path == '/api/admin/users/approve' and http_method == 'POST':
+            return handle_admin_approve_user(event)
+        elif path == '/api/admin/users' and http_method == 'POST':
+            return handle_admin_create_user(event)
+        elif path.startswith('/api/admin/users/') and http_method == 'DELETE':
+            return handle_admin_delete_user(event)
+        # Video processing routes
         elif path == '/api/generate-presigned-url':
             return handle_generate_presigned_url(event)
         elif path == '/api/create-job-mapping':
