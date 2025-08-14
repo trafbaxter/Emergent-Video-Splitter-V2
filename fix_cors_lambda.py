@@ -2259,6 +2259,8 @@ def lambda_handler(event, context):
             return handle_admin_create_user(event)
         elif path.startswith('/api/admin/users/') and http_method == 'DELETE':
             return handle_admin_delete_user(event)
+        elif path.startswith('/api/admin/users/') and http_method == 'PUT':
+            return handle_admin_update_user(event)
         # Video processing routes
         elif path == '/api/generate-presigned-url':
             return handle_generate_presigned_url(event)
