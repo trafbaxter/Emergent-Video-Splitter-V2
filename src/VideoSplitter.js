@@ -102,7 +102,8 @@ const VideoSplitter = () => {
   // Upload and processing state
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [jobId, setJobId] = useState(null);
+  const [jobId, setJobId] = useState(null); // S3 key for uploaded video
+  const [processingJobId, setProcessingJobId] = useState(null); // Job ID for processing
   const [videoInfo, setVideoInfo] = useState(null);
   const [processing, setProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
