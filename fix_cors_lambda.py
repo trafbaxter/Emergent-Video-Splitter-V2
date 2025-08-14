@@ -181,10 +181,7 @@ def get_user_by_email(email: str) -> Optional[dict]:
     try:
         response = users_table.query(
             IndexName='EmailIndex',
-            KeyConditionExpression='email = :email',
-            ExpressionAttributeValues={
-                ':email': email
-            }
+            KeyConditionExpression=Key('email').eq(email)
         )
         
         if response['Items']:
