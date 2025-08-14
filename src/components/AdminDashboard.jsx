@@ -8,6 +8,8 @@ const AdminDashboard = () => {
   const [error, setError] = useState('');
   const [selectedUser, setSelectedUser] = useState(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [showRoleChangeModal, setShowRoleChangeModal] = useState(false);
+  const [showPasswordResetModal, setShowPasswordResetModal] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
 
   // Filter states
