@@ -104,6 +104,70 @@ const AdminDashboard = () => {
     }
   };
 
+  const handleRoleChange = async (userId, newRole) => {
+    try {
+      setActionLoading(true);
+      const response = await fetch(`${API_BASE}/api/admin/users/${userId}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ type: 'role', role: newRole })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        alert(`User role updated to ${newRole} successfully!`);
+        fetchUsers(); // Refresh user list
+        setShowRoleChangeModal(false);
+        setSelectedUser(null);
+      } else {
+        const errorData = await response.json();
+        alert(`Failed to update user role: ${errorData.message}`);
+      }
+    } catch (error) {
+      console.error('Error updating user role:', error);
+      alert('Network error while updating user role');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handlePasswordReset = async (userId, newPassword, forceChange) => {
+    try {
+      setActionLoading(true);
+      const response = await fetch(`${API_BASE}/api/admin/users/${userId}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ 
+          type: 'password', 
+          password: newPassword, 
+          forcePasswordChange: forceChange 
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        alert('User password reset successfully! User will receive an email with the new password.');
+        fetchUsers(); // Refresh user list
+        setShowPasswordResetModal(false);
+        setSelectedUser(null);
+      } else {
+        const errorData = await response.json();
+        alert(`Failed to reset password: ${errorData.message}`);
+      }
+    } catch (error) {
+      console.error('Error resetting password:', error);
+      alert('Network error while resetting password');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const filteredUsers = users.filter(user => {
     const matchesStatus = statusFilter === 'all' || user.approval_status === statusFilter;
     const matchesRole = roleFilter === 'all' || user.user_role === roleFilter;
