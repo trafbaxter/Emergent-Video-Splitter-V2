@@ -956,56 +956,67 @@ def handle_job_status(event):
                             'key': obj['Key']
                         })
             
-            # Determine status based on output files
+            # Try to get current job record to preserve progress and detailed results
+            current_progress = 25  # Default starting progress
+            detailed_results = []
+            current_status = 'processing'
+            
+            try:
+                current_response = jobs_table.get_item(Key={'job_id': job_id})
+                if 'Item' in current_response:
+                    current_job = current_response['Item']
+                    # Preserve existing progress to ensure monotonic behavior
+                    current_progress = max(current_progress, current_job.get('progress', 25))
+                    current_status = current_job.get('status', 'processing')
+                    
+                    # Get detailed results if available (contains duration info)
+                    if 'results' in current_job and current_job['results']:
+                        detailed_results = current_job['results']
+                        logger.info(f"✅ Found detailed results in DynamoDB for job {job_id}")
+            except Exception as current_error:
+                logger.warning(f"Could not get current job record: {current_error}")
+            
+            # Determine status based on output files - but ensure progress never decreases
             if len(output_files) >= 2:
                 status = 'completed'
                 progress = 100
                 message = f'Processing complete! {len(output_files)} files ready for download.'
                 
-                # Update DynamoDB if job record exists
-                try:
-                    # Only update status and completion time, preserve existing detailed results from FFmpeg Lambda
-                    jobs_table.update_item(
-                        Key={'job_id': job_id},
-                        UpdateExpression='SET #status = :status, completed_at = :completed_at',
-                        ExpressionAttributeNames={'#status': 'status'},
-                        ExpressionAttributeValues={
-                            ':status': 'completed',
-                            ':completed_at': datetime.now().isoformat()
-                        }
-                    )
-                    logger.info(f"✅ Job {job_id} marked as completed in DynamoDB")
-                except Exception as update_error:
-                    logger.warning(f"Failed to update DynamoDB for completed job {job_id}: {update_error}")
+                # Use detailed results if available, otherwise fall back to basic S3 info
+                if detailed_results and len(detailed_results) > 0:
+                    output_files = detailed_results
+                    logger.info(f"✅ Using detailed results with duration info for completed job")
+                else:
+                    logger.info(f"⚠️ Using basic S3 file listing results (no duration info)")
                 
-                # Try to get detailed results from DynamoDB (set by FFmpeg Lambda)
-                try:
-                    detailed_response = jobs_table.get_item(Key={'job_id': job_id})
-                    if 'Item' in detailed_response and 'results' in detailed_response['Item']:
-                        detailed_results = detailed_response['Item']['results']
-                        if detailed_results and len(detailed_results) > 0 and 'duration' in detailed_results[0]:
-                            # Use detailed results from FFmpeg Lambda (includes duration, start_time, end_time)
-                            output_files = detailed_results
-                            logger.info(f"✅ Using detailed results from FFmpeg Lambda with duration info")
-                        else:
-                            # Fallback to S3 file listing results
-                            logger.info(f"⚠️ Using basic S3 file listing results (no duration info)")
-                    else:
-                        logger.info(f"⚠️ No detailed results in DynamoDB, using S3 file listing")
-                except Exception as detailed_error:
-                    logger.warning(f"Failed to get detailed results from DynamoDB: {detailed_error}")
+                # Update DynamoDB completion status only if not already completed
+                if current_status != 'completed':
+                    try:
+                        jobs_table.update_item(
+                            Key={'job_id': job_id},
+                            UpdateExpression='SET #status = :status, completed_at = :completed_at, progress = :progress',
+                            ExpressionAttributeNames={'#status': 'status'},
+                            ExpressionAttributeValues={
+                                ':status': 'completed',
+                                ':completed_at': datetime.now().isoformat(),
+                                ':progress': 100
+                            }
+                        )
+                        logger.info(f"✅ Job {job_id} marked as completed in DynamoDB")
+                    except Exception as update_error:
+                        logger.warning(f"Failed to update DynamoDB for completed job {job_id}: {update_error}")
                 
                 logger.info(f"✅ Job {job_id} completed with {len(output_files)} output files")
             elif len(output_files) == 1:
                 status = 'processing'
-                progress = 50
+                progress = max(50, current_progress)  # Ensure progress doesn't decrease
                 message = 'Video processing in progress. Partial results available.'
-                logger.info(f"🔄 Job {job_id} in progress with {len(output_files)} output files")
+                logger.info(f"🔄 Job {job_id} in progress with {len(output_files)} output files, progress: {progress}%")
             else:
                 status = 'processing'
-                progress = 25
+                progress = max(25, current_progress)  # Ensure progress doesn't decrease
                 message = 'Video processing started. FFmpeg is working on your video.'
-                logger.info(f"🔄 Job {job_id} starting - no output files yet")
+                logger.info(f"🔄 Job {job_id} starting - no output files yet, progress: {progress}%")
             
             return {
                 'statusCode': 200,
