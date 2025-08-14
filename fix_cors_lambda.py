@@ -729,6 +729,14 @@ def handle_split_video(event):
         # Generate job ID for tracking
         job_id = str(uuid.uuid4())
         
+        # Map frontend split methods to FFmpeg Lambda methods
+        frontend_method = body.get('method', 'intervals')
+        ffmpeg_method = 'intervals'  # default
+        if frontend_method == 'time':
+            ffmpeg_method = 'time_based'
+        elif frontend_method == 'intervals':
+            ffmpeg_method = 'intervals'
+        
         # Prepare FFmpeg Lambda payload
         ffmpeg_payload = {
             'operation': 'split_video',
@@ -736,7 +744,7 @@ def handle_split_video(event):
             'source_key': s3_key,
             'job_id': job_id,
             'split_config': {
-                'method': body.get('method', 'intervals'),
+                'method': ffmpeg_method,
                 'time_points': body.get('time_points', []),
                 'interval_duration': body.get('interval_duration', 300),
                 'preserve_quality': body.get('preserve_quality', True),
@@ -762,7 +770,7 @@ def handle_split_video(event):
                 'estimated_time': 'Processing will begin within 1-2 minutes. Check status for updates.',
                 'note': 'Job queued for background processing. Use job-status endpoint to check progress.',
                 's3_key': s3_key,
-                'method': body.get('method', 'intervals'),
+                'method': frontend_method,
                 'config_received': True
             })
         }
@@ -775,7 +783,7 @@ def handle_split_video(event):
                 'source_bucket': BUCKET_NAME,
                 'source_key': s3_key,
                 'split_config': {
-                    'method': body.get('method', 'intervals'),
+                    'method': ffmpeg_method,
                     'time_points': body.get('time_points', []),
                     'interval_duration': body.get('interval_duration', 300),
                     'preserve_quality': body.get('preserve_quality', True),
