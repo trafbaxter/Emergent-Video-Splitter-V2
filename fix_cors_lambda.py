@@ -198,7 +198,7 @@ def verify_token(token: str, token_type: str = "access") -> Optional[dict]:
         return None
 
 def get_user_by_email(email: str) -> Optional[dict]:
-    """Get user by email from DynamoDB"""
+    """Get user by email from DynamoDB (includes soft delete check)"""
     try:
         response = users_table.query(
             IndexName='EmailIndex',
@@ -207,6 +207,10 @@ def get_user_by_email(email: str) -> Optional[dict]:
         
         if response['Items']:
             user = response['Items'][0]
+            # Check if user is soft deleted
+            if user.get('deleted', False):
+                logger.info(f"❌ User {email} is deleted")
+                return None
             logger.info(f"✅ DynamoDB: Found user with email {email}")
             return user
         else:
@@ -216,6 +220,168 @@ def get_user_by_email(email: str) -> Optional[dict]:
     except Exception as e:
         logger.error(f"DynamoDB error getting user by email: {str(e)}")
         return None
+
+def get_user_by_id(user_id: str) -> Optional[dict]:
+    """Get user by ID from DynamoDB (includes soft delete check)"""
+    try:
+        response = users_table.get_item(Key={'user_id': user_id})
+        
+        if 'Item' in response:
+            user = response['Item']
+            # Check if user is soft deleted
+            if user.get('deleted', False):
+                logger.info(f"❌ User {user_id} is deleted")
+                return None
+            logger.info(f"✅ DynamoDB: Found user with ID {user_id}")
+            return user
+        else:
+            logger.info(f"❌ DynamoDB: No user found with ID {user_id}")
+            return None
+            
+    except Exception as e:
+        logger.error(f"DynamoDB error getting user by ID: {str(e)}")
+        return None
+
+def send_email_notification(to_email: str, subject: str, body_text: str, body_html: str = None):
+    """Send email notification using AWS SES"""
+    if not SES_AVAILABLE:
+        logger.warning("⚠️ SES not available, email not sent")
+        return False
+    
+    try:
+        # Use a verified sender email
+        sender_email = "admin@videosplitter.com"  # This should be verified in SES
+        
+        message = {
+            'Subject': {'Data': subject},
+            'Body': {'Text': {'Data': body_text}}
+        }
+        
+        if body_html:
+            message['Body']['Html'] = {'Data': body_html}
+        
+        response = ses_client.send_email(
+            Source=sender_email,
+            Destination={'ToAddresses': [to_email]},
+            Message=message
+        )
+        
+        logger.info(f"✅ Email sent to {to_email}: {response['MessageId']}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"❌ Failed to send email to {to_email}: {str(e)}")
+        return False
+
+def generate_totp_secret():
+    """Generate a new TOTP secret"""
+    if not TOTP_AVAILABLE:
+        return None
+    return pyotp.random_base32()
+
+def generate_qr_code(user_email: str, totp_secret: str):
+    """Generate QR code for TOTP setup"""
+    if not TOTP_AVAILABLE:
+        return None
+    
+    try:
+        totp = pyotp.TOTP(totp_secret)
+        provisioning_uri = totp.provisioning_uri(
+            user_email,
+            issuer_name="Video Splitter Pro"
+        )
+        
+        qr = qrcode.QRCode(version=1, box_size=10, border=5)
+        qr.add_data(provisioning_uri)
+        qr.make(fit=True)
+        
+        img = qr.make_image(fill_color="black", back_color="white")
+        
+        # Convert to base64
+        buffer = BytesIO()
+        img.save(buffer, format='PNG')
+        img_str = base64.b64encode(buffer.getvalue()).decode()
+        
+        return f"data:image/png;base64,{img_str}"
+        
+    except Exception as e:
+        logger.error(f"Failed to generate QR code: {str(e)}")
+        return None
+
+def verify_totp_code(totp_secret: str, code: str):
+    """Verify TOTP code"""
+    if not TOTP_AVAILABLE or not totp_secret:
+        return False
+    
+    try:
+        totp = pyotp.TOTP(totp_secret)
+        return totp.verify(code, valid_window=1)  # Allow 1 window tolerance
+    except Exception as e:
+        logger.error(f"TOTP verification error: {str(e)}")
+        return False
+
+def generate_password_reset_token():
+    """Generate a secure password reset token"""
+    return str(uuid.uuid4())
+
+def is_user_locked(user: dict):
+    """Check if user account is locked"""
+    locked_until = user.get('locked_until')
+    if not locked_until:
+        return False
+    
+    try:
+        from datetime import datetime
+        lock_time = datetime.fromisoformat(locked_until.replace('Z', '+00:00'))
+        return datetime.utcnow() < lock_time.replace(tzinfo=None)
+    except Exception:
+        return False
+
+def increment_failed_login(user_id: str):
+    """Increment failed login attempts and lock account if needed"""
+    try:
+        current_user = get_user_by_id(user_id)
+        if not current_user:
+            return
+        
+        failed_attempts = current_user.get('failed_login_attempts', 0) + 1
+        
+        # Lock account after 5 failed attempts for 30 minutes
+        lock_until = None
+        if failed_attempts >= 5:
+            lock_until = (datetime.utcnow() + timedelta(minutes=30)).isoformat()
+        
+        users_table.update_item(
+            Key={'user_id': user_id},
+            UpdateExpression='SET failed_login_attempts = :attempts, locked_until = :lock, updated_at = :updated',
+            ExpressionAttributeValues={
+                ':attempts': failed_attempts,
+                ':lock': lock_until,
+                ':updated': datetime.utcnow().isoformat()
+            }
+        )
+        
+        if lock_until:
+            logger.warning(f"🔒 User {user_id} locked after {failed_attempts} failed attempts")
+        
+    except Exception as e:
+        logger.error(f"Error incrementing failed login: {str(e)}")
+
+def reset_failed_login(user_id: str):
+    """Reset failed login attempts after successful login"""
+    try:
+        users_table.update_item(
+            Key={'user_id': user_id},
+            UpdateExpression='SET failed_login_attempts = :zero, locked_until = :null, last_login = :now, updated_at = :updated',
+            ExpressionAttributeValues={
+                ':zero': 0,
+                ':null': None,
+                ':now': datetime.utcnow().isoformat(),
+                ':updated': datetime.utcnow().isoformat()
+            }
+        )
+    except Exception as e:
+        logger.error(f"Error resetting failed login: {str(e)}")
 
 def create_user(user_data: dict) -> str:
     """Create new user in DynamoDB"""
