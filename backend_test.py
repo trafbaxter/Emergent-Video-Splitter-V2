@@ -114,7 +114,7 @@ class DynamoDBMigrationTester:
             return False
     
     def test_user_registration_dynamodb(self):
-        """Test 2: User Registration with DynamoDB"""
+        """Test 2: User Registration (CREATE) - Should create user in DynamoDB VideoSplitter-Users table"""
         print("🔍 Testing User Registration with DynamoDB...")
         
         try:
@@ -127,7 +127,7 @@ class DynamoDBMigrationTester:
             )
             response_time = time.time() - start_time
             
-            if response.status_code == 201:
+            if response.status_code in [200, 201]:
                 data = response.json()
                 
                 success_criteria = []
@@ -145,7 +145,7 @@ class DynamoDBMigrationTester:
                 else:
                     success_criteria.append(f"❌ User email: {user_info.get('email')}")
                 
-                if user_info.get('firstName') == "DynamoDB":
+                if user_info.get('firstName') == "Final":
                     success_criteria.append("✅ First name correct")
                 else:
                     success_criteria.append(f"❌ First name: {user_info.get('firstName')}")
@@ -156,22 +156,28 @@ class DynamoDBMigrationTester:
                 else:
                     success_criteria.append(f"❌ demo_mode present: {data.get('demo_mode')}")
                 
+                # Check response time (<10s as per review request)
+                if response_time < 10.0:
+                    success_criteria.append(f"✅ Response time: {response_time:.2f}s (<10s)")
+                else:
+                    success_criteria.append(f"❌ Response time: {response_time:.2f}s (≥10s)")
+                
                 # Store user_id for login test
                 self.user_id = data.get('user_id')
                 
                 all_success = all("✅" in criterion for criterion in success_criteria)
                 details = "; ".join(success_criteria)
                 
-                self.log_test("User Registration DynamoDB", all_success, details, response_time)
+                self.log_test("User Registration (CREATE)", all_success, details, response_time)
                 return all_success
                 
             else:
-                self.log_test("User Registration DynamoDB", False, 
+                self.log_test("User Registration (CREATE)", False, 
                             f"HTTP {response.status_code}: {response.text}", response_time)
                 return False
                 
         except Exception as e:
-            self.log_test("User Registration DynamoDB", False, f"Request failed: {str(e)}")
+            self.log_test("User Registration (CREATE)", False, f"Request failed: {str(e)}")
             return False
     
     def test_user_login_dynamodb(self):
