@@ -534,7 +534,7 @@ const VideoSplitter = () => {
   // Download split file
   const downloadFile = async (filename) => {
     try {
-      const response = await fetch(`${API_BASE}/api/download/${jobId}/${filename}`, {
+      const response = await fetch(`${API_BASE}/api/download/${processingJobId}/${filename}`, {
         headers: {
           'Authorization': `Bearer ${accessToken}`
         }
