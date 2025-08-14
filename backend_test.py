@@ -179,7 +179,7 @@ class DynamoDBMigrationTester:
             
             start_time = time.time()
             response = requests.post(
-                f"{self.api_base}/api/login",
+                f"{self.api_base}/api/auth/login",
                 json=login_data,
                 headers={'Content-Type': 'application/json'},
                 timeout=10
