@@ -1037,7 +1037,7 @@ def handle_job_status(event):
                     'results': output_files,
                     'output_count': len(output_files),
                     'note': 'Real processing status based on S3 file counting'
-                })
+                }, cls=DecimalEncoder)
             }
                     
         except Exception as s3_error:
