@@ -305,15 +305,17 @@ class DynamoDBMigrationTester:
             self.log_test("Migration Completeness Check", False, f"Request failed: {str(e)}")
             return False
     
-    def test_response_times(self):
-        """Test 5: Response Times (<5 seconds)"""
-        print("🔍 Testing Response Times...")
+    def test_cors_headers(self):
+        """Test 5: CORS Headers Present - Proper CORS headers on all responses"""
+        print("🔍 Testing CORS Headers...")
         
         endpoints_to_test = [
             ("/api/", "GET"),
+            ("/api/auth/register", "OPTIONS"),
+            ("/api/auth/login", "OPTIONS")
         ]
         
-        all_fast = True
+        all_cors_working = True
         details = []
         
         for endpoint, method in endpoints_to_test:
@@ -321,20 +323,24 @@ class DynamoDBMigrationTester:
                 start_time = time.time()
                 if method == "GET":
                     response = requests.get(f"{self.api_base}{endpoint}", timeout=10)
+                elif method == "OPTIONS":
+                    response = requests.options(f"{self.api_base}{endpoint}", timeout=10)
                 response_time = time.time() - start_time
                 
-                if response_time < 5.0:
-                    details.append(f"✅ {endpoint}: {response_time:.2f}s")
+                cors_headers = response.headers.get('Access-Control-Allow-Origin')
+                
+                if cors_headers:
+                    details.append(f"✅ {endpoint} ({method}): {cors_headers}")
                 else:
-                    details.append(f"❌ {endpoint}: {response_time:.2f}s (>5s)")
-                    all_fast = False
+                    details.append(f"❌ {endpoint} ({method}): No CORS headers")
+                    all_cors_working = False
                     
             except Exception as e:
-                details.append(f"❌ {endpoint}: Failed ({str(e)})")
-                all_fast = False
+                details.append(f"❌ {endpoint} ({method}): Failed ({str(e)})")
+                all_cors_working = False
         
-        self.log_test("Response Times", all_fast, "; ".join(details))
-        return all_fast
+        self.log_test("CORS Headers", all_cors_working, "; ".join(details))
+        return all_cors_working
     
     def run_all_tests(self):
         """Run all DynamoDB migration tests"""
