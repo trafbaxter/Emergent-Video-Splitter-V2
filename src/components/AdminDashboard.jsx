@@ -460,7 +460,7 @@ const AdminDashboard = () => {
                       {user.last_login ? new Date(user.last_login).toLocaleDateString() : 'Never'}
                     </td>
                     <td style={{ padding: '15px', textAlign: 'center' }}>
-                      <div style={{ display: 'flex', gap: '5px', justifyContent: 'center' }}>
+                      <div style={{ display: 'flex', gap: '5px', justifyContent: 'center', flexWrap: 'wrap' }}>
                         {user.approval_status === 'pending' && (
                           <>
                             <button
@@ -473,7 +473,8 @@ const AdminDashboard = () => {
                                 border: 'none',
                                 borderRadius: '3px',
                                 cursor: 'pointer',
-                                fontSize: '12px'
+                                fontSize: '12px',
+                                margin: '2px'
                               }}
                             >
                               Approve
@@ -488,14 +489,57 @@ const AdminDashboard = () => {
                                 border: 'none',
                                 borderRadius: '3px',
                                 cursor: 'pointer',
-                                fontSize: '12px'
+                                fontSize: '12px',
+                                margin: '2px'
                               }}
                             >
                               Reject
                             </button>
                           </>
                         )}
-                        {user.user_role !== 'admin' && (
+                        {user.approval_status === 'approved' && (
+                          <>
+                            <button
+                              onClick={() => {
+                                setSelectedUser(user);
+                                setShowRoleChangeModal(true);
+                              }}
+                              disabled={actionLoading}
+                              style={{
+                                padding: '5px 10px',
+                                backgroundColor: '#007bff',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '3px',
+                                cursor: 'pointer',
+                                fontSize: '12px',
+                                margin: '2px'
+                              }}
+                            >
+                              Change Role
+                            </button>
+                            <button
+                              onClick={() => {
+                                setSelectedUser(user);
+                                setShowPasswordResetModal(true);
+                              }}
+                              disabled={actionLoading}
+                              style={{
+                                padding: '5px 10px',
+                                backgroundColor: '#ffc107',
+                                color: 'black',
+                                border: 'none',
+                                borderRadius: '3px',
+                                cursor: 'pointer',
+                                fontSize: '12px',
+                                margin: '2px'
+                              }}
+                            >
+                              Reset Password
+                            </button>
+                          </>
+                        )}
+                        {user.user_id !== user.email && user.user_role !== 'admin' && (
                           <button
                             onClick={() => handleDeleteUser(user.user_id)}
                             disabled={actionLoading}
@@ -506,7 +550,8 @@ const AdminDashboard = () => {
                               border: 'none',
                               borderRadius: '3px',
                               cursor: 'pointer',
-                              fontSize: '12px'
+                              fontSize: '12px',
+                              margin: '2px'
                             }}
                           >
                             Delete
