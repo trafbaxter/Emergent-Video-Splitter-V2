@@ -1056,7 +1056,7 @@ def handle_download_file(event):
         logger.info(f"Download request - Job ID: {job_id}, Filename: {filename}")
         
         # Generate download URL for the processed file
-        s3_key = f"results/{job_id}/{filename}"
+        s3_key = f"outputs/{job_id}/{filename}"
         
         try:
             # Check if file exists
