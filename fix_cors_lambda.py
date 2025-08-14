@@ -15,6 +15,7 @@ from botocore.exceptions import ClientError
 import uuid
 import re
 from datetime import datetime, timedelta
+from boto3.dynamodb.conditions import Key
 
 # Initialize logger
 logger = logging.getLogger()
