@@ -269,7 +269,21 @@ backend:
         agent: "testing"
         comment: "🎉 S3 JOB QUEUE SYSTEM WORKING PERFECTLY! Comprehensive testing confirms ALL SUCCESS CRITERIA met: 1) ✅ POST /api/split-video returns HTTP 202 in 0.15s with job_id='2c603696-3eb6-4d32-b261-cf982110d20e' and status='queued' 2) ✅ Job file created in S3 at jobs/{job_id}.json with complete processing details (646 bytes) 3) ✅ Job file contains all required fields: job_id, created_at, source_bucket, source_key, split_config (method=intervals, interval_duration=300), status=queued, output_bucket, output_prefix 4) ✅ S3 job queue operational with jobs/ directory containing job files 5) ✅ CORS headers present (Access-Control-Allow-Origin: *). The decoupled job queue system is ready for background processing trigger implementation. Split requests create proper job files in S3 that contain all parameters needed for FFmpeg processing. Success rate: 100% (3/3 tests passed)."
 
-frontend:
+  - task: "MongoDB to DynamoDB Migration Testing"
+    implemented: true
+    working: false
+    file: "fix_cors_lambda.py"
+    stuck_count: 1
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "testing"
+        comment: "Initial testing required for MongoDB to DynamoDB migration verification"
+      - working: false
+        agent: "testing"
+        comment: "❌ CRITICAL LAMBDA TIMEOUT ISSUE: Cannot test DynamoDB migration due to Lambda function consistently timing out with HTTP 504 'Endpoint request timed out' after 30+ seconds. All endpoints (/api/, /api/auth/register, /api/auth/login) are unreachable. Code analysis shows DynamoDB implementation is present (users_table, jobs_table, get_user_by_email, create_user functions) but Lambda execution is failing. This appears to be the same timeout issue mentioned throughout test_result.md history. Root cause: Lambda function execution timeout preventing all endpoint testing."
+
   - task: "Frontend Integration"
     implemented: true
     working: "NA"
