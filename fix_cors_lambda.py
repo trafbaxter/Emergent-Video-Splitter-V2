@@ -582,13 +582,14 @@ Video Splitter Pro Team
         }
 
 def handle_login(event):
-    """Handle user login"""
+    """Handle user login with approval workflow and account locks"""
     origin = event.get('headers', {}).get('origin') or event.get('headers', {}).get('Origin')
     
     try:
         body = json.loads(event['body'])
         email = body.get('email')
         password = body.get('password')
+        totp_code = body.get('totpCode')  # Optional TOTP code
         
         if not email or not password:
             return {
@@ -606,16 +607,84 @@ def handle_login(event):
                 'body': json.dumps({'message': 'Invalid credentials'})
             }
         
+        # Check approval status
+        approval_status = user.get('approval_status', 'pending')
+        if approval_status == 'pending':
+            return {
+                'statusCode': 403,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({
+                    'message': 'Account pending approval',
+                    'status': 'pending_approval',
+                    'note': 'Your account is awaiting administrator approval. You will receive an email once approved.'
+                })
+            }
+        elif approval_status == 'rejected':
+            return {
+                'statusCode': 403,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({
+                    'message': 'Account access denied',
+                    'status': 'rejected',
+                    'note': 'Your account registration has been rejected. Please contact an administrator for more information.'
+                })
+            }
+        
+        # Check if account is locked
+        if is_user_locked(user):
+            return {
+                'statusCode': 423,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({
+                    'message': 'Account temporarily locked',
+                    'status': 'locked',
+                    'note': 'Your account has been temporarily locked due to multiple failed login attempts. Please try again later.'
+                })
+            }
+        
         # Verify password
         if not verify_password(password, user['password']):
+            increment_failed_login(user['user_id'])
             return {
                 'statusCode': 401,
                 'headers': get_cors_headers(origin),
                 'body': json.dumps({'message': 'Invalid credentials'})
             }
         
+        # Check if 2FA is enabled
+        if user.get('totp_enabled', False):
+            if not totp_code:
+                return {
+                    'statusCode': 200,
+                    'headers': get_cors_headers(origin),
+                    'body': json.dumps({
+                        'message': '2FA code required',
+                        'requires_2fa': True,
+                        'user_id': user['user_id']  # Temporary for 2FA validation
+                    })
+                }
+            
+            # Verify TOTP code
+            if not verify_totp_code(user.get('totp_secret'), totp_code):
+                increment_failed_login(user['user_id'])
+                return {
+                    'statusCode': 401,
+                    'headers': get_cors_headers(origin),
+                    'body': json.dumps({'message': 'Invalid 2FA code'})
+                }
+        
+        # Check if password change is required
+        force_password_change = user.get('force_password_change', False)
+        
+        # Reset failed login attempts
+        reset_failed_login(user['user_id'])
+        
         # Create tokens
-        token_data = {'user_id': user['user_id'], 'email': email}
+        token_data = {
+            'user_id': user['user_id'], 
+            'email': email,
+            'role': user.get('user_role', 'user')
+        }
         access_token = create_access_token(token_data)
         refresh_token = create_refresh_token(token_data)
         
@@ -625,8 +694,11 @@ def handle_login(event):
             'user': {
                 'email': user['email'],
                 'firstName': user.get('first_name', ''),
-                'lastName': user.get('last_name', '')
-            }
+                'lastName': user.get('last_name', ''),
+                'role': user.get('user_role', 'user'),
+                'userId': user['user_id']
+            },
+            'force_password_change': force_password_change
         }
         
         return {
