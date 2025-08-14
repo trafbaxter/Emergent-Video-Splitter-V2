@@ -42,14 +42,26 @@ except ImportError:
 BUCKET_NAME = 'videosplitter-storage-1751560247'
 AWS_REGION = os.environ.get('AWS_REGION', 'us-east-1')
 
+# SQS Configuration
+SQS_QUEUE_URL = 'https://sqs.us-east-1.amazonaws.com/756530070939/video-processing-queue'
+
+# Initialize AWS clients
+s3_client = boto3.client('s3', region_name=AWS_REGION)
+dynamodb = boto3.resource('dynamodb', region_name=AWS_REGION)
+sqs_client = boto3.client('sqs', region_name=AWS_REGION)
+
+# DynamoDB tables
+users_table = dynamodb.Table('VideoSplitter-Users')
+jobs_table = dynamodb.Table('VideoSplitter-Jobs')
+
 # Updated CORS configuration - allow multiple origins
 ALLOWED_ORIGINS = [
     'https://develop.tads-video-splitter.com',
     'https://main.tads-video-splitter.com', 
     'https://master.tads-video-splitter.com',
     'https://working.tads-video-splitter.com',
+    'https://tads-video-splitter.com',
     'http://localhost:3000',
-    'http://localhost:3001',
     'http://127.0.0.1:3000'
 ]
 
@@ -60,20 +72,16 @@ JWT_ALGORITHM = 'HS256'
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 REFRESH_TOKEN_EXPIRE_DAYS = 7
 
-# AWS clients
-s3 = boto3.client('s3')
-lambda_client = boto3.client('lambda')
+# AWS Lambda function names
 FFMPEG_LAMBDA_FUNCTION = 'ffmpeg-converter'
 
-# DynamoDB configuration
-DYNAMODB_REGION = os.environ.get('AWS_REGION', 'us-east-1')
+# DynamoDB configuration  
 USERS_TABLE = os.environ.get('USERS_TABLE', 'VideoSplitter-Users')
 JOBS_TABLE = os.environ.get('JOBS_TABLE', 'VideoSplitter-Jobs')
+DYNAMODB_REGION = os.environ.get('AWS_REGION', 'us-east-1')
 
-# DynamoDB clients
-dynamodb = boto3.resource('dynamodb', region_name=DYNAMODB_REGION)
-users_table = dynamodb.Table(USERS_TABLE)
-jobs_table = dynamodb.Table(JOBS_TABLE)
+# Create alias for s3 client to maintain compatibility
+s3 = s3_client
 
 def get_cors_headers(origin=None):
     """Get CORS headers for API responses - temporary wildcard fix"""
@@ -754,34 +762,55 @@ def handle_split_video(event):
             }
         }
         
-        # S3-BASED JOB QUEUE: Write job details to S3 for background processing
-        # This creates a decoupled system where S3 events can trigger actual processing
+        # SQS-BASED JOB QUEUE: Send message to SQS for immediate processing
+        # This creates an event-driven system with automatic retry and dead letter queue
         
-        logger.info(f"Creating job queue entry for job: {job_id}, S3 key: {s3_key}")
+        logger.info(f"Sending SQS message for job: {job_id}, S3 key: {s3_key}")
         
-        # STEP 1: Return immediate 202 response (no blocking operations)
-        response_data = {
-            'statusCode': 202,
-            'headers': get_cors_headers(origin),
-            'body': json.dumps({
+        # STEP 1: Send message to SQS queue
+        try:
+            sqs_message = {
+                'operation': 'split_video',
+                'source_bucket': BUCKET_NAME,
+                'source_key': s3_key,
+                'job_id': job_id,
+                'split_config': {
+                    'method': ffmpeg_method,
+                    'time_points': body.get('time_points', []),
+                    'interval_duration': body.get('interval_duration', 300),
+                    'preserve_quality': body.get('preserve_quality', True),
+                    'output_format': body.get('output_format', 'mp4'),
+                    'keyframe_interval': body.get('keyframe_interval', 2),
+                    'subtitle_offset': body.get('subtitle_offset', 0)
+                }
+            }
+            
+            sqs_response = sqs_client.send_message(
+                QueueUrl=SQS_QUEUE_URL,
+                MessageBody=json.dumps(sqs_message),
+                MessageAttributes={
+                    'JobId': {
+                        'StringValue': job_id,
+                        'DataType': 'String'
+                    },
+                    'Operation': {
+                        'StringValue': 'split_video',
+                        'DataType': 'String'
+                    }
+                }
+            )
+            
+            logger.info(f"✅ SQS message sent: MessageId {sqs_response['MessageId']}")
+            
+            # STEP 2: Store job record in DynamoDB for status tracking
+            job_record = {
                 'job_id': job_id,
                 'status': 'queued',
-                'message': 'Video splitting job created successfully',
-                'estimated_time': 'Processing will begin within 1-2 minutes. Check status for updates.',
-                'note': 'Job queued for background processing. Use job-status endpoint to check progress.',
-                's3_key': s3_key,
-                'method': frontend_method,
-                'config_received': True
-            })
-        }
-        
-        # STEP 2: Create job file in S3 queue for background processing
-        try:
-            job_details = {
-                'job_id': job_id,
                 'created_at': datetime.now().isoformat(),
                 'source_bucket': BUCKET_NAME,
                 'source_key': s3_key,
+                'method': frontend_method,
+                'ffmpeg_method': ffmpeg_method,
                 'split_config': {
                     'method': ffmpeg_method,
                     'time_points': body.get('time_points', []),
@@ -791,29 +820,38 @@ def handle_split_video(event):
                     'keyframe_interval': body.get('keyframe_interval', 2),
                     'subtitle_offset': body.get('subtitle_offset', 0)
                 },
-                'status': 'queued',
                 'output_bucket': BUCKET_NAME,
-                'output_prefix': f'outputs/{job_id}/'
+                'output_prefix': f'outputs/{job_id}/',
+                'sqs_message_id': sqs_response['MessageId']
             }
             
-            # Write job file to S3 queue
-            job_key = f'jobs/{job_id}.json'
-            s3.put_object(
-                Bucket=BUCKET_NAME,
-                Key=job_key,
-                Body=json.dumps(job_details, indent=2),
-                ContentType='application/json'
-            )
+            jobs_table.put_item(Item=job_record)
+            logger.info(f"✅ Job record created in DynamoDB: {job_id}")
             
-            logger.info(f"✅ Job file created: s3://{BUCKET_NAME}/{job_key}")
-            logger.info(f"✅ Job {job_id} queued for background processing")
+            # Return success response
+            return {
+                'statusCode': 202,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({
+                    'job_id': job_id,
+                    'status': 'queued',
+                    'message': 'Video splitting job queued successfully',
+                    'estimated_time': 'Processing will begin immediately via SQS. Check status for updates.',
+                    'note': 'Job sent to SQS queue for immediate processing. Use job-status endpoint to check progress.',
+                    's3_key': s3_key,
+                    'method': frontend_method,
+                    'config_received': True,
+                    'sqs_message_id': sqs_response['MessageId']
+                })
+            }
             
         except Exception as queue_error:
-            logger.error(f"❌ Failed to create job queue entry: {str(queue_error)}")
-            # Continue anyway - user still gets immediate response
-        
-        # Return immediately - processing will happen via S3 event trigger
-        return response_data
+            logger.error(f"❌ Failed to send SQS message or create job record: {str(queue_error)}")
+            return {
+                'statusCode': 500,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'Failed to queue video processing job', 'error': str(queue_error)})
+            }
         
     except json.JSONDecodeError:
         return {
@@ -830,7 +868,7 @@ def handle_split_video(event):
         }
 
 def handle_job_status(event):
-    """Handle job status requests with real S3 file checking - original working approach"""
+    """Handle job status requests with DynamoDB + S3 hybrid checking"""
     origin = event.get('headers', {}).get('origin') or event.get('headers', {}).get('Origin')
     
     try:
@@ -850,8 +888,53 @@ def handle_job_status(event):
         
         logger.info(f"Job status request for: {job_id}")
         
-        # Use the ORIGINAL working approach: Check S3 for output files
-        # The original system used "outputs/{job_id}/" not "results/{job_id}/"
+        # STEP 1: Check DynamoDB for job record (SQS-based jobs)
+        try:
+            dynamodb_response = jobs_table.get_item(Key={'job_id': job_id})
+            
+            if 'Item' in dynamodb_response:
+                job_record = dynamodb_response['Item']
+                logger.info(f"Found job record in DynamoDB: {job_id}")
+                
+                # Check if job is marked as completed in DynamoDB
+                if job_record.get('status') == 'completed':
+                    return {
+                        'statusCode': 200,
+                        'headers': get_cors_headers(origin),
+                        'body': json.dumps({
+                            'job_id': job_id,
+                            'status': 'completed',
+                            'progress': 100,
+                            'message': job_record.get('message', 'Processing complete!'),
+                            'results': job_record.get('results', []),
+                            'completed_at': job_record.get('completed_at'),
+                            'processing_time': job_record.get('processing_time'),
+                            'note': 'Job completed via SQS processing'
+                        })
+                    }
+                elif job_record.get('status') == 'failed':
+                    return {
+                        'statusCode': 200,
+                        'headers': get_cors_headers(origin),
+                        'body': json.dumps({
+                            'job_id': job_id,
+                            'status': 'failed',
+                            'progress': 0,
+                            'message': job_record.get('error_message', 'Processing failed'),
+                            'results': [],
+                            'failed_at': job_record.get('failed_at'),
+                            'note': 'Job failed during SQS processing'
+                        })
+                    }
+                else:
+                    # Job is still processing - check S3 for partial results
+                    logger.info(f"Job {job_id} still processing, checking S3 for progress")
+        
+        except Exception as dynamodb_error:
+            logger.warning(f"DynamoDB check failed for job {job_id}: {dynamodb_error}")
+            # Fall back to S3-only checking
+        
+        # STEP 2: Check S3 for output files (works for both SQS and legacy S3-based jobs)
         try:
             output_prefix = f"outputs/{job_id}/"
             
@@ -873,11 +956,27 @@ def handle_job_status(event):
                             'key': obj['Key']
                         })
             
-            # Determine status based on output files - ORIGINAL LOGIC
+            # Determine status based on output files
             if len(output_files) >= 2:
                 status = 'completed'
                 progress = 100
                 message = f'Processing complete! {len(output_files)} files ready for download.'
+                
+                # Update DynamoDB if job record exists
+                try:
+                    jobs_table.update_item(
+                        Key={'job_id': job_id},
+                        UpdateExpression='SET #status = :status, completed_at = :completed_at, results = :results',
+                        ExpressionAttributeNames={'#status': 'status'},
+                        ExpressionAttributeValues={
+                            ':status': 'completed',
+                            ':completed_at': datetime.now().isoformat(),
+                            ':results': output_files
+                        }
+                    )
+                except Exception as update_error:
+                    logger.warning(f"Failed to update DynamoDB for completed job {job_id}: {update_error}")
+                
                 logger.info(f"✅ Job {job_id} completed with {len(output_files)} output files")
             elif len(output_files) == 1:
                 status = 'processing'
