@@ -136,8 +136,14 @@ class DownloadFunctionalityTester:
                     if download_url_field and filename_field and expires_in:
                         details.append(f"✅ {filename}: HTTP 200 with download_url, filename, expires_in ({response_time:.2f}s)")
                         
-                        # Verify it's a valid S3 presigned URL
-                        if 'amazonaws.com' in download_url_field and 'X-Amz-Signature' in download_url_field:
+                        # Verify it's a valid S3 presigned URL (either v2 or v4 signature)
+                        is_valid_s3_url = (
+                            'amazonaws.com' in download_url_field and 
+                            download_url_field.startswith('http') and
+                            ('X-Amz-Signature' in download_url_field or 'Signature' in download_url_field) and
+                            ('Expires' in download_url_field or 'X-Amz-Expires' in download_url_field)
+                        )
+                        if is_valid_s3_url:
                             details.append(f"✅ {filename}: Valid S3 presigned URL format")
                         else:
                             details.append(f"❌ {filename}: Invalid S3 URL format")
