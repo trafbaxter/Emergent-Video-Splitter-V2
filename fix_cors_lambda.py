@@ -762,34 +762,55 @@ def handle_split_video(event):
             }
         }
         
-        # S3-BASED JOB QUEUE: Write job details to S3 for background processing
-        # This creates a decoupled system where S3 events can trigger actual processing
+        # SQS-BASED JOB QUEUE: Send message to SQS for immediate processing
+        # This creates an event-driven system with automatic retry and dead letter queue
         
-        logger.info(f"Creating job queue entry for job: {job_id}, S3 key: {s3_key}")
+        logger.info(f"Sending SQS message for job: {job_id}, S3 key: {s3_key}")
         
-        # STEP 1: Return immediate 202 response (no blocking operations)
-        response_data = {
-            'statusCode': 202,
-            'headers': get_cors_headers(origin),
-            'body': json.dumps({
+        # STEP 1: Send message to SQS queue
+        try:
+            sqs_message = {
+                'operation': 'split_video',
+                'source_bucket': BUCKET_NAME,
+                'source_key': s3_key,
+                'job_id': job_id,
+                'split_config': {
+                    'method': ffmpeg_method,
+                    'time_points': body.get('time_points', []),
+                    'interval_duration': body.get('interval_duration', 300),
+                    'preserve_quality': body.get('preserve_quality', True),
+                    'output_format': body.get('output_format', 'mp4'),
+                    'keyframe_interval': body.get('keyframe_interval', 2),
+                    'subtitle_offset': body.get('subtitle_offset', 0)
+                }
+            }
+            
+            sqs_response = sqs_client.send_message(
+                QueueUrl=SQS_QUEUE_URL,
+                MessageBody=json.dumps(sqs_message),
+                MessageAttributes={
+                    'JobId': {
+                        'StringValue': job_id,
+                        'DataType': 'String'
+                    },
+                    'Operation': {
+                        'StringValue': 'split_video',
+                        'DataType': 'String'
+                    }
+                }
+            )
+            
+            logger.info(f"✅ SQS message sent: MessageId {sqs_response['MessageId']}")
+            
+            # STEP 2: Store job record in DynamoDB for status tracking
+            job_record = {
                 'job_id': job_id,
                 'status': 'queued',
-                'message': 'Video splitting job created successfully',
-                'estimated_time': 'Processing will begin within 1-2 minutes. Check status for updates.',
-                'note': 'Job queued for background processing. Use job-status endpoint to check progress.',
-                's3_key': s3_key,
-                'method': frontend_method,
-                'config_received': True
-            })
-        }
-        
-        # STEP 2: Create job file in S3 queue for background processing
-        try:
-            job_details = {
-                'job_id': job_id,
                 'created_at': datetime.now().isoformat(),
                 'source_bucket': BUCKET_NAME,
                 'source_key': s3_key,
+                'method': frontend_method,
+                'ffmpeg_method': ffmpeg_method,
                 'split_config': {
                     'method': ffmpeg_method,
                     'time_points': body.get('time_points', []),
@@ -799,29 +820,38 @@ def handle_split_video(event):
                     'keyframe_interval': body.get('keyframe_interval', 2),
                     'subtitle_offset': body.get('subtitle_offset', 0)
                 },
-                'status': 'queued',
                 'output_bucket': BUCKET_NAME,
-                'output_prefix': f'outputs/{job_id}/'
+                'output_prefix': f'outputs/{job_id}/',
+                'sqs_message_id': sqs_response['MessageId']
             }
             
-            # Write job file to S3 queue
-            job_key = f'jobs/{job_id}.json'
-            s3.put_object(
-                Bucket=BUCKET_NAME,
-                Key=job_key,
-                Body=json.dumps(job_details, indent=2),
-                ContentType='application/json'
-            )
+            jobs_table.put_item(Item=job_record)
+            logger.info(f"✅ Job record created in DynamoDB: {job_id}")
             
-            logger.info(f"✅ Job file created: s3://{BUCKET_NAME}/{job_key}")
-            logger.info(f"✅ Job {job_id} queued for background processing")
+            # Return success response
+            return {
+                'statusCode': 202,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({
+                    'job_id': job_id,
+                    'status': 'queued',
+                    'message': 'Video splitting job queued successfully',
+                    'estimated_time': 'Processing will begin immediately via SQS. Check status for updates.',
+                    'note': 'Job sent to SQS queue for immediate processing. Use job-status endpoint to check progress.',
+                    's3_key': s3_key,
+                    'method': frontend_method,
+                    'config_received': True,
+                    'sqs_message_id': sqs_response['MessageId']
+                })
+            }
             
         except Exception as queue_error:
-            logger.error(f"❌ Failed to create job queue entry: {str(queue_error)}")
-            # Continue anyway - user still gets immediate response
-        
-        # Return immediately - processing will happen via S3 event trigger
-        return response_data
+            logger.error(f"❌ Failed to send SQS message or create job record: {str(queue_error)}")
+            return {
+                'statusCode': 500,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'Failed to queue video processing job', 'error': str(queue_error)})
+            }
         
     except json.JSONDecodeError:
         return {
