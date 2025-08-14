@@ -49,7 +49,7 @@ def create_sqs_infrastructure():
             QueueName=SQS_QUEUE_NAME,
             Attributes={
                 'MessageRetentionPeriod': '1209600',  # 14 days
-                'VisibilityTimeoutSeconds': '960',     # 16 minutes (longer than Lambda timeout)
+                'VisibilityTimeout': '960',     # 16 minutes (longer than Lambda timeout)
                 'ReceiveMessageWaitTimeSeconds': '20', # Long polling
                 'RedrivePolicy': json.dumps({
                     'deadLetterTargetArn': dlq_arn,
