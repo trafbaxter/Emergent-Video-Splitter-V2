@@ -474,29 +474,39 @@ const VideoSplitter = () => {
 
   // Poll for split progress
   const pollProgress = (processingJobId) => {
+    console.log('Starting progress polling for job_id:', processingJobId);
+    
     const poll = async () => {
       try {
+        console.log('Polling job status for:', processingJobId);
         const response = await fetch(`${API_BASE}/api/job-status/${processingJobId}`, {
           headers: {
             'Authorization': `Bearer ${accessToken}`
           }
         });
 
+        console.log('Job status response:', response.status, response.statusText);
+
         if (response.ok) {
           const data = await response.json();
+          console.log('Job status data:', data);
           setProgress(data.progress || 0);
 
           if (data.status === 'completed') {
+            console.log('Job completed! Results:', data.results);
             setSplitResults(data.results || []);
             setProcessing(false);
           } else if (data.status === 'failed') {
+            console.error('Job failed:', data.error);
             alert('Processing failed: ' + (data.error || 'Unknown error'));
             setProcessing(false);
           } else {
+            console.log('Job still processing, progress:', data.progress || 0, 'status:', data.status);
             // Continue polling
             setTimeout(poll, 2000);
           }
         } else {
+          console.warn('Job status request failed, retrying in 2 seconds');
           setTimeout(poll, 2000);
         }
       } catch (error) {
