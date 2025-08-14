@@ -42,6 +42,18 @@ except ImportError:
 BUCKET_NAME = 'videosplitter-storage-1751560247'
 AWS_REGION = os.environ.get('AWS_REGION', 'us-east-1')
 
+# SQS Configuration
+SQS_QUEUE_URL = 'https://sqs.us-east-1.amazonaws.com/756530070939/video-processing-queue'
+
+# Initialize AWS clients
+s3_client = boto3.client('s3', region_name=AWS_REGION)
+dynamodb = boto3.resource('dynamodb', region_name=AWS_REGION)
+sqs_client = boto3.client('sqs', region_name=AWS_REGION)
+
+# DynamoDB tables
+users_table = dynamodb.Table('VideoSplitter-Users')
+jobs_table = dynamodb.Table('VideoSplitter-Jobs')
+
 # Updated CORS configuration - allow multiple origins
 ALLOWED_ORIGINS = [
     'https://develop.tads-video-splitter.com',
