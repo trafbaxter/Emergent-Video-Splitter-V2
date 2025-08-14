@@ -38,14 +38,6 @@ except ImportError:
     BCRYPT_AVAILABLE = False
     logger.warning("⚠️ bcrypt library not available")
 
-try:
-    from pymongo import MongoClient
-    MONGODB_AVAILABLE = True
-    logger.info("✅ pymongo library loaded successfully")
-except ImportError:
-    MONGODB_AVAILABLE = False
-    logger.warning("⚠️ pymongo library not available")
-
 # Environment variables
 BUCKET_NAME = 'videosplitter-storage-1751560247'
 AWS_REGION = os.environ.get('AWS_REGION', 'us-east-1')
