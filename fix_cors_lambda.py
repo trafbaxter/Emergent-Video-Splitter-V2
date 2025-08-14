@@ -932,7 +932,7 @@ def handle_job_status(event):
                             'results': [],
                             'failed_at': job_record.get('failed_at'),
                             'note': 'Job failed during SQS processing'
-                        })
+                        }, cls=DecimalEncoder)
                     }
                 else:
                     # Job is still processing - check S3 for partial results
