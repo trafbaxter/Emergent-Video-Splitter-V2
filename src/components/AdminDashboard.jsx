@@ -583,6 +583,32 @@ const AdminDashboard = () => {
           API_BASE={API_BASE}
         />
       )}
+
+      {/* Role Change Modal */}
+      {showRoleChangeModal && selectedUser && (
+        <RoleChangeModal
+          user={selectedUser}
+          onClose={() => {
+            setShowRoleChangeModal(false);
+            setSelectedUser(null);
+          }}
+          onRoleChanged={handleRoleChange}
+          actionLoading={actionLoading}
+        />
+      )}
+
+      {/* Password Reset Modal */}
+      {showPasswordResetModal && selectedUser && (
+        <PasswordResetModal
+          user={selectedUser}
+          onClose={() => {
+            setShowPasswordResetModal(false);
+            setSelectedUser(null);
+          }}
+          onPasswordReset={handlePasswordReset}
+          actionLoading={actionLoading}
+        />
+      )}
     </div>
   );
 };
