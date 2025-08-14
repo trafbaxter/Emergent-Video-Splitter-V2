@@ -770,7 +770,7 @@ def handle_split_video(event):
                 'estimated_time': 'Processing will begin within 1-2 minutes. Check status for updates.',
                 'note': 'Job queued for background processing. Use job-status endpoint to check progress.',
                 's3_key': s3_key,
-                'method': body.get('method', 'intervals'),
+                'method': frontend_method,
                 'config_received': True
             })
         }
