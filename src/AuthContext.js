@@ -158,16 +158,25 @@ export const AuthProvider = ({ children }) => {
   const logout = () => {
     setUser(null);
     setAccessToken(null);
+    setRequires2FASetup(false);
     localStorage.removeItem('access_token');
+  };
+
+  const complete2FASetup = () => {
+    setRequires2FASetup(false);
+    // Refresh user profile to get updated 2FA status
+    fetchUserProfile();
   };
 
   const value = {
     user,
     loading,
     accessToken,
+    requires2FASetup,
     login,
     register,
     logout,
+    complete2FASetup,
     API_BASE
   };
 
