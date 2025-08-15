@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from './AuthContext';
+import PasswordReset from './components/PasswordReset';
 
 const LoginForm = ({ onToggleForm }) => {
   const [email, setEmail] = useState('');
