@@ -297,8 +297,8 @@ def get_frontend_domain(origin):
     """Get frontend domain for password reset links"""
     if origin and origin in ALLOWED_ORIGINS:
         return origin
-    # Default to the main domain
-    return 'https://tads-video-splitter.com'
+    # Default to the main production domain
+    return 'https://working.tads-video-splitter.com'
 
 def send_password_reset_email(user, reset_link):
     """Send password reset email to user"""
