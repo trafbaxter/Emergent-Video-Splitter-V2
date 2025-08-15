@@ -21,6 +21,12 @@ const AppContent = () => {
     setCurrentView('video-splitter'); // Reset to default view
   };
 
+  const handle2FASetupComplete = (success) => {
+    if (success) {
+      complete2FASetup();
+    }
+  };
+
   if (!user) {
     return (
       <div style={{
@@ -35,6 +41,59 @@ const AppContent = () => {
         ) : (
           <LoginForm onToggleForm={handleToggleForm} />
         )}
+      </div>
+    );
+  }
+
+  // Show mandatory 2FA setup if required
+  if (requires2FASetup) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '20px'
+      }}>
+        <div style={{
+          backgroundColor: 'rgba(255, 255, 255, 0.95)',
+          borderRadius: '12px',
+          padding: '40px',
+          maxWidth: '600px',
+          width: '100%',
+          boxShadow: '0 10px 30px rgba(0,0,0,0.3)',
+          textAlign: 'center'
+        }}>
+          <h1 style={{ color: '#333', marginBottom: '20px' }}>🔐 Security Setup Required</h1>
+          <p style={{ color: '#666', fontSize: '18px', marginBottom: '30px' }}>
+            For your security, Two-Factor Authentication (2FA) is required for all accounts. 
+            Please set up 2FA to continue using Video Splitter Pro.
+          </p>
+          <div style={{
+            backgroundColor: '#fff3cd',
+            border: '1px solid #ffeaa7',
+            borderRadius: '8px',
+            padding: '15px',
+            marginBottom: '30px',
+            color: '#856404'
+          }}>
+            <strong>🛡️ Why 2FA?</strong>
+            <br />
+            Two-Factor Authentication adds an extra layer of security to your account, 
+            protecting your videos and personal information from unauthorized access.
+          </div>
+          
+          <TwoFactorSetup
+            isOpen={true}
+            onClose={() => {}} // Cannot close mandatory setup
+            onSetupComplete={handle2FASetupComplete}
+          />
+          
+          <div style={{ marginTop: '20px', fontSize: '14px', color: '#666' }}>
+            Need help? Contact support for assistance with 2FA setup.
+          </div>
+        </div>
       </div>
     );
   }
