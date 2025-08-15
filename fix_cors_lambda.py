@@ -293,6 +293,91 @@ def send_email_notification(to_email: str, subject: str, body_text: str, body_ht
         logger.error(f"❌ Failed to send email to {to_email}: {str(e)}")
         return False
 
+def get_frontend_domain(origin):
+    """Get frontend domain for password reset links"""
+    if origin and origin in ALLOWED_ORIGINS:
+        return origin
+    # Default to the main domain
+    return 'https://tads-video-splitter.com'
+
+def send_password_reset_email(user, reset_link):
+    """Send password reset email to user"""
+    subject = "Password Reset Request - Video Splitter Pro"
+    
+    body_text = f"""
+Hello {user.get('first_name', 'User')},
+
+You have requested to reset your password for Video Splitter Pro.
+
+Please click the following link to reset your password:
+{reset_link}
+
+This link will expire in 1 hour for security reasons.
+
+If you did not request this password reset, please ignore this email.
+
+Best regards,
+Video Splitter Pro Team
+    """.strip()
+    
+    body_html = f"""
+    <html>
+    <body>
+        <h2>Password Reset Request</h2>
+        <p>Hello {user.get('first_name', 'User')},</p>
+        
+        <p>You have requested to reset your password for Video Splitter Pro.</p>
+        
+        <p><a href="{reset_link}" style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Reset Password</a></p>
+        
+        <p>Or copy and paste this link into your browser:<br>
+        <a href="{reset_link}">{reset_link}</a></p>
+        
+        <p><strong>This link will expire in 1 hour for security reasons.</strong></p>
+        
+        <p>If you did not request this password reset, please ignore this email.</p>
+        
+        <p>Best regards,<br>
+        Video Splitter Pro Team</p>
+    </body>
+    </html>
+    """.strip()
+    
+    return send_email_notification(user['email'], subject, body_text, body_html)
+
+def send_password_reset_confirmation_email(user):
+    """Send password reset confirmation email"""
+    subject = "Password Reset Successful - Video Splitter Pro"
+    
+    body_text = f"""
+Hello {user.get('first_name', 'User')},
+
+Your password has been successfully reset for Video Splitter Pro.
+
+If you did not make this change, please contact support immediately.
+
+Best regards,
+Video Splitter Pro Team
+    """.strip()
+    
+    body_html = f"""
+    <html>
+    <body>
+        <h2>Password Reset Successful</h2>
+        <p>Hello {user.get('first_name', 'User')},</p>
+        
+        <p>Your password has been successfully reset for Video Splitter Pro.</p>
+        
+        <p><strong>If you did not make this change, please contact support immediately.</strong></p>
+        
+        <p>Best regards,<br>
+        Video Splitter Pro Team</p>
+    </body>
+    </html>
+    """.strip()
+    
+    return send_email_notification(user['email'], subject, body_text, body_html)
+
 def generate_totp_secret():
     """Generate a new TOTP secret"""
     if not TOTP_AVAILABLE:
@@ -2553,6 +2638,173 @@ Video Splitter Pro Team
             'body': json.dumps({'message': 'Failed to disable 2FA', 'error': str(e)})
         }
 
+def handle_forgot_password(event):
+    """Handle forgot password request - send reset email"""
+    origin = event.get('headers', {}).get('origin') or event.get('headers', {}).get('Origin')
+    
+    try:
+        # Parse request body
+        body = json.loads(event.get('body', '{}'))
+        email = body.get('email', '').strip().lower()
+        
+        # Validate email
+        if not email or '@' not in email:
+            return {
+                'statusCode': 400,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'Valid email address is required'})
+            }
+        
+        # Check if user exists
+        user = get_user_by_email(email)
+        if not user:
+            # For security, don't reveal if email doesn't exist
+            return {
+                'statusCode': 200,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({
+                    'message': 'If an account with that email exists, you will receive password reset instructions.'
+                })
+            }
+        
+        # Generate secure reset token
+        reset_token = str(uuid.uuid4())
+        reset_expires = datetime.utcnow() + timedelta(hours=1)  # Token expires in 1 hour
+        
+        # Store reset token in DynamoDB
+        users_table = dynamodb.Table('VideoSplitter-Users')
+        users_table.update_item(
+            Key={'user_id': user['user_id']},
+            UpdateExpression='SET reset_token = :token, reset_expires = :expires',
+            ExpressionAttributeValues={
+                ':token': reset_token,
+                ':expires': reset_expires.isoformat()
+            }
+        )
+        
+        # Prepare reset link
+        # In production, this should be your frontend domain
+        frontend_domain = get_frontend_domain(origin)
+        reset_link = f"{frontend_domain}/reset-password?token={reset_token}"
+        
+        # Send password reset email
+        email_sent = send_password_reset_email(user, reset_link)
+        
+        return {
+            'statusCode': 200,
+            'headers': get_cors_headers(origin),
+            'body': json.dumps({
+                'message': 'If an account with that email exists, you will receive password reset instructions.',
+                'email_sent': email_sent
+            })
+        }
+        
+    except json.JSONDecodeError:
+        return {
+            'statusCode': 400,
+            'headers': get_cors_headers(origin),
+            'body': json.dumps({'message': 'Invalid JSON in request body'})
+        }
+    except Exception as e:
+        logger.error(f"Forgot password error: {str(e)}")
+        return {
+            'statusCode': 500,
+            'headers': get_cors_headers(origin),
+            'body': json.dumps({'message': 'Internal server error'})
+        }
+
+def handle_reset_password(event):
+    """Handle password reset completion with token"""
+    origin = event.get('headers', {}).get('origin') or event.get('headers', {}).get('Origin')
+    
+    try:
+        # Parse request body
+        body = json.loads(event.get('body', '{}'))
+        reset_token = body.get('token', '').strip()
+        new_password = body.get('password', '').strip()
+        
+        # Validate input
+        if not reset_token:
+            return {
+                'statusCode': 400,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'Reset token is required'})
+            }
+        
+        if not new_password or len(new_password) < 8:
+            return {
+                'statusCode': 400,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'Password must be at least 8 characters long'})
+            }
+        
+        # Find user by reset token
+        users_table = dynamodb.Table('VideoSplitter-Users')
+        response = users_table.scan(
+            FilterExpression=Key('reset_token').eq(reset_token),
+            ProjectionExpression='user_id, email, firstName, lastName, reset_expires'
+        )
+        
+        users = response.get('Items', [])
+        if not users:
+            return {
+                'statusCode': 400,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'Invalid or expired reset token'})
+            }
+        
+        user = users[0]
+        
+        # Check if token is expired
+        reset_expires = datetime.fromisoformat(user.get('reset_expires', ''))
+        if datetime.utcnow() > reset_expires:
+            return {
+                'statusCode': 400,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'Reset token has expired'})
+            }
+        
+        # Hash new password
+        hashed_password = hash_password(new_password)
+        
+        # Update user password and clear reset token
+        users_table.update_item(
+            Key={'user_id': user['user_id']},
+            UpdateExpression='SET password_hash = :password, reset_token = :null_token, reset_expires = :null_expires, force_password_change = :false',
+            ExpressionAttributeValues={
+                ':password': hashed_password,
+                ':null_token': None,
+                ':null_expires': None,
+                ':false': False
+            }
+        )
+        
+        # Send confirmation email
+        send_password_reset_confirmation_email(user)
+        
+        return {
+            'statusCode': 200,
+            'headers': get_cors_headers(origin),
+            'body': json.dumps({
+                'message': 'Password has been reset successfully. You can now log in with your new password.',
+                'success': True
+            })
+        }
+        
+    except json.JSONDecodeError:
+        return {
+            'statusCode': 400,
+            'headers': get_cors_headers(origin),
+            'body': json.dumps({'message': 'Invalid JSON in request body'})
+        }
+    except Exception as e:
+        logger.error(f"Reset password error: {str(e)}")
+        return {
+            'statusCode': 500,
+            'headers': get_cors_headers(origin),
+            'body': json.dumps({'message': 'Internal server error'})
+        }
+
 def handle_admin_user_2fa_control(event):
     """Handle admin control of user 2FA - force enable/disable for users"""
     origin = event.get('headers', {}).get('origin') or event.get('headers', {}).get('Origin')
@@ -2730,6 +2982,10 @@ def lambda_handler(event, context):
             return handle_register(event)
         elif path == '/api/auth/login':
             return handle_login(event)
+        elif path == '/api/auth/forgot-password' and http_method == 'POST':
+            return handle_forgot_password(event)
+        elif path == '/api/auth/reset-password' and http_method == 'POST':
+            return handle_reset_password(event)
         # User routes
         elif path == '/api/user/profile':
             return handle_user_profile(event)
