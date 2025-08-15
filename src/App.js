@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './AuthContext';
 import LoginForm from './LoginForm';
 import RegisterForm from './RegisterForm';
@@ -6,6 +7,7 @@ import VideoSplitter from './VideoSplitter';
 import AdminDashboard from './components/AdminDashboard';
 import UserProfile from './components/UserProfile';
 import TwoFactorSetup from './components/TwoFactorSetup';
+import PasswordResetComplete from './components/PasswordResetComplete';
 
 const AppContent = () => {
   const { user, logout, requires2FASetup, complete2FASetup } = useAuth();
