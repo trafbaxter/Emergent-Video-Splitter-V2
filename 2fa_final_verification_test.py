@@ -175,13 +175,27 @@ class TwoFAFinalVerificationTest:
                                 response_time)
                     return False
                     
-                # Validate QR code format (should contain provisioning URI)
-                qr_code = data.get('qr_code', '')
-                provisioning_uri = data.get('provisioning_uri', '')
+                # Validate QR code format (now returns dict with provisioning_uri)
+                qr_code = data.get('qr_code', {})
                 
-                if not qr_code.startswith('data:image/png;base64,'):
+                if isinstance(qr_code, dict):
+                    # New format - dict with provisioning_uri
+                    provisioning_uri = qr_code.get('provisioning_uri', '')
+                    if not provisioning_uri.startswith('otpauth://totp/'):
+                        self.log_test("2FA Setup Endpoint", False, 
+                                    f"Invalid provisioning URI format. Expected otpauth://totp/, got: {provisioning_uri[:50]}...", 
+                                    response_time)
+                        return False
+                elif isinstance(qr_code, str):
+                    # Old format - base64 string
+                    if not qr_code.startswith('data:image/png;base64,'):
+                        self.log_test("2FA Setup Endpoint", False, 
+                                    f"Invalid QR code format. Expected data:image/png;base64, got: {qr_code[:50]}...", 
+                                    response_time)
+                        return False
+                else:
                     self.log_test("2FA Setup Endpoint", False, 
-                                f"Invalid QR code format. Expected data:image/png;base64, got: {qr_code[:50]}...", 
+                                f"Invalid QR code type. Expected dict or string, got: {type(qr_code)}", 
                                 response_time)
                     return False
                     
