@@ -752,13 +752,26 @@ def handle_login(event):
             }
         
         # Verify password
-        if not verify_password(password, user['password']):
+        logger.info(f"🔍 Verifying password for user {user['user_id']}")
+        stored_password_hash = user.get('password_hash') or user.get('password')
+        if not stored_password_hash:
+            logger.error(f"❌ No password hash found for user {user['user_id']}")
+            return {
+                'statusCode': 401,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'Invalid credentials'})
+            }
+        
+        if not verify_password(password, stored_password_hash):
+            logger.info(f"❌ Password verification failed for user {user['user_id']}")
             increment_failed_login(user['user_id'])
             return {
                 'statusCode': 401,
                 'headers': get_cors_headers(origin),
                 'body': json.dumps({'message': 'Invalid credentials'})
             }
+        
+        logger.info(f"✅ Password verification successful for user {user['user_id']}")
         
         # Check if 2FA is enabled
         if user.get('totp_enabled', False):
