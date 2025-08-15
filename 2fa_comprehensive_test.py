@@ -371,7 +371,7 @@ class TwoFAFunctionalityTester:
                 login_with_2fa_data = {
                     "email": self.admin_email,
                     "password": self.admin_password,
-                    "totp_code": totp_code
+                    "code": totp_code
                 }
                 
                 start_time = time.time()
