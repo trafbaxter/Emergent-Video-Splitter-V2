@@ -244,9 +244,6 @@ const LoginForm = ({ onToggleForm }) => {
         
         <div style={{ marginTop: '15px', padding: '10px', backgroundColor: '#f8f9fa', borderRadius: '4px' }}>
           <small style={{ color: '#666' }}>
-            <strong>Demo Admin Access:</strong><br />
-            Email: admin@videosplitter.com<br />
-            Password: AdminPass123!
           </small>
         </div>
       </div>
