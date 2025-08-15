@@ -68,7 +68,8 @@ const PasswordResetComplete = () => {
   };
 
   const handleBackToLogin = () => {
-    navigate('/');
+    // Clear URL parameters and go back to login
+    window.location.href = window.location.origin;
   };
 
   if (success) {
