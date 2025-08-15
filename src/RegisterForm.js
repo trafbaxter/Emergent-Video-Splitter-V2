@@ -49,6 +49,12 @@ const RegisterForm = ({ onToggleForm }) => {
     
     if (!result.success) {
       setError(result.error);
+    } else {
+      // Check if account needs approval
+      if (result.status === 'pending_approval') {
+        alert(`Registration successful! Your account is pending administrator approval. You will receive an email notification once your account is approved.`);
+        onToggleForm(); // Switch back to login form
+      }
     }
     
     setLoading(false);
