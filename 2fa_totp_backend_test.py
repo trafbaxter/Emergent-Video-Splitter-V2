@@ -339,7 +339,8 @@ class TwoFATestSuite:
             
             if response.status_code == 200:
                 data = response.json()
-                user_id = data.get('user_id') or data.get('id')
+                user_data = data.get('user', {})
+                user_id = user_data.get('userId') or user_data.get('user_id') or user_data.get('id')
                 self.regular_user_id = user_id
                 return user_id
             else:
