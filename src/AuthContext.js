@@ -14,6 +14,7 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [accessToken, setAccessToken] = useState(localStorage.getItem('access_token'));
+  const [requires2FASetup, setRequires2FASetup] = useState(false);
   
   const API_BASE = process.env.REACT_APP_BACKEND_URL || 'https://2419j971hh.execute-api.us-east-1.amazonaws.com/prod';
 
@@ -37,6 +38,13 @@ export const AuthProvider = ({ children }) => {
       if (response.ok) {
         const data = await response.json();
         setUser(data.user);
+        
+        // Check if 2FA is required but not set up
+        if (!data.user.totpEnabled) {
+          setRequires2FASetup(true);
+        } else {
+          setRequires2FASetup(false);
+        }
       } else {
         // Token is invalid or expired
         logout();
@@ -49,25 +57,63 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const login = async (email, password) => {
+  const login = async (email, password, totpCode = null) => {
     try {
+      const requestBody = { email, password };
+      if (totpCode) {
+        requestBody.totpCode = totpCode;
+      }
+
       const response = await fetch(`${API_BASE}/api/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify(requestBody)
       });
 
       const data = await response.json();
 
       if (response.ok) {
+        // Check if 2FA is required
+        if (data.requires_2fa) {
+          return { 
+            success: false, 
+            requires_2fa: true, 
+            user_id: data.user_id,
+            error: '2FA code required' 
+          };
+        }
+
+        // Successful login
         setAccessToken(data.access_token);
         localStorage.setItem('access_token', data.access_token);
         setUser(data.user);
-        return { success: true };
+        
+        return { 
+          success: true, 
+          force_password_change: data.force_password_change 
+        };
       } else {
-        return { success: false, error: data.message || 'Login failed' };
+        // Handle different error statuses
+        if (response.status === 403) {
+          return { 
+            success: false, 
+            status: data.status,
+            error: data.message || 'Access denied' 
+          };
+        } else if (response.status === 423) {
+          return { 
+            success: false, 
+            status: 'locked',
+            error: data.message || 'Account locked' 
+          };
+        } else {
+          return { 
+            success: false, 
+            error: data.message || 'Login failed' 
+          };
+        }
       }
     } catch (error) {
       return { success: false, error: 'Network error. Please try again.' };
@@ -87,10 +133,20 @@ export const AuthProvider = ({ children }) => {
       const data = await response.json();
 
       if (response.ok) {
-        setAccessToken(data.access_token);
-        localStorage.setItem('access_token', data.access_token);
-        setUser(data.user);
-        return { success: true };
+        // Check if registration requires approval
+        if (data.status === 'pending_approval') {
+          return { 
+            success: true, 
+            status: 'pending_approval',
+            message: data.message 
+          };
+        } else {
+          // Auto-approved registration (shouldn't happen with new system, but handle it)
+          setAccessToken(data.access_token);
+          localStorage.setItem('access_token', data.access_token);
+          setUser(data.user);
+          return { success: true };
+        }
       } else {
         return { success: false, error: data.message || 'Registration failed' };
       }
@@ -102,16 +158,25 @@ export const AuthProvider = ({ children }) => {
   const logout = () => {
     setUser(null);
     setAccessToken(null);
+    setRequires2FASetup(false);
     localStorage.removeItem('access_token');
+  };
+
+  const complete2FASetup = () => {
+    setRequires2FASetup(false);
+    // Refresh user profile to get updated 2FA status
+    fetchUserProfile();
   };
 
   const value = {
     user,
     loading,
     accessToken,
+    requires2FASetup,
     login,
     register,
     logout,
+    complete2FASetup,
     API_BASE
   };
 
