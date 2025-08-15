@@ -9,7 +9,7 @@ import UserProfile from './components/UserProfile';
 import TwoFactorSetup from './components/TwoFactorSetup';
 import PasswordResetComplete from './components/PasswordResetComplete';
 
-const AppContent = () => {
+const MainApp = () => {
   const { user, logout, requires2FASetup, complete2FASetup } = useAuth();
   const [showRegister, setShowRegister] = useState(false);
   const [currentView, setCurrentView] = useState('video-splitter'); // 'video-splitter', 'admin', or 'profile'
