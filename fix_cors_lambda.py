@@ -52,14 +52,11 @@ AWS_REGION = os.environ.get('AWS_REGION', 'us-east-1')
 
 try:
     import pyotp
-    import qrcode
-    from io import BytesIO
-    import base64
     TOTP_AVAILABLE = True
-    logger.info("✅ TOTP libraries loaded successfully")
+    logger.info("✅ TOTP library loaded successfully")
 except ImportError:
     TOTP_AVAILABLE = False
-    logger.warning("⚠️ TOTP libraries not available")
+    logger.warning("⚠️ TOTP library not available")
 
 try:
     import boto3
