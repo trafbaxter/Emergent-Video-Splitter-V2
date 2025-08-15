@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../AuthContext';
-import QRCode from 'qrcode.react';
+import { QRCodeCanvas } from 'qrcode.react';
 
 const TwoFactorSetup = ({ isOpen, onClose, onSetupComplete }) => {
   const { accessToken, API_BASE } = useAuth();
