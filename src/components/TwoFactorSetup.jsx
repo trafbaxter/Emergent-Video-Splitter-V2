@@ -208,33 +208,25 @@ const TwoFactorSetup = ({ isOpen, onClose, onSetupComplete }) => {
             <div style={{ marginBottom: '25px' }}>
               <h3 style={{ color: '#555', fontSize: '16px' }}>Step 2: Add Your Account</h3>
               
-              {qrCodeDataURL ? (
-                <div style={{ textAlign: 'center', marginBottom: '20px' }}>
-                  <p style={{ color: '#666', fontSize: '14px' }}>Scan this QR code with your app:</p>
-                  <img 
-                    src={qrCodeDataURL} 
-                    alt="2FA QR Code" 
-                    style={{ 
-                      border: '1px solid #ddd', 
-                      borderRadius: '8px',
-                      maxWidth: '200px',
-                      margin: '10px 0'
-                    }} 
+              {/* QR Code Display */}
+              <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+                <p style={{ color: '#666', fontSize: '14px' }}>Scan this QR code with your app:</p>
+                <div style={{ 
+                  display: 'inline-block',
+                  padding: '15px',
+                  backgroundColor: 'white',
+                  borderRadius: '8px',
+                  border: '1px solid #ddd',
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                }}>
+                  <QRCode 
+                    value={qrCodeDataURL || ''} 
+                    size={200}
+                    level="M"
+                    includeMargin={true}
                   />
                 </div>
-              ) : (
-                <div style={{ 
-                  textAlign: 'center', 
-                  padding: '20px', 
-                  backgroundColor: '#f8f9fa', 
-                  borderRadius: '8px',
-                  marginBottom: '20px'
-                }}>
-                  <p style={{ color: '#666', fontSize: '14px', margin: 0 }}>
-                    QR code generation unavailable. Use manual entry below.
-                  </p>
-                </div>
-              )}
+              </div>
 
               <div style={{ 
                 backgroundColor: '#f8f9fa', 
