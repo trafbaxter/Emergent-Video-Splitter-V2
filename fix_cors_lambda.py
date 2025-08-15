@@ -303,7 +303,7 @@ def generate_totp_secret():
     return pyotp.random_base32()
 
 def generate_qr_code(user_email: str, totp_secret: str):
-    """Generate QR code for TOTP setup"""
+    """Generate QR code for TOTP setup - QR code generation disabled"""
     if not TOTP_AVAILABLE:
         return None
     
@@ -314,21 +314,16 @@ def generate_qr_code(user_email: str, totp_secret: str):
             issuer_name="Video Splitter Pro"
         )
         
-        qr = qrcode.QRCode(version=1, box_size=10, border=5)
-        qr.add_data(provisioning_uri)
-        qr.make(fit=True)
-        
-        img = qr.make_image(fill_color="black", back_color="white")
-        
-        # Convert to base64
-        buffer = BytesIO()
-        img.save(buffer, format='PNG')
-        img_str = base64.b64encode(buffer.getvalue()).decode()
-        
-        return f"data:image/png;base64,{img_str}"
+        # QR code generation disabled - return provisioning URI instead
+        logger.info(f"QR code generation disabled, returning provisioning URI")
+        return {
+            'provisioning_uri': provisioning_uri,
+            'message': 'QR code generation not available. Use the provisioning URI with your authenticator app.',
+            'qr_disabled': True
+        }
         
     except Exception as e:
-        logger.error(f"Failed to generate QR code: {str(e)}")
+        logger.error(f"Failed to generate provisioning URI: {str(e)}")
         return None
 
 def verify_totp_code(totp_secret: str, code: str):
