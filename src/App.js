@@ -8,9 +8,9 @@ import UserProfile from './components/UserProfile';
 import TwoFactorSetup from './components/TwoFactorSetup';
 
 const AppContent = () => {
-  const { user, logout } = useAuth();
+  const { user, logout, requires2FASetup, complete2FASetup } = useAuth();
   const [showRegister, setShowRegister] = useState(false);
-  const [currentView, setCurrentView] = useState('video-splitter'); // 'video-splitter' or 'admin'
+  const [currentView, setCurrentView] = useState('video-splitter'); // 'video-splitter', 'admin', or 'profile'
 
   const handleToggleForm = () => {
     setShowRegister(!showRegister);
