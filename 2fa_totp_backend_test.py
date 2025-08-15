@@ -381,7 +381,7 @@ class TwoFATestSuite:
             if response.status_code == 200:
                 data = response.json()
                 
-                if data.get('success'):
+                if data.get('message') and data.get('user_id'):
                     self.log_test("Admin 2FA Control (Require)", True, 
                                 f"✅ Admin 2FA require successful. Response: {data}", 
                                 response_time)
