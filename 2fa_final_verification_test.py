@@ -32,13 +32,10 @@ class TwoFAFinalVerificationTest:
         self.api_base = API_BASE
         self.test_results = []
         
-        # Test users - using realistic data as per instructions
+        # Test users - using existing approved user from test_result.md
         self.test_user = {
-            "email": "sarah.johnson@example.com",
-            "password": "SecurePass2024!",
-            "firstName": "Sarah",
-            "lastName": "Johnson",
-            "confirmPassword": "SecurePass2024!"
+            "email": "test-pending@example.com",
+            "password": "TestPassword123!"
         }
         
         self.admin_user = {
