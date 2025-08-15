@@ -70,16 +70,22 @@ def deploy_lambda_function():
         print(f"   Size: {response['CodeSize']} bytes")
         print(f"   Last Modified: {response['LastModified']}")
         
-        # Update function configuration for timeout
+        # Update function configuration for timeout and environment variables
         config_response = lambda_client.update_function_configuration(
             FunctionName=LAMBDA_FUNCTION_NAME,
             Timeout=LAMBDA_TIMEOUT,
-            MemorySize=LAMBDA_MEMORY
+            MemorySize=LAMBDA_MEMORY,
+            Environment={
+                'Variables': {
+                    'SES_SENDER_EMAIL': 'taddobbins@gmail.com'
+                }
+            }
         )
         
         print(f"✅ Lambda configuration updated!")
         print(f"   Timeout: {config_response['Timeout']} seconds")
         print(f"   Memory: {config_response['MemorySize']} MB")
+        print(f"   SES Sender Email: {config_response.get('Environment', {}).get('Variables', {}).get('SES_SENDER_EMAIL', 'Not set')}")
         
         return True
         
