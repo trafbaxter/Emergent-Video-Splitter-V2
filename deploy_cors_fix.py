@@ -33,7 +33,7 @@ def create_deployment_package():
         # Create ZIP file
         zip_path = os.path.join(temp_dir, 'lambda_package.zip')
         with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
-            # Add the lambda function
+            # Add the lambda function with correct name for handler
             zipf.write(os.path.join(package_dir, 'lambda_function.py'), 'lambda_function.py')
             
             # Add 2FA dependencies if they exist
