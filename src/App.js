@@ -206,6 +206,8 @@ const AppContent = () => {
       <div style={{ padding: '20px 0' }}>
         {currentView === 'video-splitter' ? (
           <VideoSplitter />
+        ) : currentView === 'profile' ? (
+          <UserProfile />
         ) : currentView === 'admin' && user.role === 'admin' ? (
           <AdminDashboard />
         ) : (
