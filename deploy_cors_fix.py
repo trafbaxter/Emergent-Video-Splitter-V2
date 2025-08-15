@@ -33,8 +33,21 @@ def create_deployment_package():
         # Create ZIP file
         zip_path = os.path.join(temp_dir, 'lambda_package.zip')
         with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
-            # Add the lambda function
+            # Add the lambda function with correct name for handler
             zipf.write(os.path.join(package_dir, 'lambda_function.py'), 'lambda_function.py')
+            
+            # Add 2FA dependencies if they exist
+            deps_dir = '/app/lambda_python_deps'
+            if os.path.exists(deps_dir):
+                print("📦 Adding lightweight 2FA dependencies to package...")
+                for root, dirs, files in os.walk(deps_dir):
+                    for file in files:
+                        file_path = os.path.join(root, file)
+                        arcname = os.path.relpath(file_path, deps_dir)
+                        zipf.write(file_path, arcname)
+                print(f"✅ Added TOTP dependencies from {deps_dir}")
+            else:
+                print("⚠️ No TOTP dependencies found, deploying without TOTP support")
         
         print(f"✅ Package created: {zip_path}")
         return zip_path, temp_dir

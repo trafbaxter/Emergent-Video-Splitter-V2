@@ -4,11 +4,13 @@ import LoginForm from './LoginForm';
 import RegisterForm from './RegisterForm';
 import VideoSplitter from './VideoSplitter';
 import AdminDashboard from './components/AdminDashboard';
+import UserProfile from './components/UserProfile';
+import TwoFactorSetup from './components/TwoFactorSetup';
 
 const AppContent = () => {
-  const { user, logout } = useAuth();
+  const { user, logout, requires2FASetup, complete2FASetup } = useAuth();
   const [showRegister, setShowRegister] = useState(false);
-  const [currentView, setCurrentView] = useState('video-splitter'); // 'video-splitter' or 'admin'
+  const [currentView, setCurrentView] = useState('video-splitter'); // 'video-splitter', 'admin', or 'profile'
 
   const handleToggleForm = () => {
     setShowRegister(!showRegister);
@@ -17,6 +19,12 @@ const AppContent = () => {
   const handleLogout = () => {
     logout();
     setCurrentView('video-splitter'); // Reset to default view
+  };
+
+  const handle2FASetupComplete = (success) => {
+    if (success) {
+      complete2FASetup();
+    }
   };
 
   if (!user) {
@@ -33,6 +41,59 @@ const AppContent = () => {
         ) : (
           <LoginForm onToggleForm={handleToggleForm} />
         )}
+      </div>
+    );
+  }
+
+  // Show mandatory 2FA setup if required
+  if (requires2FASetup) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '20px'
+      }}>
+        <div style={{
+          backgroundColor: 'rgba(255, 255, 255, 0.95)',
+          borderRadius: '12px',
+          padding: '40px',
+          maxWidth: '600px',
+          width: '100%',
+          boxShadow: '0 10px 30px rgba(0,0,0,0.3)',
+          textAlign: 'center'
+        }}>
+          <h1 style={{ color: '#333', marginBottom: '20px' }}>🔐 Security Setup Required</h1>
+          <p style={{ color: '#666', fontSize: '18px', marginBottom: '30px' }}>
+            For your security, Two-Factor Authentication (2FA) is required for all accounts. 
+            Please set up 2FA to continue using Video Splitter Pro.
+          </p>
+          <div style={{
+            backgroundColor: '#fff3cd',
+            border: '1px solid #ffeaa7',
+            borderRadius: '8px',
+            padding: '15px',
+            marginBottom: '30px',
+            color: '#856404'
+          }}>
+            <strong>🛡️ Why 2FA?</strong>
+            <br />
+            Two-Factor Authentication adds an extra layer of security to your account, 
+            protecting your videos and personal information from unauthorized access.
+          </div>
+          
+          <TwoFactorSetup
+            isOpen={true}
+            onClose={() => {}} // Cannot close mandatory setup
+            onSetupComplete={handle2FASetupComplete}
+          />
+          
+          <div style={{ marginTop: '20px', fontSize: '14px', color: '#666' }}>
+            Need help? Contact support for assistance with 2FA setup.
+          </div>
+        </div>
       </div>
     );
   }
@@ -77,6 +138,22 @@ const AppContent = () => {
               }}
             >
               Video Splitter
+            </button>
+            
+            <button
+              onClick={() => setCurrentView('profile')}
+              style={{
+                padding: '8px 16px',
+                backgroundColor: currentView === 'profile' ? '#28a745' : 'transparent',
+                color: currentView === 'profile' ? 'white' : '#28a745',
+                border: '1px solid #28a745',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '14px',
+                fontWeight: 'bold'
+              }}
+            >
+              🔐 Security Settings
             </button>
             
             {user.role === 'admin' && (
@@ -129,6 +206,8 @@ const AppContent = () => {
       <div style={{ padding: '20px 0' }}>
         {currentView === 'video-splitter' ? (
           <VideoSplitter />
+        ) : currentView === 'profile' ? (
+          <UserProfile />
         ) : currentView === 'admin' && user.role === 'admin' ? (
           <AdminDashboard />
         ) : (

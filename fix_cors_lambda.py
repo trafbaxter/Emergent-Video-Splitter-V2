@@ -52,14 +52,11 @@ AWS_REGION = os.environ.get('AWS_REGION', 'us-east-1')
 
 try:
     import pyotp
-    import qrcode
-    from io import BytesIO
-    import base64
     TOTP_AVAILABLE = True
-    logger.info("✅ TOTP libraries loaded successfully")
+    logger.info("✅ TOTP library loaded successfully")
 except ImportError:
     TOTP_AVAILABLE = False
-    logger.warning("⚠️ TOTP libraries not available")
+    logger.warning("⚠️ TOTP library not available")
 
 try:
     import boto3
@@ -303,7 +300,7 @@ def generate_totp_secret():
     return pyotp.random_base32()
 
 def generate_qr_code(user_email: str, totp_secret: str):
-    """Generate QR code for TOTP setup"""
+    """Generate QR code for TOTP setup - QR code generation disabled"""
     if not TOTP_AVAILABLE:
         return None
     
@@ -314,21 +311,16 @@ def generate_qr_code(user_email: str, totp_secret: str):
             issuer_name="Video Splitter Pro"
         )
         
-        qr = qrcode.QRCode(version=1, box_size=10, border=5)
-        qr.add_data(provisioning_uri)
-        qr.make(fit=True)
-        
-        img = qr.make_image(fill_color="black", back_color="white")
-        
-        # Convert to base64
-        buffer = BytesIO()
-        img.save(buffer, format='PNG')
-        img_str = base64.b64encode(buffer.getvalue()).decode()
-        
-        return f"data:image/png;base64,{img_str}"
+        # QR code generation disabled - return provisioning URI instead
+        logger.info(f"QR code generation disabled, returning provisioning URI")
+        return {
+            'provisioning_uri': provisioning_uri,
+            'message': 'QR code generation not available. Use the provisioning URI with your authenticator app.',
+            'qr_disabled': True
+        }
         
     except Exception as e:
-        logger.error(f"Failed to generate QR code: {str(e)}")
+        logger.error(f"Failed to generate provisioning URI: {str(e)}")
         return None
 
 def verify_totp_code(totp_secret: str, code: str):
@@ -487,9 +479,13 @@ def handle_health_check(event):
             'POST /api/auth/login', 
             'POST /api/auth/refresh',
             'GET /api/user/profile',
+            'GET /api/user/2fa/setup',
+            'POST /api/user/2fa/verify',
+            'POST /api/user/2fa/disable',
             'GET /api/admin/users',
             'POST /api/admin/users',
             'POST /api/admin/users/approve',
+            'POST /api/admin/users/{user_id}/2fa',
             'DELETE /api/admin/users/{user_id}',
             'PUT /api/admin/users/{user_id}',
             'POST /api/generate-presigned-url',
@@ -2248,6 +2244,468 @@ Video Splitter Pro Team
             'body': json.dumps({'message': 'Failed to update user', 'error': str(e)})
         }
 
+def handle_user_2fa_setup(event):
+    """Handle user 2FA setup - generate TOTP secret and QR code"""
+    origin = event.get('headers', {}).get('origin') or event.get('headers', {}).get('Origin')
+    
+    try:
+        # Extract and verify token
+        auth_header = event.get('headers', {}).get('authorization') or event.get('headers', {}).get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return {
+                'statusCode': 401,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'Missing or invalid authorization header'})
+            }
+        
+        token = auth_header.replace('Bearer ', '')
+        payload = verify_token(token)
+        
+        if not payload:
+            return {
+                'statusCode': 401,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'Invalid or expired token'})
+            }
+        
+        # Get user from database
+        user = get_user_by_email(payload['email'])
+        if not user:
+            return {
+                'statusCode': 404,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'User not found'})
+            }
+        
+        # Generate TOTP secret if not exists
+        totp_secret = user.get('totp_secret')
+        if not totp_secret:
+            totp_secret = generate_totp_secret()
+            if not totp_secret:
+                return {
+                    'statusCode': 500,
+                    'headers': get_cors_headers(origin),
+                    'body': json.dumps({'message': '2FA libraries not available'})
+                }
+            
+            # Store the secret (but don't enable 2FA yet)
+            users_table.update_item(
+                Key={'user_id': user['user_id']},
+                UpdateExpression='SET totp_secret = :secret, updated_at = :updated_at',
+                ExpressionAttributeValues={
+                    ':secret': totp_secret,
+                    ':updated_at': datetime.utcnow().isoformat()
+                }
+            )
+        
+        # Generate QR code
+        qr_code_data = generate_qr_code(user['email'], totp_secret)
+        if not qr_code_data:
+            return {
+                'statusCode': 500,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'Failed to generate QR code'})
+            }
+        
+        return {
+            'statusCode': 200,
+            'headers': get_cors_headers(origin),
+            'body': json.dumps({
+                'totp_secret': totp_secret,
+                'qr_code': qr_code_data,
+                'backup_codes': [],  # TODO: Implement backup codes
+                'setup_complete': False,
+                'issuer': 'Video Splitter Pro'
+            }, cls=DecimalEncoder)
+        }
+        
+    except Exception as e:
+        logger.error(f"2FA setup error: {str(e)}")
+        return {
+            'statusCode': 500,
+            'headers': get_cors_headers(origin),
+            'body': json.dumps({'message': 'Failed to setup 2FA', 'error': str(e)})
+        }
+
+def handle_user_2fa_verify_setup(event):
+    """Handle user 2FA setup verification - verify TOTP code and enable 2FA"""
+    origin = event.get('headers', {}).get('origin') or event.get('headers', {}).get('Origin')
+    
+    try:
+        # Extract and verify token
+        auth_header = event.get('headers', {}).get('authorization') or event.get('headers', {}).get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return {
+                'statusCode': 401,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'Missing or invalid authorization header'})
+            }
+        
+        token = auth_header.replace('Bearer ', '')
+        payload = verify_token(token)
+        
+        if not payload:
+            return {
+                'statusCode': 401,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'Invalid or expired token'})
+            }
+        
+        # Parse request body
+        body = json.loads(event['body'])
+        totp_code = body.get('code')
+        
+        if not totp_code:
+            return {
+                'statusCode': 400,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': '2FA code is required'})
+            }
+        
+        # Get user from database
+        user = get_user_by_email(payload['email'])
+        if not user:
+            return {
+                'statusCode': 404,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'User not found'})
+            }
+        
+        totp_secret = user.get('totp_secret')
+        if not totp_secret:
+            return {
+                'statusCode': 400,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': '2FA setup not initiated'})
+            }
+        
+        # Verify TOTP code
+        if not verify_totp_code(totp_secret, totp_code):
+            return {
+                'statusCode': 400,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'Invalid 2FA code'})
+            }
+        
+        # Enable 2FA for user
+        users_table.update_item(
+            Key={'user_id': user['user_id']},
+            UpdateExpression='SET totp_enabled = :enabled, totp_setup_at = :setup_at, updated_at = :updated_at',
+            ExpressionAttributeValues={
+                ':enabled': True,
+                ':setup_at': datetime.utcnow().isoformat(),
+                ':updated_at': datetime.utcnow().isoformat()
+            }
+        )
+        
+        # Send confirmation email
+        email_subject = "Two-Factor Authentication Enabled - Video Splitter Pro"
+        email_body = f"""
+Hello {user.get('first_name', '')},
+
+Two-factor authentication has been successfully enabled on your Video Splitter Pro account.
+
+Account Details:
+- Email: {user['email']}
+- 2FA Method: TOTP (Time-based One-Time Password)
+- Enabled Date: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC
+
+Your account is now more secure! You will need to enter a code from your authenticator app when logging in.
+
+If you did not enable 2FA, please contact support immediately.
+
+Best regards,
+Video Splitter Pro Team
+        """.strip()
+        
+        send_email_notification(user['email'], email_subject, email_body)
+        
+        return {
+            'statusCode': 200,
+            'headers': get_cors_headers(origin),
+            'body': json.dumps({
+                'message': '2FA enabled successfully',
+                'totp_enabled': True,
+                'setup_complete': True,
+                'email_sent': True
+            })
+        }
+        
+    except json.JSONDecodeError:
+        return {
+            'statusCode': 400,
+            'headers': get_cors_headers(origin),
+            'body': json.dumps({'message': 'Invalid JSON in request body'})
+        }
+    except Exception as e:
+        logger.error(f"2FA verify setup error: {str(e)}")
+        return {
+            'statusCode': 500,
+            'headers': get_cors_headers(origin),
+            'body': json.dumps({'message': 'Failed to verify 2FA setup', 'error': str(e)})
+        }
+
+def handle_user_2fa_disable(event):
+    """Handle user 2FA disable - disable TOTP authentication"""
+    origin = event.get('headers', {}).get('origin') or event.get('headers', {}).get('Origin')
+    
+    try:
+        # Extract and verify token
+        auth_header = event.get('headers', {}).get('authorization') or event.get('headers', {}).get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return {
+                'statusCode': 401,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'Missing or invalid authorization header'})
+            }
+        
+        token = auth_header.replace('Bearer ', '')
+        payload = verify_token(token)
+        
+        if not payload:
+            return {
+                'statusCode': 401,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'Invalid or expired token'})
+            }
+        
+        # Parse request body
+        body = json.loads(event['body'])
+        password = body.get('password')  # Require password to disable 2FA
+        
+        if not password:
+            return {
+                'statusCode': 400,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'Password is required to disable 2FA'})
+            }
+        
+        # Get user from database
+        user = get_user_by_email(payload['email'])
+        if not user:
+            return {
+                'statusCode': 404,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'User not found'})
+            }
+        
+        # Verify password
+        if not verify_password(password, user['password']):
+            return {
+                'statusCode': 401,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'Invalid password'})
+            }
+        
+        # Disable 2FA for user
+        users_table.update_item(
+            Key={'user_id': user['user_id']},
+            UpdateExpression='SET totp_enabled = :enabled, totp_disabled_at = :disabled_at, updated_at = :updated_at',
+            ExpressionAttributeValues={
+                ':enabled': False,
+                ':disabled_at': datetime.utcnow().isoformat(),
+                ':updated_at': datetime.utcnow().isoformat()
+            }
+        )
+        
+        # Send notification email
+        email_subject = "Two-Factor Authentication Disabled - Video Splitter Pro"
+        email_body = f"""
+Hello {user.get('first_name', '')},
+
+Two-factor authentication has been disabled on your Video Splitter Pro account.
+
+Account Details:
+- Email: {user['email']}
+- 2FA Disabled Date: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC
+
+Your account security has been reduced. We recommend keeping 2FA enabled for better security.
+
+If you did not disable 2FA, please contact support immediately and change your password.
+
+Best regards,
+Video Splitter Pro Team
+        """.strip()
+        
+        send_email_notification(user['email'], email_subject, email_body)
+        
+        return {
+            'statusCode': 200,
+            'headers': get_cors_headers(origin),
+            'body': json.dumps({
+                'message': '2FA disabled successfully',
+                'totp_enabled': False,
+                'email_sent': True
+            })
+        }
+        
+    except json.JSONDecodeError:
+        return {
+            'statusCode': 400,
+            'headers': get_cors_headers(origin),
+            'body': json.dumps({'message': 'Invalid JSON in request body'})
+        }
+    except Exception as e:
+        logger.error(f"2FA disable error: {str(e)}")
+        return {
+            'statusCode': 500,
+            'headers': get_cors_headers(origin),
+            'body': json.dumps({'message': 'Failed to disable 2FA', 'error': str(e)})
+        }
+
+def handle_admin_user_2fa_control(event):
+    """Handle admin control of user 2FA - force enable/disable for users"""
+    origin = event.get('headers', {}).get('origin') or event.get('headers', {}).get('Origin')
+    
+    try:
+        # Extract and verify admin token
+        auth_header = event.get('headers', {}).get('authorization') or event.get('headers', {}).get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return {
+                'statusCode': 401,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'Missing or invalid authorization header'})
+            }
+        
+        token = auth_header.replace('Bearer ', '')
+        payload = verify_token(token)
+        
+        if not payload:
+            return {
+                'statusCode': 401,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'Invalid or expired token'})
+            }
+        
+        # Get admin user and verify role
+        admin_user = get_user_by_email(payload['email'])
+        if not admin_user or admin_user.get('user_role') != 'admin':
+            return {
+                'statusCode': 403,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'Admin access required'})
+            }
+        
+        # Extract user ID from path
+        path = event.get('path', '')
+        user_id = path.split('/api/admin/users/')[-1].split('/2fa')[0]
+        
+        if not user_id:
+            return {
+                'statusCode': 400,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'User ID is required'})
+            }
+        
+        # Parse request body
+        body = json.loads(event['body'])
+        action = body.get('action')  # 'require' or 'disable'
+        
+        if action not in ['require', 'disable']:
+            return {
+                'statusCode': 400,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'Action must be "require" or "disable"'})
+            }
+        
+        # Get target user
+        target_user = get_user_by_id(user_id)
+        if not target_user:
+            return {
+                'statusCode': 404,
+                'headers': get_cors_headers(origin),
+                'body': json.dumps({'message': 'User not found'})
+            }
+        
+        if action == 'disable':
+            # Admin force disable 2FA
+            users_table.update_item(
+                Key={'user_id': user_id},
+                UpdateExpression='SET totp_enabled = :enabled, totp_disabled_by_admin = :admin_id, totp_disabled_at = :disabled_at, updated_at = :updated_at',
+                ExpressionAttributeValues={
+                    ':enabled': False,
+                    ':admin_id': admin_user['user_id'],
+                    ':disabled_at': datetime.utcnow().isoformat(),
+                    ':updated_at': datetime.utcnow().isoformat()
+                }
+            )
+            
+            message = f"2FA has been disabled for {target_user['email']}"
+            email_subject = "Two-Factor Authentication Disabled by Administrator"
+            email_body = f"""
+Hello {target_user.get('first_name', '')},
+
+Two-factor authentication has been disabled on your account by an administrator.
+
+Account Details:
+- Email: {target_user['email']}
+- Disabled by: {admin_user.get('first_name', '')} {admin_user.get('last_name', '')}
+- Date: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC
+
+Your account security has been reduced. Please contact support if you have questions.
+
+Best regards,
+Video Splitter Pro Team
+            """.strip()
+        
+        else:  # require
+            # Admin require 2FA (set flag, user must set it up)
+            users_table.update_item(
+                Key={'user_id': user_id},
+                UpdateExpression='SET totp_required = :required, totp_required_by_admin = :admin_id, totp_required_at = :required_at, updated_at = :updated_at',
+                ExpressionAttributeValues={
+                    ':required': True,
+                    ':admin_id': admin_user['user_id'],
+                    ':required_at': datetime.utcnow().isoformat(),
+                    ':updated_at': datetime.utcnow().isoformat()
+                }
+            )
+            
+            message = f"2FA is now required for {target_user['email']}"
+            email_subject = "Two-Factor Authentication Required by Administrator"
+            email_body = f"""
+Hello {target_user.get('first_name', '')},
+
+Two-factor authentication is now required for your Video Splitter Pro account.
+
+Account Details:
+- Email: {target_user['email']}
+- Required by: {admin_user.get('first_name', '')} {admin_user.get('last_name', '')}
+- Date: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC
+
+Please log in and set up 2FA in your account settings. You may be required to set up 2FA before accessing certain features.
+
+Best regards,
+Video Splitter Pro Team
+            """.strip()
+        
+        send_email_notification(target_user['email'], email_subject, email_body)
+        
+        return {
+            'statusCode': 200,
+            'headers': get_cors_headers(origin),
+            'body': json.dumps({
+                'message': message,
+                'user_id': user_id,
+                'action': action,
+                'email_sent': True
+            })
+        }
+        
+    except json.JSONDecodeError:
+        return {
+            'statusCode': 400,
+            'headers': get_cors_headers(origin),
+            'body': json.dumps({'message': 'Invalid JSON in request body'})
+        }
+    except Exception as e:
+        logger.error(f"Admin 2FA control error: {str(e)}")
+        return {
+            'statusCode': 500,
+            'headers': get_cors_headers(origin),
+            'body': json.dumps({'message': 'Failed to control user 2FA', 'error': str(e)})
+        }
+
 def lambda_handler(event, context):
     """Main Lambda handler with enhanced CORS support"""
     # Log the incoming request
@@ -2272,8 +2730,15 @@ def lambda_handler(event, context):
             return handle_register(event)
         elif path == '/api/auth/login':
             return handle_login(event)
+        # User routes
         elif path == '/api/user/profile':
             return handle_user_profile(event)
+        elif path == '/api/user/2fa/setup' and http_method == 'GET':
+            return handle_user_2fa_setup(event)
+        elif path == '/api/user/2fa/verify' and http_method == 'POST':
+            return handle_user_2fa_verify_setup(event)
+        elif path == '/api/user/2fa/disable' and http_method == 'POST':
+            return handle_user_2fa_disable(event)
         # Admin routes
         elif path == '/api/admin/users' and http_method == 'GET':
             return handle_admin_users_list(event)
@@ -2281,6 +2746,8 @@ def lambda_handler(event, context):
             return handle_admin_approve_user(event)
         elif path == '/api/admin/users' and http_method == 'POST':
             return handle_admin_create_user(event)
+        elif path.startswith('/api/admin/users/') and '/2fa' in path and http_method == 'POST':
+            return handle_admin_user_2fa_control(event)
         elif path.startswith('/api/admin/users/') and http_method == 'DELETE':
             return handle_admin_delete_user(event)
         elif path.startswith('/api/admin/users/') and http_method == 'PUT':

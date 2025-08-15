@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from './AuthContext';
+import PasswordReset from './components/PasswordReset';
 
 const LoginForm = ({ onToggleForm }) => {
   const [email, setEmail] = useState('');
@@ -9,6 +10,7 @@ const LoginForm = ({ onToggleForm }) => {
   const [error, setError] = useState('');
   const [showTotpInput, setShowTotpInput] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
+  const [showPasswordReset, setShowPasswordReset] = useState(false);
 
   const { login } = useAuth();
 
@@ -224,6 +226,22 @@ const LoginForm = ({ onToggleForm }) => {
           </button>
         </p>
         
+        <p style={{ margin: '10px 0', color: '#666' }}>
+          Forgot your password?{' '}
+          <button
+            onClick={() => setShowPasswordReset(true)}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: '#007bff',
+              textDecoration: 'underline',
+              cursor: 'pointer'
+            }}
+          >
+            Reset Password
+          </button>
+        </p>
+        
         <div style={{ marginTop: '15px', padding: '10px', backgroundColor: '#f8f9fa', borderRadius: '4px' }}>
           <small style={{ color: '#666' }}>
             <strong>Demo Admin Access:</strong><br />
@@ -232,6 +250,11 @@ const LoginForm = ({ onToggleForm }) => {
           </small>
         </div>
       </div>
+
+      <PasswordReset
+        isOpen={showPasswordReset}
+        onClose={() => setShowPasswordReset(false)}
+      />
     </div>
   );
 };

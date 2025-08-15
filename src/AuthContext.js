@@ -14,6 +14,7 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [accessToken, setAccessToken] = useState(localStorage.getItem('access_token'));
+  const [requires2FASetup, setRequires2FASetup] = useState(false);
   
   const API_BASE = process.env.REACT_APP_BACKEND_URL || 'https://2419j971hh.execute-api.us-east-1.amazonaws.com/prod';
 
@@ -37,6 +38,13 @@ export const AuthProvider = ({ children }) => {
       if (response.ok) {
         const data = await response.json();
         setUser(data.user);
+        
+        // Check if 2FA is required but not set up
+        if (!data.user.totpEnabled) {
+          setRequires2FASetup(true);
+        } else {
+          setRequires2FASetup(false);
+        }
       } else {
         // Token is invalid or expired
         logout();
@@ -150,16 +158,25 @@ export const AuthProvider = ({ children }) => {
   const logout = () => {
     setUser(null);
     setAccessToken(null);
+    setRequires2FASetup(false);
     localStorage.removeItem('access_token');
+  };
+
+  const complete2FASetup = () => {
+    setRequires2FASetup(false);
+    // Refresh user profile to get updated 2FA status
+    fetchUserProfile();
   };
 
   const value = {
     user,
     loading,
     accessToken,
+    requires2FASetup,
     login,
     register,
     logout,
+    complete2FASetup,
     API_BASE
   };
 
