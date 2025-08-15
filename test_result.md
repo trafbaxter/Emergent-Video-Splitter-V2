@@ -59,6 +59,78 @@ backend:
         agent: "testing"
         comment: "❌ CRITICAL: Account locking after failed login attempts not implemented. Tested 6 consecutive failed login attempts with no account lockout. No failed login attempt tracking exists."
 
+  - task: "2FA (TOTP) Setup Endpoint"
+    implemented: true
+    working: false
+    file: "fix_cors_lambda.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: false
+        agent: "testing"
+        comment: "❌ CRITICAL: 2FA setup endpoint (GET /api/user/2fa/setup) implemented but returns HTTP 500 '2FA libraries not available'. The endpoint exists and handles authentication properly, but pyotp and qrcode libraries are not deployed to Lambda environment. Libraries are available locally in /app/python_2fa_deps but need to be included in Lambda deployment package."
+
+  - task: "2FA (TOTP) Verification Endpoint"
+    implemented: true
+    working: true
+    file: "fix_cors_lambda.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "✅ 2FA verification endpoint (POST /api/user/2fa/verify) working correctly! Returns proper validation error 'message: 2FA code is required' for invalid/missing TOTP codes. Endpoint handles authentication and validates input properly. Once TOTP libraries are deployed, this endpoint should work fully."
+
+  - task: "2FA (TOTP) Disable Endpoint"
+    implemented: true
+    working: true
+    file: "fix_cors_lambda.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "✅ 2FA disable endpoint (POST /api/user/2fa/disable) working correctly! Returns HTTP 200 with 'message: 2FA disabled successfully', 'totp_enabled: false', and 'email_sent: true'. Endpoint properly handles password verification and updates user 2FA status. Email notifications are being sent as expected."
+
+  - task: "Admin 2FA Control - Require 2FA"
+    implemented: true
+    working: true
+    file: "fix_cors_lambda.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "✅ Admin 2FA control endpoint (POST /api/admin/users/{user_id}/2fa) with action 'require' working perfectly! Returns HTTP 200 with proper response: 'message: 2FA is now required for test-pending@example.com', 'user_id: a29d3588-6fa2-4ea9-a523-8e4d06ff4f61', 'action: require', 'email_sent: true'. Admin authentication, user ID validation, and email notifications all working correctly."
+
+  - task: "Admin 2FA Control - Disable 2FA"
+    implemented: true
+    working: true
+    file: "fix_cors_lambda.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "✅ Admin 2FA control endpoint (POST /api/admin/users/{user_id}/2fa) with action 'disable' working perfectly! Returns HTTP 200 with proper response: 'message: 2FA has been disabled for test-pending@example.com', 'user_id: a29d3588-6fa2-4ea9-a523-8e4d06ff4f61', 'action: disable', 'email_sent: true'. Admin can successfully manage user 2FA settings with proper notifications."
+
+  - task: "2FA TOTP Libraries Deployment"
+    implemented: false
+    working: false
+    file: "python_2fa_deps/"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: false
+        agent: "testing"
+        comment: "❌ CRITICAL: TOTP libraries (pyotp, qrcode, PIL) are available locally in /app/python_2fa_deps (13.8 MB) and working correctly, but NOT deployed to Lambda environment. Testing confirms libraries work locally: ✅ pyotp generates valid TOTP secrets and codes ✅ qrcode generates QR codes ✅ PIL/Pillow handles image processing. SOLUTION NEEDED: Deploy /app/python_2fa_deps to Lambda function to enable 2FA setup endpoint."
+
 frontend:
   - task: "Enhanced Authentication System - User Registration with Approval Workflow Frontend"
     implemented: true
