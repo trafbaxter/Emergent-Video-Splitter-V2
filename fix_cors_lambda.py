@@ -2687,6 +2687,8 @@ def handle_forgot_password(event):
         frontend_domain = get_frontend_domain(origin)
         reset_link = f"{frontend_domain}/?action=reset-password&token={reset_token}"
         
+        logger.info(f"🔗 Generated reset link: {reset_link}")
+        
         # Send password reset email
         email_sent = send_password_reset_email(user, reset_link)
         
