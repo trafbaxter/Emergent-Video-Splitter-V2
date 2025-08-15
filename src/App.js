@@ -140,6 +140,22 @@ const AppContent = () => {
               Video Splitter
             </button>
             
+            <button
+              onClick={() => setCurrentView('profile')}
+              style={{
+                padding: '8px 16px',
+                backgroundColor: currentView === 'profile' ? '#28a745' : 'transparent',
+                color: currentView === 'profile' ? 'white' : '#28a745',
+                border: '1px solid #28a745',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '14px',
+                fontWeight: 'bold'
+              }}
+            >
+              🔐 Security Settings
+            </button>
+            
             {user.role === 'admin' && (
               <button
                 onClick={() => setCurrentView('admin')}
