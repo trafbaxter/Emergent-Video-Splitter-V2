@@ -68,34 +68,11 @@ class TwoFAFinalVerificationTest:
         print()
         
     def setup_test_user(self):
-        """Setup test user by registering and logging in"""
+        """Setup test user by logging in (user already exists)"""
         print("🔧 Setting up test user...")
         
-        # Register user first
-        try:
-            start_time = time.time()
-            response = requests.post(f"{self.api_base}/api/auth/register", 
-                                   json=self.test_user,
-                                   headers={'Content-Type': 'application/json'})
-            response_time = time.time() - start_time
-            
-            if response.status_code in [200, 201]:
-                data = response.json()
-                self.user_token = data.get('access_token')
-                user_data = data.get('user', {})
-                self.user_id = user_data.get('user_id') or user_data.get('userId') or user_data.get('id')
-                
-                self.log_test("User Registration Setup", True, 
-                            f"Successfully registered user {self.test_user['email']}. Token: {self.user_token[:20] if self.user_token else 'None'}...", 
-                            response_time)
-                return True
-            else:
-                # Try to login if user already exists
-                return self.login_test_user()
-                
-        except Exception as e:
-            self.log_test("User Registration Setup", False, f"Exception during user registration: {str(e)}")
-            return self.login_test_user()
+        # Login existing user
+        return self.login_test_user()
             
     def login_test_user(self):
         """Login test user"""
