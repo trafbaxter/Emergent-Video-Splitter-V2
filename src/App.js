@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './AuthContext';
 import LoginForm from './LoginForm';
 import RegisterForm from './RegisterForm';
@@ -6,8 +7,9 @@ import VideoSplitter from './VideoSplitter';
 import AdminDashboard from './components/AdminDashboard';
 import UserProfile from './components/UserProfile';
 import TwoFactorSetup from './components/TwoFactorSetup';
+import PasswordResetComplete from './components/PasswordResetComplete';
 
-const AppContent = () => {
+const MainApp = () => {
   const { user, logout, requires2FASetup, complete2FASetup } = useAuth();
   const [showRegister, setShowRegister] = useState(false);
   const [currentView, setCurrentView] = useState('video-splitter'); // 'video-splitter', 'admin', or 'profile'
@@ -225,10 +227,22 @@ const AppContent = () => {
   );
 };
 
+const AppContent = () => {
+  return (
+    <Routes>
+      <Route path="/reset-password" element={<PasswordResetComplete />} />
+      <Route path="/" element={<MainApp />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
+};
+
 function App() {
   return (
     <AuthProvider>
-      <AppContent />
+      <Router>
+        <AppContent />
+      </Router>
     </AuthProvider>
   );
 }
