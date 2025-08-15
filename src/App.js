@@ -227,6 +227,16 @@ const MainApp = () => {
   );
 };
 
+const AppContent = () => {
+  return (
+    <Routes>
+      <Route path="/reset-password" element={<PasswordResetComplete />} />
+      <Route path="/" element={<MainApp />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
+};
+
 function App() {
   return (
     <AuthProvider>
