@@ -403,8 +403,16 @@ class TwoFATestSuite:
             
     def test_admin_2fa_control_disable(self):
         """Test 5b: Admin 2FA Control - Disable 2FA"""
-        if not self.admin_user_token or not self.regular_user_id:
-            self.log_test("Admin 2FA Control (Disable)", False, "No admin token or regular user ID available")
+        if not self.admin_user_token:
+            self.log_test("Admin 2FA Control (Disable)", False, "No admin token available")
+            return
+            
+        # Try to get user ID if not available
+        if not self.regular_user_id:
+            self.regular_user_id = self.get_user_profile()
+            
+        if not self.regular_user_id:
+            self.log_test("Admin 2FA Control (Disable)", False, "Could not get regular user ID from profile")
             return
             
         try:
