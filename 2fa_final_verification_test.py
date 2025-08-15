@@ -210,7 +210,7 @@ class TwoFAFinalVerificationTest:
                 self.totp_secret = totp_secret
                 
                 self.log_test("2FA Setup Endpoint", True, 
-                            f"✅ TOTP secret: {totp_secret[:10]}... (base32 format) ✅ QR code: data:image/png;base64 format ✅ setup_complete: false ✅ Provisioning URI included", 
+                            f"✅ TOTP secret: {totp_secret[:10]}... (base32 format) ✅ QR code/Provisioning URI: Available ✅ setup_complete: false ✅ TOTP libraries working in Lambda", 
                             response_time)
                 return True
                             
