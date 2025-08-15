@@ -293,6 +293,91 @@ def send_email_notification(to_email: str, subject: str, body_text: str, body_ht
         logger.error(f"❌ Failed to send email to {to_email}: {str(e)}")
         return False
 
+def get_frontend_domain(origin):
+    """Get frontend domain for password reset links"""
+    if origin and origin in ALLOWED_ORIGINS:
+        return origin
+    # Default to the main domain
+    return 'https://tads-video-splitter.com'
+
+def send_password_reset_email(user, reset_link):
+    """Send password reset email to user"""
+    subject = "Password Reset Request - Video Splitter Pro"
+    
+    body_text = f"""
+Hello {user.get('first_name', 'User')},
+
+You have requested to reset your password for Video Splitter Pro.
+
+Please click the following link to reset your password:
+{reset_link}
+
+This link will expire in 1 hour for security reasons.
+
+If you did not request this password reset, please ignore this email.
+
+Best regards,
+Video Splitter Pro Team
+    """.strip()
+    
+    body_html = f"""
+    <html>
+    <body>
+        <h2>Password Reset Request</h2>
+        <p>Hello {user.get('first_name', 'User')},</p>
+        
+        <p>You have requested to reset your password for Video Splitter Pro.</p>
+        
+        <p><a href="{reset_link}" style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Reset Password</a></p>
+        
+        <p>Or copy and paste this link into your browser:<br>
+        <a href="{reset_link}">{reset_link}</a></p>
+        
+        <p><strong>This link will expire in 1 hour for security reasons.</strong></p>
+        
+        <p>If you did not request this password reset, please ignore this email.</p>
+        
+        <p>Best regards,<br>
+        Video Splitter Pro Team</p>
+    </body>
+    </html>
+    """.strip()
+    
+    return send_email_notification(user['email'], subject, body_text, body_html)
+
+def send_password_reset_confirmation_email(user):
+    """Send password reset confirmation email"""
+    subject = "Password Reset Successful - Video Splitter Pro"
+    
+    body_text = f"""
+Hello {user.get('first_name', 'User')},
+
+Your password has been successfully reset for Video Splitter Pro.
+
+If you did not make this change, please contact support immediately.
+
+Best regards,
+Video Splitter Pro Team
+    """.strip()
+    
+    body_html = f"""
+    <html>
+    <body>
+        <h2>Password Reset Successful</h2>
+        <p>Hello {user.get('first_name', 'User')},</p>
+        
+        <p>Your password has been successfully reset for Video Splitter Pro.</p>
+        
+        <p><strong>If you did not make this change, please contact support immediately.</strong></p>
+        
+        <p>Best regards,<br>
+        Video Splitter Pro Team</p>
+    </body>
+    </html>
+    """.strip()
+    
+    return send_email_notification(user['email'], subject, body_text, body_html)
+
 def generate_totp_secret():
     """Generate a new TOTP secret"""
     if not TOTP_AVAILABLE:
