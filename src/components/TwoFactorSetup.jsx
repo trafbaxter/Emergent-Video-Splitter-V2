@@ -51,34 +51,10 @@ const TwoFactorSetup = ({ isOpen, onClose, onSetupComplete }) => {
     }
   };
 
-  const generateQRCode = async (provisioning_uri) => {
-    try {
-      // Use QRCode.js library for client-side QR generation
-      const QRCode = window.QRCode;
-      if (!QRCode) {
-        console.warn('QRCode library not available, showing manual entry');
-        return;
-      }
-
-      // Create canvas element
-      const canvas = document.createElement('canvas');
-      QRCode.toCanvas(canvas, provisioning_uri, {
-        width: 256,
-        margin: 2,
-        color: {
-          dark: '#000000',
-          light: '#FFFFFF'
-        }
-      }, (error) => {
-        if (error) {
-          console.error('QR code generation error:', error);
-        } else {
-          setQrCodeDataURL(canvas.toDataURL());
-        }
-      });
-    } catch (error) {
-      console.error('QR code generation failed:', error);
-    }
+  const generateQRCode = (provisioning_uri) => {
+    // QR code will be generated using QRCode.react component directly in render
+    // This function is kept for compatibility but qrCodeDataURL is set to provisioning_uri
+    setQrCodeDataURL(provisioning_uri);
   };
 
   const verify2FASetup = async () => {
