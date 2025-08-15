@@ -10,6 +10,7 @@ const LoginForm = ({ onToggleForm }) => {
   const [error, setError] = useState('');
   const [showTotpInput, setShowTotpInput] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
+  const [showPasswordReset, setShowPasswordReset] = useState(false);
 
   const { login } = useAuth();
 
