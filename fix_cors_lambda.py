@@ -2982,6 +2982,10 @@ def lambda_handler(event, context):
             return handle_register(event)
         elif path == '/api/auth/login':
             return handle_login(event)
+        elif path == '/api/auth/forgot-password' and http_method == 'POST':
+            return handle_forgot_password(event)
+        elif path == '/api/auth/reset-password' and http_method == 'POST':
+            return handle_reset_password(event)
         # User routes
         elif path == '/api/user/profile':
             return handle_user_profile(event)
