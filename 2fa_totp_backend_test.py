@@ -324,10 +324,42 @@ class TwoFATestSuite:
         except Exception as e:
             self.log_test("2FA Disable Endpoint", False, f"Exception during 2FA disable test: {str(e)}")
             
+    def get_user_profile(self):
+        """Get user profile to extract user_id"""
+        if not self.regular_user_token:
+            return None
+            
+        try:
+            headers = {
+                'Authorization': f'Bearer {self.regular_user_token}',
+                'Content-Type': 'application/json'
+            }
+            
+            response = requests.get(f"{self.api_base}/api/user/profile", headers=headers)
+            
+            if response.status_code == 200:
+                data = response.json()
+                user_id = data.get('user_id') or data.get('id')
+                self.regular_user_id = user_id
+                return user_id
+            else:
+                return None
+                
+        except Exception as e:
+            return None
+    
     def test_admin_2fa_control_require(self):
         """Test 5a: Admin 2FA Control - Require 2FA"""
-        if not self.admin_user_token or not self.regular_user_id:
-            self.log_test("Admin 2FA Control (Require)", False, "No admin token or regular user ID available")
+        if not self.admin_user_token:
+            self.log_test("Admin 2FA Control (Require)", False, "No admin token available")
+            return
+            
+        # Try to get user ID if not available
+        if not self.regular_user_id:
+            self.regular_user_id = self.get_user_profile()
+            
+        if not self.regular_user_id:
+            self.log_test("Admin 2FA Control (Require)", False, "Could not get regular user ID from profile")
             return
             
         try:
