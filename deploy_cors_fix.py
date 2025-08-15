@@ -85,6 +85,7 @@ def deploy_lambda_function():
         print(f"✅ Lambda configuration updated!")
         print(f"   Timeout: {config_response['Timeout']} seconds")
         print(f"   Memory: {config_response['MemorySize']} MB")
+        print(f"   SES Sender Email: {config_response.get('Environment', {}).get('Variables', {}).get('SES_SENDER_EMAIL', 'Not set')}")
         
         return True
         
