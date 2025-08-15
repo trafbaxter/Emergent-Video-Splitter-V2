@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
 
 const PasswordResetComplete = () => {
   const [password, setPassword] = useState('');
@@ -7,11 +6,12 @@ const PasswordResetComplete = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
-  const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
   
   const API_BASE = process.env.REACT_APP_BACKEND_URL || 'https://2419j971hh.execute-api.us-east-1.amazonaws.com/prod';
-  const token = searchParams.get('token');
+  
+  // Get token from URL parameters
+  const urlParams = new URLSearchParams(window.location.search);
+  const token = urlParams.get('token');
 
   useEffect(() => {
     if (!token) {
@@ -68,7 +68,8 @@ const PasswordResetComplete = () => {
   };
 
   const handleBackToLogin = () => {
-    navigate('/');
+    // Clear URL parameters and go back to login
+    window.location.href = window.location.origin;
   };
 
   if (success) {

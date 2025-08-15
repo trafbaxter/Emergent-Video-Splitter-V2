@@ -2682,10 +2682,10 @@ def handle_forgot_password(event):
             }
         )
         
-        # Prepare reset link
-        # In production, this should be your frontend domain
+        # Prepare reset link - use URL parameters for compatibility
+        # This format works without requiring server-side routing configuration
         frontend_domain = get_frontend_domain(origin)
-        reset_link = f"{frontend_domain}/reset-password?token={reset_token}"
+        reset_link = f"{frontend_domain}/?action=reset-password&token={reset_token}"
         
         # Send password reset email
         email_sent = send_password_reset_email(user, reset_link)

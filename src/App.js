@@ -14,6 +14,11 @@ const MainApp = () => {
   const [showRegister, setShowRegister] = useState(false);
   const [currentView, setCurrentView] = useState('video-splitter'); // 'video-splitter', 'admin', or 'profile'
 
+  // Check for password reset action in URL parameters
+  const urlParams = new URLSearchParams(window.location.search);
+  const action = urlParams.get('action');
+  const token = urlParams.get('token');
+
   const handleToggleForm = () => {
     setShowRegister(!showRegister);
   };
@@ -28,6 +33,11 @@ const MainApp = () => {
       complete2FASetup();
     }
   };
+
+  // Show password reset page if action=reset-password
+  if (action === 'reset-password') {
+    return <PasswordResetComplete />;
+  }
 
   if (!user) {
     return (
