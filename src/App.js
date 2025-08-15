@@ -4,6 +4,8 @@ import LoginForm from './LoginForm';
 import RegisterForm from './RegisterForm';
 import VideoSplitter from './VideoSplitter';
 import AdminDashboard from './components/AdminDashboard';
+import UserProfile from './components/UserProfile';
+import TwoFactorSetup from './components/TwoFactorSetup';
 
 const AppContent = () => {
   const { user, logout } = useAuth();
