@@ -191,7 +191,7 @@ class TwoFAFunctionalityTester:
             }
             
             verification_data = {
-                "totp_code": totp_code
+                "code": totp_code
             }
             
             start_time = time.time()
