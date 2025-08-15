@@ -2734,8 +2734,15 @@ def lambda_handler(event, context):
             return handle_register(event)
         elif path == '/api/auth/login':
             return handle_login(event)
+        # User routes
         elif path == '/api/user/profile':
             return handle_user_profile(event)
+        elif path == '/api/user/2fa/setup' and http_method == 'GET':
+            return handle_user_2fa_setup(event)
+        elif path == '/api/user/2fa/verify' and http_method == 'POST':
+            return handle_user_2fa_verify_setup(event)
+        elif path == '/api/user/2fa/disable' and http_method == 'POST':
+            return handle_user_2fa_disable(event)
         # Admin routes
         elif path == '/api/admin/users' and http_method == 'GET':
             return handle_admin_users_list(event)
@@ -2743,6 +2750,8 @@ def lambda_handler(event, context):
             return handle_admin_approve_user(event)
         elif path == '/api/admin/users' and http_method == 'POST':
             return handle_admin_create_user(event)
+        elif path.startswith('/api/admin/users/') and '/2fa' in path and http_method == 'POST':
+            return handle_admin_user_2fa_control(event)
         elif path.startswith('/api/admin/users/') and http_method == 'DELETE':
             return handle_admin_delete_user(event)
         elif path.startswith('/api/admin/users/') and http_method == 'PUT':
