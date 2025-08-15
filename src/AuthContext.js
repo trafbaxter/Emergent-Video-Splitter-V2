@@ -38,6 +38,13 @@ export const AuthProvider = ({ children }) => {
       if (response.ok) {
         const data = await response.json();
         setUser(data.user);
+        
+        // Check if 2FA is required but not set up
+        if (!data.user.totpEnabled) {
+          setRequires2FASetup(true);
+        } else {
+          setRequires2FASetup(false);
+        }
       } else {
         // Token is invalid or expired
         logout();
