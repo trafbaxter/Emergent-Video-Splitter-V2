@@ -59,39 +59,31 @@ class VideoMergerAPITester:
             self.log(f"❌ {name} - Error: {str(e)}")
             return False, {}
 
-    def create_test_video_file(self, filename="test_video.mp4", size_mb=1):
-        """Create a minimal test video file"""
-        # Create a minimal MP4 file header that should be accepted
-        mp4_header = bytes([
-            # ftyp box
-            0x00, 0x00, 0x00, 0x20,  # box size
-            0x66, 0x74, 0x79, 0x70,  # 'ftyp'
-            0x69, 0x73, 0x6F, 0x6D,  # major brand 'isom'
-            0x00, 0x00, 0x02, 0x00,  # minor version
-            0x69, 0x73, 0x6F, 0x6D,  # compatible brand 'isom'
-            0x69, 0x73, 0x6F, 0x32,  # compatible brand 'iso2'
-            0x61, 0x76, 0x63, 0x31,  # compatible brand 'avc1'
-            0x6D, 0x70, 0x34, 0x31,  # compatible brand 'mp41'
-            
-            # mdat box with minimal data
-            0x00, 0x00, 0x00, 0x10,  # box size
-            0x6D, 0x64, 0x61, 0x74,  # 'mdat'
-            0x00, 0x00, 0x00, 0x00,  # minimal data
-            0x00, 0x00, 0x00, 0x00   # minimal data
-        ])
-        
-        # Pad to desired size
-        padding_size = (size_mb * 1024 * 1024) - len(mp4_header)
-        if padding_size > 0:
-            mp4_data = mp4_header + b'\x00' * padding_size
-        else:
-            mp4_data = mp4_header
+    def create_test_video_file(self, filename="test_video.mp4", duration=1):
+        """Create a valid test video file using ffmpeg"""
+        import subprocess
         
         temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.mp4')
-        temp_file.write(mp4_data)
         temp_file.close()
         
-        return temp_file.name
+        try:
+            # Create a simple test video using ffmpeg
+            cmd = [
+                'ffmpeg', '-f', 'lavfi', 
+                '-i', f'testsrc=duration={duration}:size=320x240:rate=1',
+                '-c:v', 'libx264', '-t', str(duration), 
+                '-pix_fmt', 'yuv420p', temp_file.name, '-y'
+            ]
+            
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            if result.returncode != 0:
+                self.log(f"❌ Failed to create test video: {result.stderr}")
+                return None
+                
+            return temp_file.name
+        except Exception as e:
+            self.log(f"❌ Error creating test video: {e}")
+            return None
 
     def test_basic_connectivity(self):
         """Test basic API connectivity"""
