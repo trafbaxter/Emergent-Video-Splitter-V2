@@ -257,16 +257,35 @@ const MainApp = () => {
       </nav>
 
       {/* Main Content */}
-      <div style={{ padding: '20px 0' }}>
-        {currentView === 'video-splitter' ? (
-          <VideoSplitter />
-        ) : currentView === 'video-merger' ? (
-          <VideoMerger />
-        ) : currentView === 'profile' ? (
-          <UserProfile />
-        ) : currentView === 'admin' && currentUser && currentUser.role === 'admin' ? (
-          <AdminDashboard />
-        ) : (
+      <div style={{ padding: '20px 0', position: 'relative' }}>
+        <div style={{ 
+          display: currentView === 'video-splitter' ? 'block' : 'none'
+        }}>
+          {currentView === 'video-splitter' && <VideoSplitter />}
+        </div>
+        
+        <div style={{ 
+          display: currentView === 'video-merger' ? 'block' : 'none'
+        }}>
+          {currentView === 'video-merger' && <VideoMerger />}
+        </div>
+        
+        <div style={{ 
+          display: currentView === 'profile' ? 'block' : 'none'
+        }}>
+          {currentView === 'profile' && <UserProfile />}
+        </div>
+        
+        <div style={{ 
+          display: (currentView === 'admin' && currentUser && currentUser.role === 'admin') ? 'block' : 'none'
+        }}>
+          {currentView === 'admin' && currentUser && currentUser.role === 'admin' && <AdminDashboard />}
+        </div>
+        
+        {currentView !== 'video-splitter' && 
+         currentView !== 'video-merger' && 
+         currentView !== 'profile' && 
+         !(currentView === 'admin' && currentUser && currentUser.role === 'admin') && (
           <div style={{ 
             textAlign: 'center', 
             padding: '40px',
