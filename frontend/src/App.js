@@ -52,7 +52,8 @@ const MainApp = () => {
     return <PasswordResetComplete />;
   }
 
-  if (!currentUser && !demoMode) {
+  // Skip login form entirely in demo mode
+  if (!demoMode && !currentUser) {
     return (
       <div style={{
         minHeight: '100vh',
