@@ -19,8 +19,16 @@ export const AuthProvider = ({ children }) => {
   const API_BASE = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8001';
 
   useEffect(() => {
-    // Always skip authentication for demo mode
+    // Always enable demo mode for video merger application
+    // Skip all authentication API calls since we don't need them
+    console.log("AuthContext: Demo mode enabled, skipping authentication");
+    setLoading(false);
+    return;
+    
+    // Original authentication code (disabled for demo)
+    /*
     const isDemoMode = window.location.hostname.includes('emergentagent.com') || 
+                      window.location.hostname.includes('tads-video-splitter.com') ||
                       window.location.search.includes('demo=true') || 
                       !accessToken;
     
@@ -34,6 +42,7 @@ export const AuthProvider = ({ children }) => {
     } else {
       setLoading(false);
     }
+    */
   }, [accessToken]);
 
   const fetchUserProfile = async () => {
