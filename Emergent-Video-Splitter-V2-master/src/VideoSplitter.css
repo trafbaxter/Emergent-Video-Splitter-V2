@@ -1,0 +1,52 @@
+/* VideoSplitter Component Styles */
+
+/* Fix dropdown option visibility */
+.video-splitter select {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 10px;
+  padding: 10px 15px;
+  color: white;
+  font-size: 14px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.video-splitter select option {
+  background-color: #2d3748 !important;
+  color: white !important;
+  padding: 8px 12px;
+  border: none;
+}
+
+.video-splitter select option:hover {
+  background-color: #4a5568 !important;
+}
+
+.video-splitter select option:selected {
+  background-color: #667eea !important;
+}
+
+/* Video element styling */
+.video-splitter video {
+  background-color: #000;
+  border-radius: 10px;
+}
+
+/* Input styling for consistency */
+.video-splitter input[type="number"],
+.video-splitter input[type="text"] {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 10px;
+  padding: 10px 15px;
+  color: white;
+  font-size: 14px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.video-splitter input[type="number"]::placeholder,
+.video-splitter input[type="text"]::placeholder {
+  color: rgba(255, 255, 255, 0.6);
+}
