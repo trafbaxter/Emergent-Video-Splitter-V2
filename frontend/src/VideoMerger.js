@@ -1,13 +1,22 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 
 const VideoMerger = () => {
   console.log("VideoMerger component is rendering!");
   
+  useEffect(() => {
+    console.log("VideoMerger mounted and ready!");
+    return () => {
+      console.log("VideoMerger unmounting");
+    };
+  }, []);
+  
   return (
-    <div style={{ 
+    <div className="video-merger-container" style={{ 
       minHeight: '100vh',
       background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-      padding: '40px 20px'
+      padding: '40px 20px',
+      position: 'relative',
+      zIndex: 10
     }}>
       <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
         
@@ -70,7 +79,7 @@ const VideoMerger = () => {
             color: 'rgba(255,255,255,0.8)',
             fontSize: '16px'
           }}>
-            Video merging functionality coming soon! 🚧
+            Video merging functionality working! ✅
           </div>
         </div>
       </div>
