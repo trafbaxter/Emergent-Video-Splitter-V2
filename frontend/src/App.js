@@ -26,6 +26,8 @@ const MainApp = () => {
   
   // Always use demo user when demo mode is enabled
   const currentUser = demoMode ? demoUser : user;
+  
+  console.log("App.js Debug:", { demoMode, user, currentUser });
 
   // Check for password reset action in URL parameters
   const urlParams = new URLSearchParams(window.location.search);
