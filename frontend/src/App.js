@@ -16,7 +16,7 @@ const MainApp = () => {
   const [currentView, setCurrentView] = useState('video-splitter'); // 'video-splitter', 'video-merger', 'admin', or 'profile'
   
   // FOR DEMO PURPOSES: Create a demo user if no user is authenticated
-  const demoMode = true;
+  const demoMode = true; // Always enable demo mode for this implementation
   const demoUser = { 
     firstName: 'Demo', 
     lastName: 'User', 

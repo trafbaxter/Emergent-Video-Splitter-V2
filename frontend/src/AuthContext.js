@@ -16,11 +16,15 @@ export const AuthProvider = ({ children }) => {
   const [accessToken, setAccessToken] = useState(localStorage.getItem('access_token'));
   const [requires2FASetup, setRequires2FASetup] = useState(false);
   
-  const API_BASE = process.env.REACT_APP_BACKEND_URL || 'https://2419j971hh.execute-api.us-east-1.amazonaws.com/prod';
+  const API_BASE = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8001';
 
   useEffect(() => {
-    // Skip authentication API calls for demo mode or if no token
-    if (accessToken && window.location.search.includes('demo=true')) {
+    // Always skip authentication for demo mode
+    const isDemoMode = window.location.hostname.includes('emergentagent.com') || 
+                      window.location.search.includes('demo=true') || 
+                      !accessToken;
+    
+    if (isDemoMode) {
       setLoading(false);
       return;
     }
