@@ -196,7 +196,7 @@ const MainApp = () => {
               🔐 Security Settings
             </button>
             
-            {user.role === 'admin' && (
+            {currentUser && currentUser.role === 'admin' && (
               <button
                 onClick={() => setCurrentView('admin')}
                 style={{
