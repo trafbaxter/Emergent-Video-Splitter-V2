@@ -14,6 +14,17 @@ const MainApp = () => {
   const { user, logout, requires2FASetup, complete2FASetup } = useAuth();
   const [showRegister, setShowRegister] = useState(false);
   const [currentView, setCurrentView] = useState('video-splitter'); // 'video-splitter', 'video-merger', 'admin', or 'profile'
+  
+  // FOR DEMO PURPOSES: Allow access without authentication
+  const demoMode = true;
+  const demoUser = { 
+    firstName: 'Demo', 
+    lastName: 'User', 
+    email: 'demo@example.com', 
+    role: 'user' 
+  };
+  
+  const currentUser = demoMode ? demoUser : user;
 
   // Check for password reset action in URL parameters
   const urlParams = new URLSearchParams(window.location.search);
