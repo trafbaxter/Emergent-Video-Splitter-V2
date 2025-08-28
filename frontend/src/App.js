@@ -69,8 +69,8 @@ const MainApp = () => {
     );
   }
 
-  // Show mandatory 2FA setup if required
-  if (requires2FASetup) {
+  // Show mandatory 2FA setup if required (skip in demo mode)
+  if (requires2FASetup && !demoMode) {
     return (
       <div style={{
         minHeight: '100vh',
