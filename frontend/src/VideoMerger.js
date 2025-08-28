@@ -1,6 +1,8 @@
 import React from 'react';
 
 const VideoMerger = () => {
+  console.log("VideoMerger component is rendering!");
+  
   return (
     <div style={{ 
       minHeight: '100vh',
