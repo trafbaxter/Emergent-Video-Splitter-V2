@@ -152,6 +152,22 @@ const MainApp = () => {
             >
               Video Splitter
             </button>
+
+            <button
+              onClick={() => setCurrentView('video-merger')}
+              style={{
+                padding: '8px 16px',
+                backgroundColor: currentView === 'video-merger' ? '#9333ea' : 'transparent',
+                color: currentView === 'video-merger' ? 'white' : '#9333ea',
+                border: '1px solid #9333ea',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '14px',
+                fontWeight: 'bold'
+              }}
+            >
+              Video Merger
+            </button>
             
             <button
               onClick={() => setCurrentView('profile')}
