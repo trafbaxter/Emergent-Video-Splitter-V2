@@ -13,7 +13,7 @@ import PasswordResetComplete from './components/PasswordResetComplete';
 const MainApp = () => {
   const { user, logout, requires2FASetup, complete2FASetup } = useAuth();
   const [showRegister, setShowRegister] = useState(false);
-  const [currentView, setCurrentView] = useState('video-splitter'); // 'video-splitter', 'admin', or 'profile'
+  const [currentView, setCurrentView] = useState('video-splitter'); // 'video-splitter', 'video-merger', 'admin', or 'profile'
 
   // Check for password reset action in URL parameters
   const urlParams = new URLSearchParams(window.location.search);
@@ -133,7 +133,7 @@ const MainApp = () => {
             fontSize: '24px',
             fontWeight: 'bold'
           }}>
-            Video Splitter Pro
+            Video Splitter & Merger Pro
           </h1>
           
           <div style={{ display: 'flex', gap: '20px' }}>
@@ -142,7 +142,7 @@ const MainApp = () => {
               style={{
                 padding: '8px 16px',
                 backgroundColor: currentView === 'video-splitter' ? '#007bff' : 'transparent',
-                color: currentView === 'video-splitter' ? 'white' : '#333',
+                color: currentView === 'video-splitter' ? 'white' : '#007bff',
                 border: '1px solid #007bff',
                 borderRadius: '4px',
                 cursor: 'pointer',
@@ -150,23 +150,23 @@ const MainApp = () => {
                 fontWeight: 'bold'
               }}
             >
-              Video Splitter
+              📱 Video Splitter
             </button>
-
+            
             <button
               onClick={() => setCurrentView('video-merger')}
               style={{
                 padding: '8px 16px',
-                backgroundColor: currentView === 'video-merger' ? '#9333ea' : 'transparent',
-                color: currentView === 'video-merger' ? 'white' : '#9333ea',
-                border: '1px solid #9333ea',
+                backgroundColor: currentView === 'video-merger' ? '#17a2b8' : 'transparent',
+                color: currentView === 'video-merger' ? 'white' : '#17a2b8',
+                border: '1px solid #17a2b8',
                 borderRadius: '4px',
                 cursor: 'pointer',
                 fontSize: '14px',
                 fontWeight: 'bold'
               }}
             >
-              Video Merger
+              🎬 Video Merger
             </button>
             
             <button

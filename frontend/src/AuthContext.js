@@ -19,6 +19,12 @@ export const AuthProvider = ({ children }) => {
   const API_BASE = process.env.REACT_APP_BACKEND_URL || 'https://2419j971hh.execute-api.us-east-1.amazonaws.com/prod';
 
   useEffect(() => {
+    // Skip authentication API calls for demo mode or if no token
+    if (accessToken && window.location.search.includes('demo=true')) {
+      setLoading(false);
+      return;
+    }
+    
     if (accessToken) {
       fetchUserProfile();
     } else {
@@ -28,6 +34,12 @@ export const AuthProvider = ({ children }) => {
 
   const fetchUserProfile = async () => {
     try {
+      // Skip API call for demo mode
+      if (window.location.search.includes('demo=true')) {
+        setLoading(false);
+        return;
+      }
+      
       const response = await fetch(`${API_BASE}/api/user/profile`, {
         headers: {
           'Authorization': `Bearer ${accessToken}`,
@@ -51,7 +63,10 @@ export const AuthProvider = ({ children }) => {
       }
     } catch (error) {
       console.error('Failed to fetch user profile:', error);
-      logout();
+      // Don't logout on network errors for demo mode
+      if (!window.location.search.includes('demo=true')) {
+        logout();
+      }
     } finally {
       setLoading(false);
     }

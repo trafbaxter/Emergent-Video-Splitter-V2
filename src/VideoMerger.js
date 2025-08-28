@@ -1,319 +1,298 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import './VideoMerger.css';
 
-const API_BASE = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8001';
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
 const VideoMerger = () => {
   const [mergeJobId, setMergeJobId] = useState(null);
-  const [uploadedFiles, setUploadedFiles] = useState([]);
+  const [uploadedVideos, setUploadedVideos] = useState([]);
+  const [draggedIndex, setDraggedIndex] = useState(null);
+  const [dragOverIndex, setDragOverIndex] = useState(null);
   const [uploading, setUploading] = useState(false);
-  const [processing, setProcessing] = useState(false);
+  const [merging, setMerging] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [mergedResult, setMergedResult] = useState(null);
-  const [dragOver, setDragOver] = useState(false);
-  const [draggedItem, setDraggedItem] = useState(null);
+  const [mergeResult, setMergeResult] = useState(null);
+  const [error, setError] = useState(null);
   
   // Merge configuration
-  const [outputFormat, setOutputFormat] = useState('mp4');
-  const [preserveQuality, setPreserveQuality] = useState(true);
-  const [audioHandling, setAudioHandling] = useState('concat');
-  const [includeSubtitles, setIncludeSubtitles] = useState(true);
+  const [mergeConfig, setMergeConfig] = useState({
+    output_format: 'mp4',
+    quality_mode: 'auto',
+    custom_quality: {
+      width: 1920,
+      height: 1080,
+      bitrate: '2M',
+      fps: 30
+    },
+    preserve_audio: true,
+    transition_duration: 0.0
+  });
   
-  const fileInputRef = useRef();
-
-  // Format time helper
-  const formatTime = (seconds) => {
-    const hrs = Math.floor(seconds / 3600);
-    const mins = Math.floor((seconds % 3600) / 60);
-    const secs = Math.floor(seconds % 60);
-    if (hrs > 0) {
-      return `${hrs}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  const fileInputRef = useRef(null);
+  
+  useEffect(() => {
+    // Create merge job on component mount
+    createMergeJob();
+  }, []);
+  
+  useEffect(() => {
+    let pollInterval;
+    
+    if (merging && mergeJobId) {
+      pollInterval = setInterval(() => {
+        pollMergeStatus();
+      }, 2000);
     }
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  // Create new merge job
+    
+    return () => {
+      if (pollInterval) {
+        clearInterval(pollInterval);
+      }
+    };
+  }, [merging, mergeJobId]);
+  
   const createMergeJob = async () => {
     try {
-      const response = await fetch(`${API_BASE}/api/create-merge-job`, {
+      const response = await fetch(`${BACKEND_URL}/api/merge/create-job`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         }
       });
-
+      
       if (response.ok) {
         const data = await response.json();
         setMergeJobId(data.job_id);
-        return data.job_id;
       } else {
         throw new Error('Failed to create merge job');
       }
-    } catch (error) {
-      console.error('Error creating merge job:', error);
-      alert('Failed to create merge job');
-      return null;
+    } catch (err) {
+      setError('Failed to initialize merge job: ' + err.message);
     }
   };
-
-  // Handle file selection
-  const handleFileInputChange = (event) => {
+  
+  const handleFileSelect = (event) => {
     const files = Array.from(event.target.files);
-    handleFiles(files);
+    uploadVideos(files);
   };
-
-  // Handle drag and drop
-  const handleDragOver = (e) => {
-    e.preventDefault();
-    setDragOver(true);
-  };
-
-  const handleDragLeave = () => {
-    setDragOver(false);
-  };
-
-  const handleDrop = (e) => {
-    e.preventDefault();
-    setDragOver(false);
-    const files = Array.from(e.dataTransfer.files);
-    handleFiles(files);
-  };
-
-  // Process selected files
-  const handleFiles = async (files) => {
-    if (files.length === 0) return;
-
-    // Filter video files
+  
+  const handleDrop = (event) => {
+    event.preventDefault();
+    const files = Array.from(event.dataTransfer.files);
     const videoFiles = files.filter(file => 
       file.type.startsWith('video/') || 
-      file.name.toLowerCase().match(/\.(mp4|avi|mov|mkv|wmv|flv|webm|m4v)$/i)
+      /\.(mp4|mkv|avi|mov|wmv|flv|webm)$/i.test(file.name)
     );
-
-    if (videoFiles.length === 0) {
-      alert('Please select valid video files');
+    
+    if (videoFiles.length > 0) {
+      uploadVideos(videoFiles);
+    }
+  };
+  
+  const handleDragOver = (event) => {
+    event.preventDefault();
+  };
+  
+  const uploadVideos = async (files) => {
+    if (!mergeJobId) {
+      setError('No merge job available. Please refresh the page.');
       return;
     }
-
+    
     setUploading(true);
-
+    setError(null);
+    
     try {
-      // Create merge job if not exists
-      let jobId = mergeJobId;
-      if (!jobId) {
-        jobId = await createMergeJob();
-        if (!jobId) return;
+      for (const file of files) {
+        const formData = new FormData();
+        formData.append('file', file);
+        
+        const response = await fetch(`${BACKEND_URL}/api/merge/upload-video/${mergeJobId}`, {
+          method: 'POST',
+          body: formData
+        });
+        
+        if (response.ok) {
+          const videoData = await response.json();
+          setUploadedVideos(prev => [...prev, {
+            ...videoData,
+            file: file,
+            preview: URL.createObjectURL(file)
+          }]);
+        } else {
+          const errorData = await response.json();
+          throw new Error(errorData.detail || 'Upload failed');
+        }
       }
-
-      // Upload each file
-      for (const file of videoFiles) {
-        await uploadFileToMergeJob(jobId, file);
-      }
-
-      // Refresh job status
-      await refreshJobStatus(jobId);
-
-    } catch (error) {
-      console.error('Error handling files:', error);
-      alert('Error uploading files: ' + error.message);
+    } catch (err) {
+      setError('Upload failed: ' + err.message);
     } finally {
       setUploading(false);
     }
   };
-
-  // Upload file to merge job
-  const uploadFileToMergeJob = async (jobId, file) => {
-    const formData = new FormData();
-    formData.append('file', file);
-
-    const response = await fetch(`${API_BASE}/api/upload-merge-video/${jobId}`, {
-      method: 'POST',
-      body: formData
-    });
-
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`Failed to upload ${file.name}: ${error}`);
-    }
-
-    return response.json();
+  
+  const handleDragStart = (index) => {
+    setDraggedIndex(index);
   };
-
-  // Refresh job status
-  const refreshJobStatus = async (jobId) => {
-    try {
-      const response = await fetch(`${API_BASE}/api/merge-job-status/${jobId}`);
-      if (response.ok) {
-        const job = await response.json();
-        setUploadedFiles(job.input_files || []);
-        setProgress(job.progress || 0);
-        
-        if (job.status === 'completed') {
-          setMergedResult(job.merged_file);
-          setProcessing(false);
-        } else if (job.status === 'processing') {
-          setProcessing(true);
-        }
-      }
-    } catch (error) {
-      console.error('Error refreshing job status:', error);
-    }
+  
+  const handleDragOverVideo = (event, index) => {
+    event.preventDefault();
+    setDragOverIndex(index);
   };
-
-  // Remove file from merge
-  const removeFile = async (filename) => {
-    if (!mergeJobId) return;
-
-    try {
-      const response = await fetch(`${API_BASE}/api/remove-merge-file/${mergeJobId}/${filename}`, {
-        method: 'DELETE'
-      });
-
-      if (response.ok) {
-        await refreshJobStatus(mergeJobId);
-      } else {
-        alert('Failed to remove file');
-      }
-    } catch (error) {
-      console.error('Error removing file:', error);
-      alert('Error removing file');
-    }
+  
+  const handleDragLeave = () => {
+    setDragOverIndex(null);
   };
-
-  // Drag and drop reordering
-  const handleDragStart = useCallback((e, index) => {
-    setDraggedItem(index);
-    e.dataTransfer.effectAllowed = 'move';
-  }, []);
-
-  const handleDragOverItem = useCallback((e, index) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-  }, []);
-
-  const handleDropItem = useCallback(async (e, dropIndex) => {
-    e.preventDefault();
+  
+  const handleDrop2 = async (event, dropIndex) => {
+    event.preventDefault();
+    setDragOverIndex(null);
     
-    if (draggedItem === null || draggedItem === dropIndex) return;
-
-    // Reorder files locally first for immediate feedback
-    const reorderedFiles = [...uploadedFiles];
-    const [draggedFile] = reorderedFiles.splice(draggedItem, 1);
-    reorderedFiles.splice(dropIndex, 0, draggedFile);
+    if (draggedIndex === null || draggedIndex === dropIndex) {
+      setDraggedIndex(null);
+      return;
+    }
     
-    setUploadedFiles(reorderedFiles);
-    setDraggedItem(null);
-
-    // Update order on server
+    // Reorder videos locally
+    const newVideos = [...uploadedVideos];
+    const draggedVideo = newVideos[draggedIndex];
+    newVideos.splice(draggedIndex, 1);
+    newVideos.splice(dropIndex, 0, draggedVideo);
+    
+    // Update order values
+    const reorderedVideos = newVideos.map((video, index) => ({
+      ...video,
+      order: index
+    }));
+    
+    setUploadedVideos(reorderedVideos);
+    setDraggedIndex(null);
+    
+    // Update order on backend
     try {
-      const fileOrder = reorderedFiles.map(f => f.filename);
-      const response = await fetch(`${API_BASE}/api/reorder-merge-files/${mergeJobId}`, {
-        method: 'POST',
+      const orderData = reorderedVideos.map(video => ({
+        video_id: video.video_id,
+        order: video.order
+      }));
+      
+      await fetch(`${BACKEND_URL}/api/merge/reorder-videos/${mergeJobId}`, {
+        method: 'PUT',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(fileOrder)
+        body: JSON.stringify(orderData)
       });
-
-      if (!response.ok) {
-        // Revert on error
-        await refreshJobStatus(mergeJobId);
-      }
-    } catch (error) {
-      console.error('Error reordering files:', error);
-      await refreshJobStatus(mergeJobId);
+    } catch (err) {
+      console.error('Failed to update video order:', err);
+      setError('Failed to update video order');
     }
-  }, [draggedItem, uploadedFiles, mergeJobId]);
-
-  // Start merging process
-  const startMerging = async () => {
-    if (!mergeJobId || uploadedFiles.length < 2) return;
-
-    setProcessing(true);
-    setProgress(0);
-
+  };
+  
+  const removeVideo = async (videoId) => {
     try {
-      const mergeConfig = {
-        output_format: outputFormat,
-        preserve_quality: preserveQuality,
-        audio_handling: audioHandling,
-        include_subtitles: includeSubtitles,
-        video_file_order: uploadedFiles.map(f => f.filename)
-      };
-
-      const response = await fetch(`${API_BASE}/api/start-merge/${mergeJobId}`, {
+      const response = await fetch(`${BACKEND_URL}/api/merge/remove-video/${mergeJobId}/${videoId}`, {
+        method: 'DELETE'
+      });
+      
+      if (response.ok) {
+        setUploadedVideos(prev => prev.filter(video => video.video_id !== videoId));
+      } else {
+        throw new Error('Failed to remove video');
+      }
+    } catch (err) {
+      setError('Failed to remove video: ' + err.message);
+    }
+  };
+  
+  const startMerge = async () => {
+    if (uploadedVideos.length < 2) {
+      setError('Please upload at least 2 videos to merge');
+      return;
+    }
+    
+    setMerging(true);
+    setProgress(0);
+    setError(null);
+    
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/merge/start/${mergeJobId}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify(mergeConfig)
       });
-
-      if (response.ok) {
-        // Start polling for progress
-        pollMergeProgress();
-      } else {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to start merge');
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to start merge');
       }
-    } catch (error) {
-      console.error('Error starting merge:', error);
-      alert('Failed to start merge: ' + error.message);
-      setProcessing(false);
+    } catch (err) {
+      setError('Failed to start merge: ' + err.message);
+      setMerging(false);
     }
   };
-
-  // Poll merge progress
-  const pollMergeProgress = () => {
-    const poll = async () => {
-      try {
-        const response = await fetch(`${API_BASE}/api/merge-job-status/${mergeJobId}`);
-        if (response.ok) {
-          const job = await response.json();
-          setProgress(job.progress || 0);
-
-          if (job.status === 'completed') {
-            setMergedResult(job.merged_file);
-            setProcessing(false);
-          } else if (job.status === 'failed') {
-            alert('Merge failed: ' + (job.error_message || 'Unknown error'));
-            setProcessing(false);
-          } else {
-            // Continue polling
-            setTimeout(poll, 2000);
-          }
-        } else {
-          setTimeout(poll, 2000);
-        }
-      } catch (error) {
-        console.error('Polling error:', error);
-        setTimeout(poll, 2000);
-      }
-    };
-
-    poll();
-  };
-
-  // Download merged video
-  const downloadMergedVideo = async () => {
+  
+  const pollMergeStatus = async () => {
     if (!mergeJobId) return;
-
+    
     try {
-      window.open(`${API_BASE}/api/download-merged/${mergeJobId}`, '_blank');
-    } catch (error) {
-      console.error('Error downloading file:', error);
-      alert('Download failed');
+      const response = await fetch(`${BACKEND_URL}/api/merge/status/${mergeJobId}`);
+      
+      if (response.ok) {
+        const data = await response.json();
+        setProgress(data.progress);
+        
+        if (data.status === 'completed') {
+          setMerging(false);
+          setMergeResult(data);
+        } else if (data.status === 'failed') {
+          setMerging(false);
+          setError('Merge failed: ' + (data.error_message || 'Unknown error'));
+        }
+      }
+    } catch (err) {
+      console.error('Failed to poll merge status:', err);
     }
   };
-
-  // Reset merger
-  const resetMerger = () => {
-    setMergeJobId(null);
-    setUploadedFiles([]);
-    setMergedResult(null);
-    setProgress(0);
-    setProcessing(false);
+  
+  const downloadMergedVideo = async () => {
+    if (!mergeResult) return;
+    
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/merge/download/${mergeJobId}`);
+      
+      if (response.ok) {
+        const data = await response.json();
+        window.open(data.download_url, '_blank');
+      } else {
+        throw new Error('Failed to get download URL');
+      }
+    } catch (err) {
+      setError('Download failed: ' + err.message);
+    }
   };
-
-  // Styles
+  
+  const resetMerger = () => {
+    setUploadedVideos([]);
+    setMerging(false);
+    setProgress(0);
+    setMergeResult(null);
+    setError(null);
+    createMergeJob();
+  };
+  
+  const formatDuration = (seconds) => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = Math.floor(seconds % 60);
+    
+    if (hours > 0) {
+      return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
+    return `${minutes}:${secs.toString().padStart(2, '0')}`;
+  };
+  
   const cardStyle = {
     background: 'rgba(255, 255, 255, 0.1)',
     backdropFilter: 'blur(10px)',
@@ -323,7 +302,7 @@ const VideoMerger = () => {
     marginBottom: '30px',
     boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)'
   };
-
+  
   const buttonStyle = {
     background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
     border: 'none',
@@ -336,31 +315,9 @@ const VideoMerger = () => {
     transition: 'all 0.3s ease',
     boxShadow: '0 4px 15px rgba(0, 0, 0, 0.2)'
   };
-
-  const inputStyle = {
-    background: 'rgba(255, 255, 255, 0.1)',
-    border: '1px solid rgba(255, 255, 255, 0.3)',
-    borderRadius: '10px',
-    padding: '10px 15px',
-    color: 'white',
-    fontSize: '14px',
-    width: '100%',
-    boxSizing: 'border-box'
-  };
-
-  const selectStyle = {
-    background: 'rgba(255, 255, 255, 0.1)',
-    border: '1px solid rgba(255, 255, 255, 0.3)',
-    borderRadius: '10px',
-    padding: '10px 15px',
-    color: 'white',
-    fontSize: '14px',
-    width: '100%',
-    boxSizing: 'border-box'
-  };
-
+  
   return (
-    <div className="video-merger" style={{ 
+    <div style={{ 
       minHeight: '100vh',
       background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
       padding: '40px 20px'
@@ -376,7 +333,7 @@ const VideoMerger = () => {
             margin: '0 0 10px 0',
             textShadow: '0 2px 10px rgba(0,0,0,0.3)'
           }}>
-            Video Merger Pro
+            🎬 Video Merger Pro
           </h1>
           <p style={{ 
             color: 'rgba(255,255,255,0.8)', 
@@ -384,118 +341,150 @@ const VideoMerger = () => {
             margin: 0,
             fontWeight: '300'
           }}>
-            Combine multiple videos into one seamless file
+            Upload multiple videos and merge them into a single file
           </p>
         </div>
+
+        {/* Error Display */}
+        {error && (
+          <div style={{
+            ...cardStyle,
+            backgroundColor: 'rgba(244, 67, 54, 0.2)',
+            border: '1px solid rgba(244, 67, 54, 0.4)',
+            marginBottom: '20px'
+          }}>
+            <div style={{ color: '#ff6b6b', fontSize: '16px' }}>
+              ❌ {error}
+            </div>
+          </div>
+        )}
 
         {/* Upload Section */}
         <div style={cardStyle}>
           <h2 style={{ color: 'white', fontSize: '1.5rem', marginBottom: '20px', fontWeight: '600' }}>
-            Select Videos to Merge
+            Upload Videos to Merge
           </h2>
           
           <div
             onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
             onDrop={handleDrop}
             onClick={() => fileInputRef.current?.click()}
             style={{
-              border: `2px dashed ${dragOver ? '#4ade80' : 'rgba(255,255,255,0.3)'}`,
+              border: '2px dashed rgba(255,255,255,0.3)',
               borderRadius: '15px',
-              padding: '50px 20px',
+              padding: '40px 20px',
               textAlign: 'center',
               cursor: 'pointer',
               transition: 'all 0.3s ease',
-              background: dragOver ? 'rgba(74, 222, 128, 0.1)' : 'transparent'
+              marginBottom: '20px'
             }}
           >
             <input
               type="file"
-              accept="video/*,.mp4,.avi,.mov,.mkv,.webm,.flv,.wmv,.m4v"
-              onChange={handleFileInputChange}
-              ref={fileInputRef}
+              accept="video/*,.mp4,.avi,.mov,.mkv,.webm,.flv,.wmv"
               multiple
+              onChange={handleFileSelect}
+              ref={fileInputRef}
               style={{ display: 'none' }}
             />
             
-            <div style={{ fontSize: '3rem', marginBottom: '20px' }}>🎬</div>
+            <div style={{ fontSize: '3rem', marginBottom: '20px' }}>🎥</div>
             <h3 style={{ color: 'white', fontSize: '1.3rem', margin: '0 0 10px 0' }}>
-              Select Multiple Video Files
+              Choose Videos to Merge
             </h3>
             <p style={{ color: 'rgba(255,255,255,0.7)', margin: 0 }}>
-              Drag & drop or click to browse<br/>
-              <small>Select 2 or more videos to merge together</small>
+              Drag & drop multiple video files or click to browse<br/>
+              <small>Supports: MP4, AVI, MOV, MKV, WebM, FLV, WMV</small>
             </p>
-            
-            {uploading && (
-              <div style={{ marginTop: '20px', color: '#4ade80', fontSize: '16px' }}>
-                Uploading files...
-              </div>
-            )}
           </div>
+          
+          {uploading && (
+            <div style={{
+              textAlign: 'center',
+              color: 'rgba(255,255,255,0.8)',
+              fontSize: '16px'
+            }}>
+              Uploading videos... ⏳
+            </div>
+          )}
         </div>
 
-        {/* File List */}
-        {uploadedFiles.length > 0 && (
+        {/* Video List with Drag & Drop */}
+        {uploadedVideos.length > 0 && (
           <div style={cardStyle}>
             <h2 style={{ color: 'white', fontSize: '1.5rem', marginBottom: '20px', fontWeight: '600' }}>
-              Files to Merge ({uploadedFiles.length})
+              Videos to Merge ({uploadedVideos.length})
             </h2>
             <p style={{ color: 'rgba(255,255,255,0.7)', marginBottom: '20px', fontSize: '14px' }}>
-              Drag and drop to reorder • Files will be merged in this order
+              💡 Drag and drop videos to reorder them
             </p>
             
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-              {uploadedFiles.map((file, index) => (
+            <div style={{ display: 'grid', gap: '15px' }}>
+              {uploadedVideos.map((video, index) => (
                 <div
-                  key={file.filename}
+                  key={video.video_id}
                   draggable
-                  onDragStart={(e) => handleDragStart(e, index)}
-                  onDragOver={(e) => handleDragOverItem(e, index)}
-                  onDrop={(e) => handleDropItem(e, index)}
+                  onDragStart={() => handleDragStart(index)}
+                  onDragOver={(e) => handleDragOverVideo(e, index)}
+                  onDragLeave={handleDragLeave}
+                  onDrop={(e) => handleDrop2(e, index)}
                   style={{
-                    background: 'rgba(255, 255, 255, 0.05)',
-                    borderRadius: '15px',
-                    padding: '20px',
-                    border: '1px solid rgba(255, 255, 255, 0.1)',
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'space-between',
-                    cursor: 'move',
-                    transition: 'all 0.3s ease',
-                    opacity: draggedItem === index ? 0.5 : 1
+                    gap: '15px',
+                    padding: '15px',
+                    background: dragOverIndex === index ? 
+                      'rgba(255,255,255,0.2)' : 
+                      'rgba(255,255,255,0.05)',
+                    borderRadius: '10px',
+                    border: dragOverIndex === index ? 
+                      '2px solid rgba(255,255,255,0.4)' :
+                      '1px solid rgba(255,255,255,0.1)',
+                    cursor: 'grab',
+                    transition: 'all 0.3s ease'
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                    <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '18px' }}>
-                      ⋮⋮
+                  <div style={{
+                    background: 'rgba(255,255,255,0.2)',
+                    borderRadius: '8px',
+                    padding: '8px 12px',
+                    color: 'white',
+                    fontSize: '14px',
+                    fontWeight: 'bold',
+                    minWidth: '30px',
+                    textAlign: 'center'
+                  }}>
+                    {index + 1}
+                  </div>
+                  
+                  <div style={{ flex: 1, color: 'white' }}>
+                    <div style={{ fontWeight: '600', marginBottom: '5px' }}>
+                      {video.filename}
                     </div>
-                    <div style={{ color: 'white', fontSize: '1.5rem' }}>
-                      {index + 1}
-                    </div>
-                    <div>
-                      <div style={{ color: 'white', fontSize: '16px', fontWeight: '600' }}>
-                        {file.filename}
-                      </div>
-                      <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: '14px' }}>
-                        {formatTime(file.video_info?.duration || 0)} • {(file.size / (1024 * 1024)).toFixed(1)} MB
-                      </div>
+                    <div style={{ 
+                      fontSize: '12px', 
+                      color: 'rgba(255,255,255,0.7)',
+                      display: 'flex',
+                      gap: '15px'
+                    }}>
+                      <span>Duration: {formatDuration(video.duration)}</span>
+                      <span>Size: {(video.size / (1024 * 1024)).toFixed(1)} MB</span>
                     </div>
                   </div>
                   
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      removeFile(file.filename);
+                      removeVideo(video.video_id);
                     }}
                     style={{
-                      background: 'rgba(239, 68, 68, 0.2)',
-                      border: '1px solid rgba(239, 68, 68, 0.4)',
-                      borderRadius: '8px',
-                      padding: '8px 12px',
-                      color: '#ef4444',
+                      background: 'rgba(244, 67, 54, 0.2)',
+                      border: '1px solid rgba(244, 67, 54, 0.4)',
+                      borderRadius: '5px',
+                      color: '#ff6b6b',
+                      padding: '5px 10px',
                       cursor: 'pointer',
-                      fontSize: '14px'
+                      fontSize: '12px'
                     }}
                   >
                     Remove
@@ -507,135 +496,168 @@ const VideoMerger = () => {
         )}
 
         {/* Merge Configuration */}
-        {uploadedFiles.length >= 2 && !processing && !mergedResult && (
+        {uploadedVideos.length > 1 && !merging && !mergeResult && (
           <div style={cardStyle}>
-            <h2 style={{ color: 'white', fontSize: '1.5rem', marginBottom: '30px', fontWeight: '600' }}>
+            <h2 style={{ color: 'white', fontSize: '1.5rem', marginBottom: '20px', fontWeight: '600' }}>
               Merge Settings
             </h2>
             
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '40px' }}>
-              
-              {/* Left Column - Output Settings */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '30px' }}>
               <div>
-                <h3 style={{ color: 'white', fontSize: '1.2rem', marginBottom: '15px' }}>Output Settings</h3>
-                
-                <div style={{ marginBottom: '20px' }}>
-                  <label style={{ color: 'rgba(255,255,255,0.9)', display: 'block', marginBottom: '8px' }}>
-                    Output Format:
-                  </label>
-                  <select
-                    value={outputFormat}
-                    onChange={(e) => setOutputFormat(e.target.value)}
-                    style={{
-                      ...selectStyle,
-                      height: '45px'
-                    }}
-                  >
-                    <option value="mp4" style={{backgroundColor: '#2d3748', color: 'white'}}>MP4</option>
-                    <option value="mkv" style={{backgroundColor: '#2d3748', color: 'white'}}>MKV</option>
-                    <option value="avi" style={{backgroundColor: '#2d3748', color: 'white'}}>AVI</option>
-                    <option value="mov" style={{backgroundColor: '#2d3748', color: 'white'}}>MOV</option>
-                    <option value="webm" style={{backgroundColor: '#2d3748', color: 'white'}}>WebM</option>
-                  </select>
-                </div>
-
-                <div style={{ marginBottom: '20px' }}>
-                  <label style={{ 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    gap: '10px', 
-                    color: 'rgba(255,255,255,0.9)',
-                    cursor: 'pointer'
-                  }}>
-                    <input
-                      type="checkbox"
-                      checked={preserveQuality}
-                      onChange={(e) => setPreserveQuality(e.target.checked)}
-                      style={{ transform: 'scale(1.2)' }}
-                    />
-                    Preserve original quality
-                  </label>
-                </div>
-
-                <div style={{ marginBottom: '20px' }}>
-                  <label style={{ 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    gap: '10px', 
-                    color: 'rgba(255,255,255,0.9)',
-                    cursor: 'pointer'
-                  }}>
-                    <input
-                      type="checkbox"
-                      checked={includeSubtitles}
-                      onChange={(e) => setIncludeSubtitles(e.target.checked)}
-                      style={{ transform: 'scale(1.2)' }}
-                    />
-                    Include subtitles
-                  </label>
-                </div>
+                <h3 style={{ color: 'white', fontSize: '1.2rem', marginBottom: '15px' }}>Output Format</h3>
+                <select
+                  value={mergeConfig.output_format}
+                  onChange={(e) => setMergeConfig(prev => ({...prev, output_format: e.target.value}))}
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    borderRadius: '8px',
+                    border: '1px solid rgba(255,255,255,0.3)',
+                    background: 'rgba(255,255,255,0.1)',
+                    color: 'white',
+                    fontSize: '14px'
+                  }}
+                >
+                  <option value="mp4" style={{backgroundColor: '#2d3748', color: 'white'}}>MP4</option>
+                  <option value="mkv" style={{backgroundColor: '#2d3748', color: 'white'}}>MKV</option>
+                  <option value="avi" style={{backgroundColor: '#2d3748', color: 'white'}}>AVI</option>
+                  <option value="mov" style={{backgroundColor: '#2d3748', color: 'white'}}>MOV</option>
+                </select>
               </div>
-
-              {/* Right Column - Audio Settings */}
+              
               <div>
-                <h3 style={{ color: 'white', fontSize: '1.2rem', marginBottom: '15px' }}>Audio Handling</h3>
-                
-                <div style={{ marginBottom: '20px' }}>
-                  <select
-                    value={audioHandling}
-                    onChange={(e) => setAudioHandling(e.target.value)}
-                    style={{
-                      ...selectStyle,
-                      height: '45px'
-                    }}
-                  >
-                    <option value="concat" style={{backgroundColor: '#2d3748', color: 'white'}}>
-                      Concatenate (Keep all audio)
-                    </option>
-                    <option value="first_only" style={{backgroundColor: '#2d3748', color: 'white'}}>
-                      First video audio only
-                    </option>
-                    <option value="mix" style={{backgroundColor: '#2d3748', color: 'white'}}>
-                      Mix all audio tracks
-                    </option>
-                  </select>
-                </div>
-
-                <div style={{ 
-                  background: 'rgba(255,255,255,0.05)', 
-                  borderRadius: '10px', 
-                  padding: '15px',
-                  color: 'rgba(255,255,255,0.8)',
-                  fontSize: '14px'
-                }}>
-                  <strong>Audio Options:</strong>
-                  <ul style={{ margin: '10px 0', paddingLeft: '20px' }}>
-                    <li><strong>Concatenate:</strong> Join audio sequentially (recommended)</li>
-                    <li><strong>First only:</strong> Use audio from first video throughout</li>
-                    <li><strong>Mix:</strong> Blend audio tracks together (experimental)</li>
-                  </ul>
-                </div>
+                <h3 style={{ color: 'white', fontSize: '1.2rem', marginBottom: '15px' }}>Quality Mode</h3>
+                <select
+                  value={mergeConfig.quality_mode}
+                  onChange={(e) => setMergeConfig(prev => ({...prev, quality_mode: e.target.value}))}
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    borderRadius: '8px',
+                    border: '1px solid rgba(255,255,255,0.3)',
+                    background: 'rgba(255,255,255,0.1)',
+                    color: 'white',
+                    fontSize: '14px'
+                  }}
+                >
+                  <option value="auto" style={{backgroundColor: '#2d3748', color: 'white'}}>Auto-detect Best Settings</option>
+                  <option value="highest" style={{backgroundColor: '#2d3748', color: 'white'}}>Highest Quality</option>
+                  <option value="custom" style={{backgroundColor: '#2d3748', color: 'white'}}>Custom Settings</option>
+                </select>
               </div>
             </div>
-
+            
+            {mergeConfig.quality_mode === 'custom' && (
+              <div style={{ marginTop: '20px' }}>
+                <h3 style={{ color: 'white', fontSize: '1.1rem', marginBottom: '15px' }}>Custom Quality Settings</h3>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '15px' }}>
+                  <div>
+                    <label style={{ color: 'rgba(255,255,255,0.8)', fontSize: '12px' }}>Width</label>
+                    <input
+                      type="number"
+                      value={mergeConfig.custom_quality.width}
+                      onChange={(e) => setMergeConfig(prev => ({
+                        ...prev,
+                        custom_quality: {...prev.custom_quality, width: parseInt(e.target.value)}
+                      }))}
+                      style={{
+                        width: '100%',
+                        padding: '8px',
+                        borderRadius: '5px',
+                        border: '1px solid rgba(255,255,255,0.3)',
+                        background: 'rgba(255,255,255,0.1)',
+                        color: 'white',
+                        fontSize: '14px'
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ color: 'rgba(255,255,255,0.8)', fontSize: '12px' }}>Height</label>
+                    <input
+                      type="number"
+                      value={mergeConfig.custom_quality.height}
+                      onChange={(e) => setMergeConfig(prev => ({
+                        ...prev,
+                        custom_quality: {...prev.custom_quality, height: parseInt(e.target.value)}
+                      }))}
+                      style={{
+                        width: '100%',
+                        padding: '8px',
+                        borderRadius: '5px',
+                        border: '1px solid rgba(255,255,255,0.3)',
+                        background: 'rgba(255,255,255,0.1)',
+                        color: 'white',
+                        fontSize: '14px'
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ color: 'rgba(255,255,255,0.8)', fontSize: '12px' }}>Bitrate</label>
+                    <input
+                      type="text"
+                      value={mergeConfig.custom_quality.bitrate}
+                      onChange={(e) => setMergeConfig(prev => ({
+                        ...prev,
+                        custom_quality: {...prev.custom_quality, bitrate: e.target.value}
+                      }))}
+                      style={{
+                        width: '100%',
+                        padding: '8px',
+                        borderRadius: '5px',
+                        border: '1px solid rgba(255,255,255,0.3)',
+                        background: 'rgba(255,255,255,0.1)',
+                        color: 'white',
+                        fontSize: '14px'
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ color: 'rgba(255,255,255,0.8)', fontSize: '12px' }}>FPS</label>
+                    <input
+                      type="number"
+                      value={mergeConfig.custom_quality.fps}
+                      onChange={(e) => setMergeConfig(prev => ({
+                        ...prev,
+                        custom_quality: {...prev.custom_quality, fps: parseInt(e.target.value)}
+                      }))}
+                      style={{
+                        width: '100%',
+                        padding: '8px',
+                        borderRadius: '5px',
+                        border: '1px solid rgba(255,255,255,0.3)',
+                        background: 'rgba(255,255,255,0.1)',
+                        color: 'white',
+                        fontSize: '14px'
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+            
             <div style={{ textAlign: 'center', marginTop: '30px' }}>
               <button
-                onClick={startMerging}
+                onClick={startMerge}
+                disabled={uploadedVideos.length < 2}
                 style={{
                   ...buttonStyle,
-                  background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)',
+                  background: uploadedVideos.length < 2 ? 
+                    'rgba(255,255,255,0.2)' : 
+                    'linear-gradient(135deg, #4ade80 0%, #22c55e 100%)',
                   fontSize: '18px',
-                  padding: '15px 40px'
+                  padding: '15px 40px',
+                  cursor: uploadedVideos.length < 2 ? 'not-allowed' : 'pointer',
+                  opacity: uploadedVideos.length < 2 ? 0.5 : 1
                 }}
               >
-                Start Merging Videos
+                🎬 Start Merging Videos
               </button>
             </div>
           </div>
         )}
 
-        {/* Processing Progress */}
-        {processing && (
+        {/* Merging Progress */}
+        {merging && (
           <div style={cardStyle}>
             <h2 style={{ color: 'white', fontSize: '1.5rem', marginBottom: '20px', fontWeight: '600' }}>
               🎬 Merging Videos...
@@ -665,13 +687,26 @@ const VideoMerger = () => {
               fontSize: '18px', 
               fontWeight: '600' 
             }}>
-              {progress}% Complete
+              {progress.toFixed(1)}% Complete
+            </div>
+            
+            <div style={{
+              textAlign: 'center',
+              color: 'rgba(255,255,255,0.7)',
+              fontSize: '14px',
+              marginTop: '10px'
+            }}>
+              {progress < 30 ? 'Downloading videos...' :
+               progress < 40 ? 'Analyzing video properties...' :
+               progress < 80 ? 'Merging videos...' :
+               progress < 95 ? 'Uploading merged video...' :
+               'Finalizing...'}
             </div>
           </div>
         )}
 
         {/* Merge Result */}
-        {mergedResult && (
+        {mergeResult && (
           <div style={cardStyle}>
             <h2 style={{ color: 'white', fontSize: '1.5rem', marginBottom: '20px', fontWeight: '600' }}>
               ✅ Merge Complete!
@@ -680,61 +715,38 @@ const VideoMerger = () => {
             <div style={{
               background: 'rgba(74, 222, 128, 0.2)',
               borderRadius: '15px',
-              padding: '25px',
-              textAlign: 'center'
+              padding: '20px',
+              marginBottom: '20px'
             }}>
-              <div style={{ color: 'white', fontSize: '18px', marginBottom: '15px', fontWeight: '600' }}>
-                {mergedResult.filename}
+              <div style={{ color: 'white', fontSize: '16px', marginBottom: '10px' }}>
+                <strong>Output File:</strong> {mergeResult.output_filename}
               </div>
-              
-              <div style={{ color: 'rgba(255,255,255,0.8)', marginBottom: '20px' }}>
-                Duration: {formatTime(mergedResult.duration || 0)} • 
-                Size: {((mergedResult.size || 0) / (1024 * 1024)).toFixed(1)} MB
-              </div>
-              
-              <div style={{ display: 'flex', gap: '15px', justifyContent: 'center' }}>
-                <button
-                  onClick={downloadMergedVideo}
-                  style={{
-                    ...buttonStyle,
-                    background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)'
-                  }}
-                >
-                  Download Merged Video
-                </button>
-                
-                <button
-                  onClick={resetMerger}
-                  style={{
-                    ...buttonStyle,
-                    background: 'rgba(255,255,255,0.1)',
-                    border: '1px solid rgba(255,255,255,0.3)'
-                  }}
-                >
-                  Merge New Videos
-                </button>
+              <div style={{ color: 'rgba(255,255,255,0.8)', fontSize: '14px' }}>
+                Successfully merged {uploadedVideos.length} videos into a single file
               </div>
             </div>
-          </div>
-        )}
-
-        {/* Tips */}
-        {uploadedFiles.length === 0 && (
-          <div style={{
-            ...cardStyle,
-            background: 'rgba(255,255,255,0.05)'
-          }}>
-            <h3 style={{ color: 'white', fontSize: '1.2rem', marginBottom: '15px', fontWeight: '600' }}>
-              💡 Tips for Best Results
-            </h3>
             
-            <ul style={{ color: 'rgba(255,255,255,0.8)', lineHeight: '1.6', paddingLeft: '20px' }}>
-              <li>Use videos with similar resolutions and frame rates for best quality</li>
-              <li>Videos will be merged in the order you arrange them</li>
-              <li>Drag and drop to reorder videos before merging</li>
-              <li>Choose "Preserve quality" for fastest processing without re-encoding</li>
-              <li>Select appropriate audio handling based on your content</li>
-            </ul>
+            <div style={{ textAlign: 'center', display: 'flex', gap: '15px', justifyContent: 'center' }}>
+              <button
+                onClick={downloadMergedVideo}
+                style={{
+                  ...buttonStyle,
+                  background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)'
+                }}
+              >
+                📥 Download Merged Video
+              </button>
+              
+              <button
+                onClick={resetMerger}
+                style={{
+                  ...buttonStyle,
+                  background: 'linear-gradient(135deg, #6b7280 0%, #4b5563 100%)'
+                }}
+              >
+                🔄 Start New Merge
+              </button>
+            </div>
           </div>
         )}
       </div>

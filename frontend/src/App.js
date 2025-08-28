@@ -13,7 +13,18 @@ import PasswordResetComplete from './components/PasswordResetComplete';
 const MainApp = () => {
   const { user, logout, requires2FASetup, complete2FASetup } = useAuth();
   const [showRegister, setShowRegister] = useState(false);
-  const [currentView, setCurrentView] = useState('video-splitter'); // 'video-splitter', 'admin', or 'profile'
+  const [currentView, setCurrentView] = useState('video-splitter'); // 'video-splitter', 'video-merger', 'admin', or 'profile'
+  
+  // FOR DEMO PURPOSES: Create a demo user if no user is authenticated
+  const demoMode = true;
+  const demoUser = { 
+    firstName: 'Demo', 
+    lastName: 'User', 
+    email: 'demo@example.com', 
+    role: 'user' 
+  };
+  
+  const currentUser = (demoMode && !user) ? demoUser : user;
 
   // Check for password reset action in URL parameters
   const urlParams = new URLSearchParams(window.location.search);
@@ -40,7 +51,7 @@ const MainApp = () => {
     return <PasswordResetComplete />;
   }
 
-  if (!user) {
+  if (!currentUser && !demoMode) {
     return (
       <div style={{
         minHeight: '100vh',
@@ -58,8 +69,8 @@ const MainApp = () => {
     );
   }
 
-  // Show mandatory 2FA setup if required
-  if (requires2FASetup) {
+  // Show mandatory 2FA setup if required (skip in demo mode)
+  if (requires2FASetup && !demoMode) {
     return (
       <div style={{
         minHeight: '100vh',
@@ -133,7 +144,7 @@ const MainApp = () => {
             fontSize: '24px',
             fontWeight: 'bold'
           }}>
-            Video Splitter Pro
+            Video Splitter & Merger Pro
           </h1>
           
           <div style={{ display: 'flex', gap: '20px' }}>
@@ -142,7 +153,7 @@ const MainApp = () => {
               style={{
                 padding: '8px 16px',
                 backgroundColor: currentView === 'video-splitter' ? '#007bff' : 'transparent',
-                color: currentView === 'video-splitter' ? 'white' : '#333',
+                color: currentView === 'video-splitter' ? 'white' : '#007bff',
                 border: '1px solid #007bff',
                 borderRadius: '4px',
                 cursor: 'pointer',
@@ -150,23 +161,23 @@ const MainApp = () => {
                 fontWeight: 'bold'
               }}
             >
-              Video Splitter
+              📱 Video Splitter
             </button>
-
+            
             <button
               onClick={() => setCurrentView('video-merger')}
               style={{
                 padding: '8px 16px',
-                backgroundColor: currentView === 'video-merger' ? '#9333ea' : 'transparent',
-                color: currentView === 'video-merger' ? 'white' : '#9333ea',
-                border: '1px solid #9333ea',
+                backgroundColor: currentView === 'video-merger' ? '#17a2b8' : 'transparent',
+                color: currentView === 'video-merger' ? 'white' : '#17a2b8',
+                border: '1px solid #17a2b8',
                 borderRadius: '4px',
                 cursor: 'pointer',
                 fontSize: '14px',
                 fontWeight: 'bold'
               }}
             >
-              Video Merger
+              🎬 Video Merger
             </button>
             
             <button
@@ -185,7 +196,7 @@ const MainApp = () => {
               🔐 Security Settings
             </button>
             
-            {user.role === 'admin' && (
+            {currentUser && currentUser.role === 'admin' && (
               <button
                 onClick={() => setCurrentView('admin')}
                 style={{
@@ -208,40 +219,65 @@ const MainApp = () => {
         <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
           <div style={{ textAlign: 'right' }}>
             <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#333' }}>
-              {user.firstName} {user.lastName}
+              {currentUser.firstName} {currentUser.lastName}
             </div>
             <div style={{ fontSize: '12px', color: '#666' }}>
-              {user.role === 'admin' ? '🔒 Administrator' : '👤 User'} • {user.email}
+              {currentUser.role === 'admin' ? '🔒 Administrator' : '👤 User'} • {currentUser.email}
             </div>
           </div>
-          <button
-            onClick={handleLogout}
-            style={{
-              padding: '8px 16px',
-              backgroundColor: '#6c757d',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontSize: '14px'
-            }}
-          >
-            Logout
-          </button>
+          {!demoMode && (
+            <button
+              onClick={handleLogout}
+              style={{
+                padding: '8px 16px',
+                backgroundColor: '#6c757d',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '14px'
+              }}
+            >
+              Logout
+            </button>
+          )}
+          {demoMode && (
+            <div style={{ 
+              fontSize: '12px', 
+              color: '#28a745', 
+              fontWeight: 'bold',
+              padding: '4px 8px',
+              background: 'rgba(40, 167, 69, 0.1)',
+              borderRadius: '4px'
+            }}>
+              DEMO MODE
+            </div>
+          )}
         </div>
       </nav>
 
       {/* Main Content */}
-      <div style={{ padding: '20px 0' }}>
-        {currentView === 'video-splitter' ? (
-          <VideoSplitter />
-        ) : currentView === 'video-merger' ? (
-          <VideoMerger />
-        ) : currentView === 'profile' ? (
-          <UserProfile />
-        ) : currentView === 'admin' && user.role === 'admin' ? (
-          <AdminDashboard />
-        ) : (
+      <div key={currentView} style={{ padding: '20px 0', position: 'relative' }}>
+        {currentView === 'video-splitter' && (
+          <VideoSplitter key="splitter" />
+        )}
+        
+        {currentView === 'video-merger' && (
+          <VideoMerger key="merger" />
+        )}
+        
+        {currentView === 'profile' && (
+          <UserProfile key="profile" />
+        )}
+        
+        {currentView === 'admin' && currentUser && currentUser.role === 'admin' && (
+          <AdminDashboard key="admin" />
+        )}
+        
+        {currentView !== 'video-splitter' && 
+         currentView !== 'video-merger' && 
+         currentView !== 'profile' && 
+         !(currentView === 'admin' && currentUser && currentUser.role === 'admin') && (
           <div style={{ 
             textAlign: 'center', 
             padding: '40px',
