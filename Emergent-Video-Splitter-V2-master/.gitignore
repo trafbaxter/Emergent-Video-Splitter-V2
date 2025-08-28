@@ -1,0 +1,83 @@
+# Dependencies
+node_modules/
+lambda_deps/
+python_deps/
+final_lambda/
+lambda_package/
+
+# Environment variables (NEVER commit these)
+.env
+.env.local
+.env.production
+.env.staging
+.env.*
+
+# AWS credentials (NEVER commit these)
+.aws/
+credentials
+config
+
+# Build outputs
+dist/
+build/
+*.zip
+
+# Logs
+*.log
+logs/
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Temporary files
+temp/
+tmp/
+*.tmp
+
+# Backup files
+*backup*
+*_backup
+*.bak
+
+# Database files
+*.db
+*.sqlite
+
+# Certificates and keys (NEVER commit these)
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+
+# Configuration files that might contain secrets
+config.json
+secrets.json
