@@ -31,6 +31,16 @@ mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
+# AWS S3 configuration
+s3_client = boto3.client(
+    's3',
+    aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
+    aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
+    region_name=os.environ.get('AWS_REGION', 'us-east-1')
+)
+
+S3_BUCKET = os.environ.get('S3_BUCKET', 'video-merge-bucket')
+
 # Create the main app without a prefix
 app = FastAPI(
     title="Video Splitter API",
