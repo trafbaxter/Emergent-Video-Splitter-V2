@@ -51,7 +51,7 @@ const MainApp = () => {
     return <PasswordResetComplete />;
   }
 
-  if (!user) {
+  if (!currentUser && !demoMode) {
     return (
       <div style={{
         minHeight: '100vh',
