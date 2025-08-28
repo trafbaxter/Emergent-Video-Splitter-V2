@@ -19,8 +19,12 @@ export const AuthProvider = ({ children }) => {
   const API_BASE = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8001';
 
   useEffect(() => {
-    // Skip authentication API calls for demo mode - check both URL param and lack of token
-    if (window.location.search.includes('demo=true') || !accessToken) {
+    // Always skip authentication for demo mode
+    const isDemoMode = window.location.hostname.includes('emergentagent.com') || 
+                      window.location.search.includes('demo=true') || 
+                      !accessToken;
+    
+    if (isDemoMode) {
       setLoading(false);
       return;
     }
