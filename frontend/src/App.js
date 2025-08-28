@@ -11,10 +11,6 @@ import TwoFactorSetup from './components/TwoFactorSetup';
 import PasswordResetComplete from './components/PasswordResetComplete';
 
 const MainApp = () => {
-  const { user, logout, requires2FASetup, complete2FASetup } = useAuth();
-  const [showRegister, setShowRegister] = useState(false);
-  const [currentView, setCurrentView] = useState('video-splitter'); // 'video-splitter', 'video-merger', 'admin', or 'profile'
-  
   // FOR DEMO PURPOSES: Allow access without authentication
   const demoMode = true;
   const demoUser = { 
@@ -23,6 +19,20 @@ const MainApp = () => {
     email: 'demo@example.com', 
     role: 'user' 
   };
+  
+  // Only use auth context if not in demo mode
+  let user = null, logout = () => {}, requires2FASetup = false, complete2FASetup = () => {};
+  
+  if (!demoMode) {
+    const authContext = useAuth();
+    user = authContext.user;
+    logout = authContext.logout;
+    requires2FASetup = authContext.requires2FASetup;
+    complete2FASetup = authContext.complete2FASetup;
+  }
+  
+  const [showRegister, setShowRegister] = useState(false);
+  const [currentView, setCurrentView] = useState('video-splitter'); // 'video-splitter', 'video-merger', 'admin', or 'profile'
   
   const currentUser = demoMode ? demoUser : user;
 
