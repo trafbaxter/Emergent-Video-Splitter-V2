@@ -15,7 +15,7 @@ const MainApp = () => {
   const [showRegister, setShowRegister] = useState(false);
   const [currentView, setCurrentView] = useState('video-splitter'); // 'video-splitter', 'video-merger', 'admin', or 'profile'
   
-  // FOR DEMO PURPOSES: Create a demo user if no user is authenticated
+  // FOR DEMO PURPOSES: Always use demo user, ignore authentication completely
   const demoMode = true; // Always enable demo mode for this implementation
   const demoUser = { 
     firstName: 'Demo', 
@@ -24,7 +24,8 @@ const MainApp = () => {
     role: 'user' 
   };
   
-  const currentUser = (demoMode && !user) ? demoUser : user;
+  // Always use demo user when demo mode is enabled
+  const currentUser = demoMode ? demoUser : user;
 
   // Check for password reset action in URL parameters
   const urlParams = new URLSearchParams(window.location.search);
