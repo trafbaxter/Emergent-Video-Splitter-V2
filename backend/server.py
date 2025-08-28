@@ -33,10 +33,11 @@ db = client[os.environ['DB_NAME']]
 
 # AWS S3 configuration - credentials should be provided via environment variables
 # For production: use IAM roles, AWS credentials file, or environment variables
-# For development: set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment variables
+# Note: Some environments don't allow variables starting with "AWS_"
+# So we use ACCESS_KEY_ID and SECRET_ACCESS_KEY instead
 
-aws_access_key = os.environ.get('AWS_ACCESS_KEY_ID')
-aws_secret_key = os.environ.get('AWS_SECRET_ACCESS_KEY')
+aws_access_key = os.environ.get('ACCESS_KEY_ID') or os.environ.get('AWS_ACCESS_KEY_ID')
+aws_secret_key = os.environ.get('SECRET_ACCESS_KEY') or os.environ.get('AWS_SECRET_ACCESS_KEY')
 
 if aws_access_key and aws_secret_key:
     s3_client = boto3.client(
