@@ -342,6 +342,184 @@ async def process_video_job(job_id: str, file_path: str, config: SplitConfig):
             }}
         )
 
+async def merge_videos_with_config(
+    input_files: List[str],
+    output_path: str,
+    config: MergeConfig,
+    job_id: str
+) -> str:
+    """Merge multiple videos using FFmpeg"""
+    try:
+        # Create a temporary file list for FFmpeg concat demuxer
+        concat_file_path = PROCESS_DIR / f"{job_id}_concat_list.txt"
+        
+        # Create concat file content
+        with open(concat_file_path, 'w') as f:
+            for file_path in input_files:
+                # Escape file paths for FFmpeg
+                escaped_path = file_path.replace('\\', '\\\\').replace("'", "\\'")
+                f.write(f"file '{escaped_path}'\n")
+        
+        # Update progress
+        await update_merge_job_progress(job_id, 10, "preparing")
+        
+        # Build FFmpeg command based on configuration
+        if config.audio_handling == "concat":
+            # Simple concatenation - fastest method
+            (
+                ffmpeg
+                .input(str(concat_file_path), format='concat', safe=0)
+                .output(
+                    output_path,
+                    c='copy' if config.preserve_quality else 'libx264',
+                    acodec='copy' if config.preserve_quality else 'aac'
+                )
+                .overwrite_output()
+                .run(capture_stdout=True, capture_stderr=True)
+            )
+        elif config.audio_handling == "mix":
+            # More complex - mix audio tracks from all videos
+            input_streams = []
+            for file_path in input_files:
+                input_streams.append(ffmpeg.input(file_path))
+            
+            # Create filter complex for mixing
+            audio_inputs = [stream.audio for stream in input_streams]
+            mixed_audio = ffmpeg.filter(audio_inputs, 'amix', inputs=len(audio_inputs))
+            
+            # Concatenate video streams
+            video_inputs = [stream.video for stream in input_streams]
+            concatenated_video = ffmpeg.filter(video_inputs, 'concat', n=len(video_inputs), v=1, a=0)
+            
+            # Combine video and mixed audio
+            output_args = {
+                'c:v': 'copy' if config.preserve_quality else 'libx264',
+                'c:a': 'aac'
+            }
+            
+            (
+                ffmpeg
+                .output(concatenated_video, mixed_audio, output_path, **output_args)
+                .overwrite_output()
+                .run(capture_stdout=True, capture_stderr=True)
+            )
+        elif config.audio_handling == "first_only":
+            # Use audio from first video only
+            first_input = ffmpeg.input(input_files[0])
+            other_inputs = [ffmpeg.input(f) for f in input_files[1:]]
+            
+            # Get video from all, audio from first only
+            all_videos = [first_input.video] + [inp.video for inp in other_inputs]
+            concatenated_video = ffmpeg.filter(all_videos, 'concat', n=len(all_videos), v=1, a=0)
+            
+            output_args = {
+                'c:v': 'copy' if config.preserve_quality else 'libx264',
+                'c:a': 'copy' if config.preserve_quality else 'aac'
+            }
+            
+            (
+                ffmpeg
+                .output(concatenated_video, first_input.audio, output_path, **output_args)
+                .overwrite_output()
+                .run(capture_stdout=True, capture_stderr=True)
+            )
+        
+        # Clean up concat file
+        if concat_file_path.exists():
+            concat_file_path.unlink()
+        
+        # Update progress to completion
+        await update_merge_job_progress(job_id, 100, "completed")
+        
+        return output_path
+        
+    except ffmpeg.Error as e:
+        error_msg = e.stderr.decode() if e.stderr else str(e)
+        logger.error(f"FFmpeg error during merge: {error_msg}")
+        raise Exception(f"Error merging videos: {error_msg}")
+    except Exception as e:
+        logger.error(f"Error merging videos: {e}")
+        raise e
+
+async def update_merge_job_progress(job_id: str, progress: float, status: str = None):
+    """Update merge job progress in database"""
+    update_data = {
+        'progress': progress,
+        'updated_at': datetime.utcnow()
+    }
+    if status:
+        update_data['status'] = status
+    
+    await db.merge_jobs.update_one(
+        {'id': job_id},
+        {'$set': update_data}
+    )
+
+async def process_merge_job(job_id: str, file_paths: List[str], config: MergeConfig):
+    """Background task to process video merging"""
+    try:
+        # Update status to processing
+        await update_merge_job_progress(job_id, 5, "processing")
+        
+        # Reorder files based on config if specified
+        ordered_files = file_paths
+        if config.video_file_order:
+            # Reorder based on filename order specified in config
+            file_path_map = {os.path.basename(fp): fp for fp in file_paths}
+            ordered_files = []
+            for filename in config.video_file_order:
+                if filename in file_path_map:
+                    ordered_files.append(file_path_map[filename])
+            # Add any remaining files not in the order list
+            for fp in file_paths:
+                if fp not in ordered_files:
+                    ordered_files.append(fp)
+        
+        # Create output directory for this job
+        output_dir = OUTPUT_DIR / job_id
+        output_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Generate output filename
+        base_name = "merged_video"
+        output_filename = f"{base_name}.{config.output_format}"
+        output_path = str(output_dir / output_filename)
+        
+        # Merge the videos
+        merged_file_path = await merge_videos_with_config(
+            ordered_files, output_path, config, job_id
+        )
+        
+        # Get info about the merged file
+        merged_info = await get_video_info(merged_file_path)
+        merged_file_size = Path(merged_file_path).stat().st_size
+        
+        # Update job with completion
+        await db.merge_jobs.update_one(
+            {'id': job_id},
+            {'$set': {
+                'status': 'completed',
+                'progress': 100.0,
+                'merged_file': {
+                    'filename': output_filename,
+                    'size': merged_file_size,
+                    'duration': merged_info['duration'],
+                    'path': merged_file_path
+                },
+                'updated_at': datetime.utcnow()
+            }}
+        )
+        
+    except Exception as e:
+        logger.error(f"Error processing merge job {job_id}: {e}")
+        await db.merge_jobs.update_one(
+            {'id': job_id},
+            {'$set': {
+                'status': 'failed',
+                'error_message': str(e),
+                'updated_at': datetime.utcnow()
+            }}
+        )
+
 # API Endpoints
 # Add your routes to the router instead of directly to app
 @api_router.get("/")
