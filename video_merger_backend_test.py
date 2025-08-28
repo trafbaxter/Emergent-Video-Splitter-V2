@@ -5,6 +5,7 @@ import sys
 import os
 import tempfile
 import time
+import subprocess
 from datetime import datetime
 
 class VideoMergerAPITester:
