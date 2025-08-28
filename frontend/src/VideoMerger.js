@@ -5,81 +5,88 @@ const VideoMerger = () => {
   
   useEffect(() => {
     console.log("VideoMerger mounted and ready!");
+    // Force a style change to document body
+    document.body.style.border = "5px solid red";
+    document.title = "Video Merger Pro - Active";
+    
     return () => {
       console.log("VideoMerger unmounting");
+      document.body.style.border = "";
+      document.title = "Video Splitter & Merger Pro";
     };
   }, []);
   
   return (
-    <div className="video-merger-container" style={{ 
-      minHeight: '100vh',
-      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-      padding: '40px 20px',
-      position: 'relative',
-      zIndex: 10
-    }}>
+    <div 
+      className="video-merger-container" 
+      id="video-merger-active"
+      style={{ 
+        minHeight: '100vh',
+        background: 'linear-gradient(135deg, #ff6b6b 0%, #4ecdc4 100%)', // VERY different colors
+        padding: '40px 20px',
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        zIndex: 9999,
+        border: '10px solid orange' // Obvious visual indicator
+      }}>
       <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
         
         {/* Header */}
         <div style={{ textAlign: 'center', marginBottom: '40px' }}>
           <h1 style={{ 
-            fontSize: '3rem', 
-            fontWeight: '700', 
-            color: 'white', 
+            fontSize: '4rem', 
+            fontWeight: '900', 
+            color: 'yellow', 
             margin: '0 0 10px 0',
-            textShadow: '0 2px 10px rgba(0,0,0,0.3)'
+            textShadow: '0 2px 10px rgba(0,0,0,0.8)',
+            border: '5px solid black'
           }}>
-            🎬 Video Merger Pro
+            🎬 VIDEO MERGER PRO 🎬
           </h1>
           <p style={{ 
-            color: 'rgba(255,255,255,0.8)', 
-            fontSize: '1.2rem', 
+            color: 'white', 
+            fontSize: '1.5rem', 
             margin: 0,
-            fontWeight: '300'
+            fontWeight: '700',
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            padding: '10px',
+            borderRadius: '10px'
           }}>
-            Upload multiple videos and merge them into a single file
+            THIS IS THE MERGER COMPONENT - NOT SPLITTER!
           </p>
         </div>
 
-        {/* Upload Section */}
+        {/* Very obvious content */}
         <div style={{
-          background: 'rgba(255, 255, 255, 0.1)',
-          backdropFilter: 'blur(10px)',
+          background: 'rgba(255, 255, 0, 0.9)',
+          border: '5px solid red',
           borderRadius: '20px',
-          border: '1px solid rgba(255, 255, 255, 0.2)',
           padding: '30px',
           marginBottom: '30px',
-          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)'
+          textAlign: 'center'
         }}>
-          <h2 style={{ color: 'white', fontSize: '1.5rem', marginBottom: '20px', fontWeight: '600' }}>
-            Upload Videos to Merge
+          <h2 style={{ color: 'red', fontSize: '2rem', marginBottom: '20px', fontWeight: '900' }}>
+            🔥 VIDEO MERGER IS ACTIVE 🔥
           </h2>
           
           <div style={{
-            border: '2px dashed rgba(255,255,255,0.3)',
+            border: '5px dashed red',
             borderRadius: '15px',
             padding: '40px 20px',
             textAlign: 'center',
-            cursor: 'pointer',
-            transition: 'all 0.3s ease',
+            backgroundColor: 'white',
             marginBottom: '20px'
           }}>
-            <div style={{ fontSize: '3rem', marginBottom: '20px' }}>🎥</div>
-            <h3 style={{ color: 'white', fontSize: '1.3rem', margin: '0 0 10px 0' }}>
-              Choose Videos to Merge
+            <div style={{ fontSize: '5rem', marginBottom: '20px' }}>🎥🔀🎥</div>
+            <h3 style={{ color: 'black', fontSize: '2rem', margin: '0 0 10px 0' }}>
+              MERGE MULTIPLE VIDEOS HERE
             </h3>
-            <p style={{ color: 'rgba(255,255,255,0.7)', margin: 0 }}>
-              Drag & drop multiple video files or click to browse<br/>
-              <small>Supports: MP4, AVI, MOV, MKV, WebM, FLV, WMV</small>
+            <p style={{ color: 'black', margin: 0, fontSize: '1.2rem' }}>
+              This is definitely the VideoMerger component!<br/>
+              <strong>NOT the Video Splitter</strong>
             </p>
-          </div>
-          
-          <div style={{
-            textAlign: 'center',
-            color: 'rgba(255,255,255,0.8)',
-            fontSize: '16px'
-          }}>
-            Video merging functionality working! ✅
           </div>
         </div>
       </div>
