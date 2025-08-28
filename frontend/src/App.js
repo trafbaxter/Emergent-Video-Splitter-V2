@@ -264,7 +264,7 @@ const MainApp = () => {
           <VideoMerger />
         ) : currentView === 'profile' ? (
           <UserProfile />
-        ) : currentView === 'admin' && user.role === 'admin' ? (
+        ) : currentView === 'admin' && currentUser.role === 'admin' ? (
           <AdminDashboard />
         ) : (
           <div style={{ 
