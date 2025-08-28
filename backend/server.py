@@ -68,6 +68,18 @@ class VideoProcessingJob(BaseModel):
     file_path: Optional[str] = None
     video_info: Optional[Dict] = None
 
+class VideoMergeJob(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    job_type: str = "merge"  # Differentiate from split jobs
+    status: str  # "uploading", "processing", "completed", "failed"
+    progress: float = 0.0
+    input_files: List[Dict] = []  # List of uploaded video files with metadata
+    merged_file: Optional[Dict] = None  # Result file info
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    error_message: Optional[str] = None
+    merge_config: Optional[Dict] = None
+
 class SplitConfig(BaseModel):
     method: str  # "time_based", "intervals", "chapters"
     time_points: Optional[List[float]] = None  # for time_based splitting
@@ -77,6 +89,13 @@ class SplitConfig(BaseModel):
     subtitle_sync_offset: float = 0.0
     force_keyframes: bool = True  # Force keyframes at split points
     keyframe_interval: float = 2.0  # Keyframe interval in seconds
+
+class MergeConfig(BaseModel):
+    output_format: str = "mp4"
+    preserve_quality: bool = True
+    audio_handling: str = "concat"  # "concat", "mix", "first_only"
+    include_subtitles: bool = True
+    video_file_order: List[str] = []  # Order of files to merge by filename
 
 class VideoInfo(BaseModel):
     duration: float
