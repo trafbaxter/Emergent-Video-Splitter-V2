@@ -1135,6 +1135,297 @@ async def cleanup_job(job_id: str):
         logger.error(f"Cleanup error: {e}")
         raise HTTPException(status_code=500, detail=f"Cleanup failed: {str(e)}")
 
+# Video Merging API Endpoints
+@api_router.post("/merge/create-job")
+async def create_merge_job():
+    """Create a new video merge job"""
+    job_id = str(uuid.uuid4())
+    job = VideoMergeJob(id=job_id)
+    
+    await db.video_merge_jobs.insert_one(job.dict())
+    
+    return {"job_id": job_id, "message": "Merge job created successfully"}
+
+@api_router.post("/merge/upload-video/{job_id}")
+async def upload_video_for_merge(job_id: str, file: UploadFile = File(...)):
+    """Upload a video file for merging"""
+    
+    # Validate file format
+    if not file.filename.lower().endswith(('.mp4', '.mkv', '.avi', '.mov', '.wmv', '.flv', '.webm')):
+        raise HTTPException(status_code=400, detail="Unsupported video format")
+    
+    # Check if merge job exists
+    job = await db.video_merge_jobs.find_one({"id": job_id})
+    if not job:
+        raise HTTPException(status_code=404, detail="Merge job not found")
+    
+    if job['status'] != 'pending':
+        raise HTTPException(status_code=400, detail="Cannot add videos to job that is not pending")
+    
+    try:
+        # Create unique S3 key
+        video_id = str(uuid.uuid4())
+        s3_key = f"merge-uploads/{job_id}/{video_id}_{file.filename}"
+        
+        # Save file temporarily
+        temp_path = UPLOAD_DIR / f"temp_{video_id}_{file.filename}"
+        
+        # Stream file to disk
+        total_size = 0
+        chunk_size = 1024 * 1024  # 1MB chunks
+        
+        async with aiofiles.open(temp_path, 'wb') as f:
+            while True:
+                chunk = await file.read(chunk_size)
+                if not chunk:
+                    break
+                await f.write(chunk)
+                total_size += len(chunk)
+        
+        # Get video info
+        video_info = await get_video_info(str(temp_path))
+        
+        # Upload to S3
+        upload_success = await upload_to_s3(str(temp_path), s3_key)
+        
+        if not upload_success:
+            temp_path.unlink()  # Clean up temp file
+            raise HTTPException(status_code=500, detail="Failed to upload to S3")
+        
+        # Create video info object
+        merge_video = MergeVideoInfo(
+            id=video_id,
+            filename=file.filename,
+            s3_key=s3_key,
+            duration=video_info['duration'],
+            size=total_size,
+            video_info=video_info,
+            order=len(job['videos'])  # Auto-assign order based on upload sequence
+        )
+        
+        # Add video to merge job
+        await db.video_merge_jobs.update_one(
+            {'id': job_id},
+            {
+                '$push': {'videos': merge_video.dict()},
+                '$set': {'updated_at': datetime.utcnow()}
+            }
+        )
+        
+        # Clean up temp file
+        temp_path.unlink()
+        
+        return {
+            "video_id": video_id,
+            "filename": file.filename,
+            "size": total_size,
+            "duration": video_info['duration'],
+            "order": merge_video.order,
+            "message": "Video uploaded successfully"
+        }
+        
+    except Exception as e:
+        logger.error(f"Upload error: {e}")
+        # Clean up temp file if it exists
+        temp_path = UPLOAD_DIR / f"temp_{video_id}_{file.filename}"
+        if temp_path.exists():
+            temp_path.unlink()
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+
+@api_router.put("/merge/reorder-videos/{job_id}")
+async def reorder_videos(job_id: str, video_order: List[Dict[str, Any]]):
+    """Reorder videos in merge job
+    Expects: [{"video_id": "id1", "order": 0}, {"video_id": "id2", "order": 1}, ...]
+    """
+    
+    job = await db.video_merge_jobs.find_one({"id": job_id})
+    if not job:
+        raise HTTPException(status_code=404, detail="Merge job not found")
+    
+    if job['status'] != 'pending':
+        raise HTTPException(status_code=400, detail="Cannot reorder videos in job that is not pending")
+    
+    try:
+        # Update video orders
+        for video in job['videos']:
+            for reorder in video_order:
+                if video['id'] == reorder['video_id']:
+                    video['order'] = reorder['order']
+                    break
+        
+        # Sort videos by new order
+        job['videos'].sort(key=lambda x: x['order'])
+        
+        # Update in database
+        await db.video_merge_jobs.update_one(
+            {'id': job_id},
+            {
+                '$set': {
+                    'videos': job['videos'],
+                    'updated_at': datetime.utcnow()
+                }
+            }
+        )
+        
+        return {"message": "Video order updated successfully", "videos": job['videos']}
+        
+    except Exception as e:
+        logger.error(f"Reorder error: {e}")
+        raise HTTPException(status_code=500, detail=f"Reorder failed: {str(e)}")
+
+@api_router.delete("/merge/remove-video/{job_id}/{video_id}")
+async def remove_video_from_merge(job_id: str, video_id: str):
+    """Remove a video from merge job"""
+    
+    job = await db.video_merge_jobs.find_one({"id": job_id})
+    if not job:
+        raise HTTPException(status_code=404, detail="Merge job not found")
+    
+    if job['status'] != 'pending':
+        raise HTTPException(status_code=400, detail="Cannot remove videos from job that is not pending")
+    
+    try:
+        # Find and remove video
+        video_to_remove = None
+        for video in job['videos']:
+            if video['id'] == video_id:
+                video_to_remove = video
+                break
+        
+        if not video_to_remove:
+            raise HTTPException(status_code=404, detail="Video not found in merge job")
+        
+        # Remove from S3 (optional, for cleanup)
+        # s3_client.delete_object(Bucket=S3_BUCKET, Key=video_to_remove['s3_key'])
+        
+        # Remove from job
+        await db.video_merge_jobs.update_one(
+            {'id': job_id},
+            {
+                '$pull': {'videos': {'id': video_id}},
+                '$set': {'updated_at': datetime.utcnow()}
+            }
+        )
+        
+        return {"message": "Video removed successfully"}
+        
+    except Exception as e:
+        logger.error(f"Remove video error: {e}")
+        raise HTTPException(status_code=500, detail=f"Remove video failed: {str(e)}")
+
+@api_router.post("/merge/start/{job_id}")
+async def start_merge_job(
+    job_id: str, 
+    config: MergeConfig,
+    background_tasks: BackgroundTasks
+):
+    """Start the video merging process"""
+    
+    job = await db.video_merge_jobs.find_one({"id": job_id})
+    if not job:
+        raise HTTPException(status_code=404, detail="Merge job not found")
+    
+    if job['status'] != 'pending':
+        raise HTTPException(status_code=400, detail="Job is not in pending state")
+    
+    if len(job['videos']) < 2:
+        raise HTTPException(status_code=400, detail="Need at least 2 videos to merge")
+    
+    # Start background processing
+    background_tasks.add_task(process_merge_job, job_id, config)
+    
+    return {"message": "Merge process started", "job_id": job_id}
+
+@api_router.get("/merge/status/{job_id}")
+async def get_merge_job_status(job_id: str):
+    """Get merge job status and progress"""
+    
+    job = await db.video_merge_jobs.find_one({"id": job_id})
+    if not job:
+        raise HTTPException(status_code=404, detail="Merge job not found")
+    
+    return {
+        "id": job['id'],
+        "status": job['status'],
+        "progress": job['progress'],
+        "videos": job['videos'],
+        "output_filename": job.get('output_filename'),
+        "error_message": job.get('error_message'),
+        "merge_settings": job.get('merge_settings'),
+        "created_at": job['created_at'],
+        "updated_at": job['updated_at']
+    }
+
+@api_router.get("/merge/download/{job_id}")
+async def download_merged_video(job_id: str):
+    """Get download URL for merged video"""
+    
+    job = await db.video_merge_jobs.find_one({"id": job_id})
+    if not job:
+        raise HTTPException(status_code=404, detail="Merge job not found")
+    
+    if job['status'] != 'completed':
+        raise HTTPException(status_code=400, detail="Merge job not completed")
+    
+    if not job.get('output_s3_key'):
+        raise HTTPException(status_code=404, detail="Output file not found")
+    
+    try:
+        # Generate presigned URL for download
+        download_url = await generate_s3_presigned_url(job['output_s3_key'], expires_in=3600)
+        
+        if not download_url:
+            raise HTTPException(status_code=500, detail="Failed to generate download URL")
+        
+        return {
+            "download_url": download_url,
+            "filename": job['output_filename'],
+            "expires_in": 3600
+        }
+        
+    except Exception as e:
+        logger.error(f"Download URL generation error: {e}")
+        raise HTTPException(status_code=500, detail=f"Download failed: {str(e)}")
+
+@api_router.delete("/merge/cleanup/{job_id}")
+async def cleanup_merge_job(job_id: str):
+    """Clean up merge job and associated files"""
+    try:
+        job = await db.video_merge_jobs.find_one({"id": job_id})
+        if job:
+            # Delete videos from S3
+            for video in job.get('videos', []):
+                try:
+                    s3_client.delete_object(Bucket=S3_BUCKET, Key=video['s3_key'])
+                except Exception as e:
+                    logger.warning(f"Failed to delete S3 object {video['s3_key']}: {e}")
+            
+            # Delete merged output from S3
+            if job.get('output_s3_key'):
+                try:
+                    s3_client.delete_object(Bucket=S3_BUCKET, Key=job['output_s3_key'])
+                except Exception as e:
+                    logger.warning(f"Failed to delete S3 output {job['output_s3_key']}: {e}")
+        
+        # Remove job from database
+        await db.video_merge_jobs.delete_one({"id": job_id})
+        
+        return {"message": "Merge job cleaned up successfully"}
+    
+    except Exception as e:
+        logger.error(f"Cleanup error: {e}")
+        raise HTTPException(status_code=500, detail=f"Cleanup failed: {str(e)}")
+
+@api_router.get("/merge/jobs")
+async def list_merge_jobs(limit: int = 50):
+    """List recent merge jobs"""
+    try:
+        jobs = await db.video_merge_jobs.find().sort("created_at", -1).limit(limit).to_list(limit)
+        return {"jobs": jobs}
+    except Exception as e:
+        logger.error(f"List jobs error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to list jobs: {str(e)}")
+
 # Add CORS middleware before including routes
 app.add_middleware(
     CORSMiddleware,
