@@ -1034,6 +1034,292 @@ async def cleanup_job(job_id: str):
         logger.error(f"Cleanup error: {e}")
         raise HTTPException(status_code=500, detail=f"Cleanup failed: {str(e)}")
 
+# Video Merge Endpoints
+
+@api_router.post("/create-merge-job")
+async def create_merge_job():
+    """Create a new merge job"""
+    job_id = str(uuid.uuid4())
+    
+    merge_job = VideoMergeJob(
+        id=job_id,
+        status="created",
+        progress=0.0,
+        input_files=[],
+        merge_config={}
+    )
+    
+    # Save to database
+    await db.merge_jobs.insert_one(merge_job.dict())
+    
+    return {
+        "job_id": job_id,
+        "status": "created",
+        "message": "Merge job created successfully"
+    }
+
+@api_router.post("/upload-merge-video/{job_id}")
+async def upload_merge_video(job_id: str, file: UploadFile = File(...)):
+    """Upload a video file to be included in merge job"""
+    logger.info(f"Merge upload attempt - job_id: {job_id}, filename: {file.filename}")
+    
+    # Verify job exists
+    job = await db.merge_jobs.find_one({"id": job_id})
+    if not job:
+        raise HTTPException(status_code=404, detail="Merge job not found")
+    
+    if job['status'] not in ['created', 'uploading']:
+        raise HTTPException(status_code=400, detail="Job is not in uploading state")
+    
+    if not file.filename.lower().endswith(('.mp4', '.mkv', '.avi', '.mov', '.wmv', '.flv', '.webm')):
+        raise HTTPException(status_code=400, detail="Unsupported video format")
+    
+    # Save file
+    file_path = UPLOAD_DIR / f"{job_id}_{file.filename}"
+    
+    try:
+        # Stream file to disk
+        total_size = 0
+        chunk_size = 1024 * 1024  # 1MB chunks
+        
+        async with aiofiles.open(file_path, 'wb') as f:
+            while True:
+                chunk = await file.read(chunk_size)
+                if not chunk:
+                    break
+                await f.write(chunk)
+                total_size += len(chunk)
+        
+        # Get video info
+        video_info = await get_video_info(str(file_path))
+        
+        # Add file info to job
+        file_info = {
+            'filename': file.filename,
+            'file_path': str(file_path),
+            'size': total_size,
+            'video_info': video_info
+        }
+        
+        # Update job with new file
+        await db.merge_jobs.update_one(
+            {'id': job_id},
+            {
+                '$push': {'input_files': file_info},
+                '$set': {
+                    'status': 'uploading',
+                    'updated_at': datetime.utcnow()
+                }
+            }
+        )
+        
+        logger.info(f"Successfully uploaded merge video: {file.filename}, size: {total_size / 1024 / 1024:.1f} MB")
+        
+        return {
+            "message": "File uploaded successfully",
+            "filename": file.filename,
+            "size": total_size,
+            "video_info": video_info
+        }
+        
+    except Exception as e:
+        logger.error(f"Merge upload error: {e}")
+        # Clean up partial file if upload failed
+        if file_path.exists():
+            file_path.unlink()
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+
+@api_router.get("/merge-job-status/{job_id}")
+async def get_merge_job_status(job_id: str):
+    """Get merge job status and files"""
+    job = await db.merge_jobs.find_one({"id": job_id})
+    if not job:
+        raise HTTPException(status_code=404, detail="Merge job not found")
+    
+    return {
+        "id": job['id'],
+        "status": job['status'],
+        "progress": job['progress'],
+        "input_files": job.get('input_files', []),
+        "merged_file": job.get('merged_file'),
+        "error_message": job.get('error_message'),
+        "created_at": job['created_at'],
+        "updated_at": job['updated_at']
+    }
+
+@api_router.post("/start-merge/{job_id}")
+async def start_merge(
+    job_id: str,
+    config: MergeConfig,
+    background_tasks: BackgroundTasks
+):
+    """Start the video merge process"""
+    # Get job from database
+    job = await db.merge_jobs.find_one({"id": job_id})
+    if not job:
+        raise HTTPException(status_code=404, detail="Merge job not found")
+    
+    if job['status'] != 'uploading':
+        raise HTTPException(status_code=400, detail="Job is not ready for merging")
+    
+    if len(job.get('input_files', [])) < 2:
+        raise HTTPException(status_code=400, detail="At least 2 videos are required for merging")
+    
+    # Extract file paths from job
+    file_paths = [file_info['file_path'] for file_info in job['input_files']]
+    
+    # Update merge config in job
+    await db.merge_jobs.update_one(
+        {'id': job_id},
+        {'$set': {
+            'merge_config': config.dict(),
+            'status': 'ready_to_process',
+            'updated_at': datetime.utcnow()
+        }}
+    )
+    
+    # Start background processing
+    background_tasks.add_task(process_merge_job, job_id, file_paths, config)
+    
+    return {
+        "message": "Video merge started",
+        "job_id": job_id,
+        "files_count": len(file_paths)
+    }
+
+@api_router.delete("/remove-merge-file/{job_id}/{filename}")
+async def remove_merge_file(job_id: str, filename: str):
+    """Remove a file from merge job"""
+    job = await db.merge_jobs.find_one({"id": job_id})
+    if not job:
+        raise HTTPException(status_code=404, detail="Merge job not found")
+    
+    if job['status'] not in ['created', 'uploading']:
+        raise HTTPException(status_code=400, detail="Cannot remove files from job in current status")
+    
+    # Find and remove file from input_files list
+    input_files = job.get('input_files', [])
+    file_to_remove = None
+    updated_files = []
+    
+    for file_info in input_files:
+        if file_info['filename'] == filename:
+            file_to_remove = file_info
+        else:
+            updated_files.append(file_info)
+    
+    if not file_to_remove:
+        raise HTTPException(status_code=404, detail="File not found in merge job")
+    
+    # Remove physical file
+    file_path = Path(file_to_remove['file_path'])
+    if file_path.exists():
+        file_path.unlink()
+    
+    # Update job in database
+    await db.merge_jobs.update_one(
+        {'id': job_id},
+        {
+            '$set': {
+                'input_files': updated_files,
+                'updated_at': datetime.utcnow()
+            }
+        }
+    )
+    
+    return {"message": "File removed successfully"}
+
+@api_router.post("/reorder-merge-files/{job_id}")
+async def reorder_merge_files(job_id: str, file_order: List[str]):
+    """Update the order of files in merge job"""
+    job = await db.merge_jobs.find_one({"id": job_id})
+    if not job:
+        raise HTTPException(status_code=404, detail="Merge job not found")
+    
+    if job['status'] not in ['created', 'uploading']:
+        raise HTTPException(status_code=400, detail="Cannot reorder files in current status")
+    
+    # Reorder input_files based on provided order
+    input_files = job.get('input_files', [])
+    file_map = {f['filename']: f for f in input_files}
+    
+    reordered_files = []
+    for filename in file_order:
+        if filename in file_map:
+            reordered_files.append(file_map[filename])
+    
+    # Add any files not in the order list at the end
+    for file_info in input_files:
+        if file_info not in reordered_files:
+            reordered_files.append(file_info)
+    
+    # Update job in database
+    await db.merge_jobs.update_one(
+        {'id': job_id},
+        {
+            '$set': {
+                'input_files': reordered_files,
+                'updated_at': datetime.utcnow()
+            }
+        }
+    )
+    
+    return {"message": "Files reordered successfully"}
+
+@api_router.get("/download-merged/{job_id}")
+async def download_merged_video(job_id: str):
+    """Download the merged video file"""
+    job = await db.merge_jobs.find_one({"id": job_id})
+    if not job or job['status'] != 'completed':
+        raise HTTPException(status_code=404, detail="Merge job not found or not completed")
+    
+    merged_file = job.get('merged_file')
+    if not merged_file:
+        raise HTTPException(status_code=404, detail="Merged file not found")
+    
+    file_path = Path(merged_file['path'])
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Merged file not found on disk")
+    
+    return FileResponse(
+        file_path,
+        media_type='application/octet-stream',
+        filename=merged_file['filename']
+    )
+
+@api_router.delete("/cleanup-merge/{job_id}")
+async def cleanup_merge_job(job_id: str):
+    """Clean up merge job files"""
+    try:
+        job = await db.merge_jobs.find_one({"id": job_id})
+        if job:
+            # Remove input files
+            for file_info in job.get('input_files', []):
+                file_path = Path(file_info['file_path'])
+                if file_path.exists():
+                    file_path.unlink()
+            
+            # Remove merged file
+            merged_file = job.get('merged_file')
+            if merged_file and merged_file.get('path'):
+                merged_path = Path(merged_file['path'])
+                if merged_path.exists():
+                    merged_path.unlink()
+            
+            # Remove output directory
+            output_dir = OUTPUT_DIR / job_id
+            if output_dir.exists():
+                shutil.rmtree(output_dir)
+        
+        # Remove job from database
+        await db.merge_jobs.delete_one({"id": job_id})
+        
+        return {"message": "Merge job cleaned up successfully"}
+    
+    except Exception as e:
+        logger.error(f"Merge cleanup error: {e}")
+        raise HTTPException(status_code=500, detail=f"Cleanup failed: {str(e)}")
+
 # Add CORS middleware before including routes
 app.add_middleware(
     CORSMiddleware,
