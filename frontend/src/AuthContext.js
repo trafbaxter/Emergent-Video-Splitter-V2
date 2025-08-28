@@ -16,11 +16,44 @@ export const AuthProvider = ({ children }) => {
   const [accessToken, setAccessToken] = useState(localStorage.getItem('access_token'));
   const [requires2FASetup, setRequires2FASetup] = useState(false);
   
-  const API_BASE = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8001';
+  // Backend URL configuration - prioritize environment variable, then detect from current domain
+  const getBackendURL = () => {
+    // First try environment variable
+    if (process.env.REACT_APP_BACKEND_URL) {
+      return process.env.REACT_APP_BACKEND_URL;
+    }
+    
+    // Auto-detect based on current domain
+    const hostname = window.location.hostname;
+    const protocol = window.location.protocol;
+    const port = window.location.port;
+    
+    if (hostname.includes('emergentagent.com')) {
+      return `${protocol}//${hostname}`;
+    } else if (hostname.includes('tads-video-splitter.com')) {
+      // For your deployed AWS version, use the same domain but with /api prefix
+      return `${protocol}//${hostname}`;
+    } else if (hostname === 'localhost') {
+      return 'http://localhost:8001';
+    } else {
+      // Default fallback to same origin with /api prefix
+      return `${protocol}//${hostname}${port ? ':' + port : ''}`;
+    }
+  };
+
+  const API_BASE = getBackendURL();
 
   useEffect(() => {
-    // Always skip authentication for demo mode
+    // Always enable demo mode for video merger application
+    // Skip all authentication API calls since we don't need them
+    console.log("AuthContext: Demo mode enabled, skipping authentication");
+    setLoading(false);
+    return;
+    
+    // Original authentication code (disabled for demo)
+    /*
     const isDemoMode = window.location.hostname.includes('emergentagent.com') || 
+                      window.location.hostname.includes('tads-video-splitter.com') ||
                       window.location.search.includes('demo=true') || 
                       !accessToken;
     
@@ -34,6 +67,7 @@ export const AuthProvider = ({ children }) => {
     } else {
       setLoading(false);
     }
+    */
   }, [accessToken]);
 
   const fetchUserProfile = async () => {
