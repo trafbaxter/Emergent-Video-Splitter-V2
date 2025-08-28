@@ -119,8 +119,12 @@ class VideoMergerAPITester:
         # Create test video files
         video_files = []
         for i in range(3):  # Create 3 test videos
-            video_path = self.create_test_video_file(f"test_video_{i+1}.mp4", size_mb=1)
-            video_files.append(video_path)
+            video_path = self.create_test_video_file(f"test_video_{i+1}.mp4", duration=1)
+            if video_path:
+                video_files.append(video_path)
+            else:
+                self.log(f"❌ Failed to create test video {i+1}")
+                return False
 
         upload_success = True
         
