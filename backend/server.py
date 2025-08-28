@@ -202,6 +202,10 @@ async def get_video_info(file_path: str) -> Dict:
 # AWS S3 Helper Functions
 async def upload_to_s3(file_path: str, s3_key: str) -> bool:
     """Upload file to S3"""
+    if not s3_client:
+        logger.error("S3 client not configured - missing AWS credentials")
+        return False
+        
     try:
         s3_client.upload_file(file_path, S3_BUCKET, s3_key)
         return True
@@ -211,6 +215,10 @@ async def upload_to_s3(file_path: str, s3_key: str) -> bool:
 
 async def download_from_s3(s3_key: str, local_path: str) -> bool:
     """Download file from S3"""
+    if not s3_client:
+        logger.error("S3 client not configured - missing AWS credentials")
+        return False
+        
     try:
         s3_client.download_file(S3_BUCKET, s3_key, local_path)
         return True
@@ -220,6 +228,10 @@ async def download_from_s3(s3_key: str, local_path: str) -> bool:
 
 async def generate_s3_presigned_url(s3_key: str, expires_in: int = 3600) -> str:
     """Generate presigned URL for S3 object"""
+    if not s3_client:
+        logger.error("S3 client not configured - missing AWS credentials")
+        return ""
+        
     try:
         url = s3_client.generate_presigned_url(
             'get_object',
