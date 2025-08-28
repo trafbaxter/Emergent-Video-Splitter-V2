@@ -19,6 +19,12 @@ export const AuthProvider = ({ children }) => {
   const API_BASE = process.env.REACT_APP_BACKEND_URL || 'https://2419j971hh.execute-api.us-east-1.amazonaws.com/prod';
 
   useEffect(() => {
+    // Skip authentication API calls for demo mode or if no token
+    if (accessToken && window.location.search.includes('demo=true')) {
+      setLoading(false);
+      return;
+    }
+    
     if (accessToken) {
       fetchUserProfile();
     } else {
