@@ -31,15 +31,31 @@ mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
-# AWS S3 configuration
-s3_client = boto3.client(
-    's3',
-    aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
-    aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
-    region_name=os.environ.get('AWS_REGION', 'us-east-1')
-)
+# AWS S3 configuration - credentials should be provided via environment variables
+# For production: use IAM roles, AWS credentials file, or environment variables
+# For development: set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment variables
 
-S3_BUCKET = os.environ.get('S3_BUCKET', 'video-merge-bucket')
+aws_access_key = os.environ.get('AWS_ACCESS_KEY_ID')
+aws_secret_key = os.environ.get('AWS_SECRET_ACCESS_KEY')
+
+if aws_access_key and aws_secret_key:
+    s3_client = boto3.client(
+        's3',
+        aws_access_key_id=aws_access_key,
+        aws_secret_access_key=aws_secret_key,
+        region_name=os.environ.get('AWS_REGION', 'us-east-1')
+    )
+    print("✅ AWS S3 client configured with provided credentials")
+else:
+    # Fallback to default credential chain (IAM roles, credentials file, etc.)
+    try:
+        s3_client = boto3.client('s3', region_name=os.environ.get('AWS_REGION', 'us-east-1'))
+        print("✅ AWS S3 client configured with default credential chain")
+    except Exception as e:
+        print(f"⚠️ AWS S3 client configuration failed: {e}")
+        s3_client = None
+
+S3_BUCKET = os.environ.get('S3_BUCKET', 'videosplitter-storage-1751560247')
 
 # Create the main app without a prefix
 app = FastAPI(
