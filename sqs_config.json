@@ -1,0 +1,8 @@
+{
+  "sqs_queue_url": "https://sqs.us-east-1.amazonaws.com/756530070939/video-processing-queue",
+  "sqs_queue_arn": "arn:aws:sqs:us-east-1:756530070939:video-processing-queue",
+  "dlq_url": "https://sqs.us-east-1.amazonaws.com/756530070939/video-processing-dlq",
+  "dlq_arn": "arn:aws:sqs:us-east-1:756530070939:video-processing-dlq",
+  "region": "us-east-1",
+  "lambda_function": "ffmpeg-converter"
+}
