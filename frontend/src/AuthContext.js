@@ -19,8 +19,8 @@ export const AuthProvider = ({ children }) => {
   const API_BASE = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8001';
 
   useEffect(() => {
-    // Skip authentication API calls for demo mode or if no token
-    if (accessToken && window.location.search.includes('demo=true')) {
+    // Skip authentication API calls for demo mode - check both URL param and lack of token
+    if (window.location.search.includes('demo=true') || !accessToken) {
       setLoading(false);
       return;
     }
