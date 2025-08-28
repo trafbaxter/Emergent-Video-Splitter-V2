@@ -235,6 +235,8 @@ const MainApp = () => {
       <div style={{ padding: '20px 0' }}>
         {currentView === 'video-splitter' ? (
           <VideoSplitter />
+        ) : currentView === 'video-merger' ? (
+          <VideoMerger />
         ) : currentView === 'profile' ? (
           <UserProfile />
         ) : currentView === 'admin' && user.role === 'admin' ? (
