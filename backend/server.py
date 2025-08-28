@@ -99,6 +99,34 @@ class VideoInfo(BaseModel):
     subtitle_streams: List[Dict]
     chapters: List[Dict] = []
 
+class MergeVideoInfo(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    filename: str
+    s3_key: str
+    duration: float
+    size: int
+    video_info: Dict
+    order: int = 0
+
+class VideoMergeJob(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    videos: List[MergeVideoInfo] = []
+    status: str = "pending"  # "pending", "processing", "completed", "failed"
+    progress: float = 0.0
+    output_filename: Optional[str] = None
+    output_s3_key: Optional[str] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    error_message: Optional[str] = None
+    merge_settings: Optional[Dict] = None
+
+class MergeConfig(BaseModel):
+    output_format: str = "mp4"
+    quality_mode: str = "auto"  # "auto", "highest", "custom"
+    custom_quality: Optional[Dict] = None
+    preserve_audio: bool = True
+    transition_duration: float = 0.0  # seconds of crossfade between videos
+
 # Helper functions
 async def get_video_info(file_path: str) -> Dict:
     """Extract video information using ffprobe"""
