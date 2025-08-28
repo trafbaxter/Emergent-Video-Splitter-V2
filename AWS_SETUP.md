@@ -6,6 +6,16 @@ AWS credentials are NOT stored in the codebase for security reasons. They must b
 ## Setup Options
 
 ### Option 1: Environment Variables (Recommended for Development)
+**Note**: Some environments don't allow variables starting with "AWS_". Use these variable names instead:
+
+```bash
+export ACCESS_KEY_ID="your_access_key_here"
+export SECRET_ACCESS_KEY="your_secret_key_here" 
+export AWS_REGION="us-east-1"
+export S3_BUCKET="videosplitter-storage-1751560247"
+```
+
+**Alternative** (if your environment allows AWS_ prefixes):
 ```bash
 export AWS_ACCESS_KEY_ID="your_access_key_here"
 export AWS_SECRET_ACCESS_KEY="your_secret_key_here"
@@ -29,6 +39,12 @@ region = us-east-1
 
 ### Option 3: IAM Roles (Recommended for Production)
 When running on AWS EC2/ECS/Lambda, use IAM roles instead of access keys.
+
+## Variable Precedence
+The application checks for credentials in this order:
+1. `ACCESS_KEY_ID` and `SECRET_ACCESS_KEY` (preferred for restricted environments)
+2. `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` (standard AWS naming)
+3. AWS default credential chain (IAM roles, credentials file, etc.)
 
 ## Required AWS Permissions
 The AWS user/role needs the following S3 permissions:
