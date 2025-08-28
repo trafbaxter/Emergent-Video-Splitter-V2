@@ -219,26 +219,40 @@ const MainApp = () => {
         <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
           <div style={{ textAlign: 'right' }}>
             <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#333' }}>
-              {user.firstName} {user.lastName}
+              {currentUser.firstName} {currentUser.lastName}
             </div>
             <div style={{ fontSize: '12px', color: '#666' }}>
-              {user.role === 'admin' ? '🔒 Administrator' : '👤 User'} • {user.email}
+              {currentUser.role === 'admin' ? '🔒 Administrator' : '👤 User'} • {currentUser.email}
             </div>
           </div>
-          <button
-            onClick={handleLogout}
-            style={{
-              padding: '8px 16px',
-              backgroundColor: '#6c757d',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontSize: '14px'
-            }}
-          >
-            Logout
-          </button>
+          {!demoMode && (
+            <button
+              onClick={handleLogout}
+              style={{
+                padding: '8px 16px',
+                backgroundColor: '#6c757d',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '14px'
+              }}
+            >
+              Logout
+            </button>
+          )}
+          {demoMode && (
+            <div style={{ 
+              fontSize: '12px', 
+              color: '#28a745', 
+              fontWeight: 'bold',
+              padding: '4px 8px',
+              background: 'rgba(40, 167, 69, 0.1)',
+              borderRadius: '4px'
+            }}>
+              DEMO MODE
+            </div>
+          )}
         </div>
       </nav>
 
