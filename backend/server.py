@@ -183,6 +183,264 @@ async def get_video_info(file_path: str) -> Dict:
         logger.error(f"Error getting video info: {e}")
         raise HTTPException(status_code=500, detail=f"Error analyzing video: {str(e)}")
 
+# AWS S3 Helper Functions
+async def upload_to_s3(file_path: str, s3_key: str) -> bool:
+    """Upload file to S3"""
+    try:
+        s3_client.upload_file(file_path, S3_BUCKET, s3_key)
+        return True
+    except Exception as e:
+        logger.error(f"Error uploading to S3: {e}")
+        return False
+
+async def download_from_s3(s3_key: str, local_path: str) -> bool:
+    """Download file from S3"""
+    try:
+        s3_client.download_file(S3_BUCKET, s3_key, local_path)
+        return True
+    except Exception as e:
+        logger.error(f"Error downloading from S3: {e}")
+        return False
+
+async def generate_s3_presigned_url(s3_key: str, expires_in: int = 3600) -> str:
+    """Generate presigned URL for S3 object"""
+    try:
+        url = s3_client.generate_presigned_url(
+            'get_object',
+            Params={'Bucket': S3_BUCKET, 'Key': s3_key},
+            ExpiresIn=expires_in
+        )
+        return url
+    except Exception as e:
+        logger.error(f"Error generating presigned URL: {e}")
+        return ""
+
+async def detect_optimal_merge_settings(video_infos: List[Dict]) -> Dict:
+    """Detect optimal settings for merging videos"""
+    if not video_infos:
+        return {}
+    
+    # Find common denominator settings
+    min_width = min(info.get('video_streams', [{}])[0].get('width', 1920) for info in video_infos if info.get('video_streams'))
+    min_height = min(info.get('video_streams', [{}])[0].get('height', 1080) for info in video_infos if info.get('video_streams'))
+    
+    # Use the most common audio codec and sample rate
+    audio_codecs = [info.get('audio_streams', [{}])[0].get('codec', 'aac') for info in video_infos if info.get('audio_streams')]
+    common_codec = max(set(audio_codecs), key=audio_codecs.count) if audio_codecs else 'aac'
+    
+    return {
+        'width': min_width,
+        'height': min_height,
+        'video_codec': 'libx264',
+        'audio_codec': common_codec,
+        'bitrate': '2M',  # 2 Mbps default
+        'fps': 30
+    }
+
+async def merge_videos_with_ffmpeg(
+    input_files: List[str], 
+    output_path: str, 
+    config: MergeConfig,
+    optimal_settings: Dict,
+    job_id: str
+) -> bool:
+    """Merge multiple videos using FFmpeg"""
+    try:
+        # Create filter complex for video concatenation
+        filter_parts = []
+        video_inputs = []
+        audio_inputs = []
+        
+        # Build input streams
+        for i, input_file in enumerate(input_files):
+            video_inputs.append(f"[{i}:v]")
+            audio_inputs.append(f"[{i}:a]")
+        
+        # Create video filter chain
+        if config.quality_mode == "custom" and config.custom_quality:
+            settings = config.custom_quality
+        else:
+            settings = optimal_settings
+        
+        # Scale all videos to same resolution
+        scaled_inputs = []
+        for i in range(len(input_files)):
+            scaled_name = f"[v{i}]"
+            filter_parts.append(f"[{i}:v]scale={settings.get('width', 1920)}:{settings.get('height', 1080)}:force_original_aspect_ratio=decrease,pad={settings.get('width', 1920)}:{settings.get('height', 1080)}:(ow-iw)/2:(oh-ih)/2{scaled_name}")
+            scaled_inputs.append(scaled_name)
+        
+        # Concatenate videos
+        concat_filter = f"{''.join(scaled_inputs)}concat=n={len(input_files)}:v=1:a=0[outv]"
+        filter_parts.append(concat_filter)
+        
+        # Handle audio concatenation if preserve_audio is True
+        if config.preserve_audio:
+            audio_concat = f"{''.join(audio_inputs)}concat=n={len(input_files)}:v=0:a=1[outa]"
+            filter_parts.append(audio_concat)
+        
+        # Build FFmpeg inputs
+        inputs = []
+        for input_file in input_files:
+            inputs.extend(['-i', input_file])
+        
+        # Build output arguments
+        output_args = [
+            '-filter_complex', ';'.join(filter_parts),
+            '-map', '[outv]'
+        ]
+        
+        if config.preserve_audio:
+            output_args.extend(['-map', '[outa]'])
+        
+        # Add quality settings
+        output_args.extend([
+            '-c:v', 'libx264',
+            '-preset', 'medium',
+            '-crf', '23',  # Good quality default
+            '-c:a', 'aac',
+            '-b:a', '128k',
+            '-movflags', '+faststart',  # Web-optimized
+            output_path
+        ])
+        
+        # Execute FFmpeg
+        cmd = ['ffmpeg', '-y'] + inputs + output_args
+        
+        logger.info(f"Running FFmpeg command: {' '.join(cmd)}")
+        
+        process = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        
+        stdout, stderr = await process.communicate()
+        
+        if process.returncode == 0:
+            logger.info(f"Successfully merged videos for job {job_id}")
+            return True
+        else:
+            logger.error(f"FFmpeg failed for job {job_id}: {stderr.decode()}")
+            return False
+            
+    except Exception as e:
+        logger.error(f"Error merging videos: {e}")
+        return False
+
+async def process_merge_job(job_id: str, config: MergeConfig):
+    """Background task to process video merging"""
+    try:
+        # Update status to processing
+        await update_merge_job_progress(job_id, 0, "processing")
+        
+        # Get merge job from database
+        job = await db.video_merge_jobs.find_one({"id": job_id})
+        if not job:
+            raise Exception("Merge job not found")
+        
+        # Download all videos from S3
+        temp_dir = PROCESS_DIR / job_id
+        temp_dir.mkdir(exist_ok=True)
+        
+        downloaded_files = []
+        total_videos = len(job['videos'])
+        
+        for i, video_info in enumerate(job['videos']):
+            # Update progress - downloading phase (0-30%)
+            progress = (i / total_videos) * 30
+            await update_merge_job_progress(job_id, progress)
+            
+            local_path = temp_dir / f"video_{video_info['order']:03d}_{video_info['filename']}"
+            success = await download_from_s3(video_info['s3_key'], str(local_path))
+            
+            if not success:
+                raise Exception(f"Failed to download video: {video_info['filename']}")
+            
+            downloaded_files.append(str(local_path))
+        
+        # Sort files by order
+        video_data = list(zip(downloaded_files, job['videos']))
+        video_data.sort(key=lambda x: x[1]['order'])
+        downloaded_files = [x[0] for x in video_data]
+        
+        await update_merge_job_progress(job_id, 35, "processing")
+        
+        # Detect optimal settings
+        video_infos = [v['video_info'] for v in job['videos']]
+        optimal_settings = await detect_optimal_merge_settings(video_infos)
+        
+        await update_merge_job_progress(job_id, 40, "processing")
+        
+        # Merge videos
+        output_filename = f"merged_{job_id}.{config.output_format}"
+        output_path = temp_dir / output_filename
+        
+        await update_merge_job_progress(job_id, 45, "processing")
+        
+        success = await merge_videos_with_ffmpeg(
+            downloaded_files, str(output_path), config, optimal_settings, job_id
+        )
+        
+        if not success:
+            raise Exception("Video merging failed")
+        
+        await update_merge_job_progress(job_id, 80, "processing")
+        
+        # Upload merged video to S3
+        output_s3_key = f"merged/{job_id}/{output_filename}"
+        upload_success = await upload_to_s3(str(output_path), output_s3_key)
+        
+        if not upload_success:
+            raise Exception("Failed to upload merged video to S3")
+        
+        await update_merge_job_progress(job_id, 95, "processing")
+        
+        # Update job with completion
+        await db.video_merge_jobs.update_one(
+            {'id': job_id},
+            {'$set': {
+                'status': 'completed',
+                'progress': 100.0,
+                'output_filename': output_filename,
+                'output_s3_key': output_s3_key,
+                'merge_settings': optimal_settings,
+                'updated_at': datetime.utcnow()
+            }}
+        )
+        
+        # Cleanup temp files
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        
+    except Exception as e:
+        logger.error(f"Error processing merge job {job_id}: {e}")
+        await db.video_merge_jobs.update_one(
+            {'id': job_id},
+            {'$set': {
+                'status': 'failed',
+                'error_message': str(e),
+                'updated_at': datetime.utcnow()
+            }}
+        )
+        
+        # Cleanup temp files on error
+        temp_dir = PROCESS_DIR / job_id
+        if temp_dir.exists():
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+async def update_merge_job_progress(job_id: str, progress: float, status: str = None):
+    """Update merge job progress in database"""
+    update_data = {
+        'progress': progress,
+        'updated_at': datetime.utcnow()
+    }
+    if status:
+        update_data['status'] = status
+    
+    await db.video_merge_jobs.update_one(
+        {'id': job_id},
+        {'$set': update_data}
+    )
+
 async def split_video_with_subtitles(
     input_path: str, 
     output_dir: str, 
