@@ -119,9 +119,9 @@ const VideoSplitter = () => {
   const [timePoints, setTimePoints] = useState([]);
   const [intervalDuration, setIntervalDuration] = useState(300); // 5 minutes
   const [preserveQuality, setPreserveQuality] = useState(true);
-  const [outputFormat, setOutputFormat] = useState('mp4');
+  const [outputFormat, setOutputFormat] = useState('mkv');
   const [forceKeyframes, setForceKeyframes] = useState(true);
-  const [keyframeInterval, setKeyframeInterval] = useState(2);
+  const [keyframeInterval, setKeyframeInterval] = useState(1);
   const [subtitleOffset, setSubtitleOffset] = useState(0);
 
   // Format time for display
