@@ -119,9 +119,9 @@ const VideoSplitter = () => {
   const [timePoints, setTimePoints] = useState([]);
   const [intervalDuration, setIntervalDuration] = useState(300); // 5 minutes
   const [preserveQuality, setPreserveQuality] = useState(true);
-  const [outputFormat, setOutputFormat] = useState('mp4');
+  const [outputFormat, setOutputFormat] = useState('mkv');
   const [forceKeyframes, setForceKeyframes] = useState(true);
-  const [keyframeInterval, setKeyframeInterval] = useState(2);
+  const [keyframeInterval, setKeyframeInterval] = useState(1);
   const [subtitleOffset, setSubtitleOffset] = useState(0);
 
   // Format time for display
@@ -985,8 +985,8 @@ const VideoSplitter = () => {
                       height: '45px'
                     }}
                   >
+                    <option value="mkv" style={{backgroundColor: '#2d3748', color: 'white'}}>MKV</option>                    
                     <option value="mp4" style={{backgroundColor: '#2d3748', color: 'white'}}>MP4</option>
-                    <option value="mkv" style={{backgroundColor: '#2d3748', color: 'white'}}>MKV</option>
                     <option value="avi" style={{backgroundColor: '#2d3748', color: 'white'}}>AVI</option>
                     <option value="mov" style={{backgroundColor: '#2d3748', color: 'white'}}>MOV</option>
                     <option value="webm" style={{backgroundColor: '#2d3748', color: 'white'}}>WebM</option>
