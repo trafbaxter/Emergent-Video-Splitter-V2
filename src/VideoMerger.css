@@ -1,0 +1,283 @@
+/* VideoMerger.css */
+
+.video-merger {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 40px 20px;
+}
+
+.video-merger-container {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.merger-card {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 30px;
+  margin-bottom: 30px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+
+.drag-drop-zone {
+  border: 2px dashed rgba(255, 255, 255, 0.3);
+  border-radius: 15px;
+  padding: 40px 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  margin-bottom: 20px;
+}
+
+.drag-drop-zone:hover {
+  border-color: rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.drag-drop-zone.drag-over {
+  border-color: #4ade80;
+  background: rgba(74, 222, 128, 0.1);
+}
+
+.video-item {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  padding: 15px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  cursor: grab;
+  transition: all 0.3s ease;
+}
+
+.video-item:active {
+  cursor: grabbing;
+}
+
+.video-item.drag-over {
+  background: rgba(255, 255, 255, 0.2);
+  border: 2px solid rgba(255, 255, 255, 0.4);
+}
+
+.video-item.dragging {
+  opacity: 0.5;
+  transform: rotate(5deg);
+}
+
+.video-order-number {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  padding: 8px 12px;
+  color: white;
+  font-size: 14px;
+  font-weight: bold;
+  min-width: 30px;
+  text-align: center;
+}
+
+.video-info {
+  flex: 1;
+  color: white;
+}
+
+.video-filename {
+  font-weight: 600;
+  margin-bottom: 5px;
+}
+
+.video-details {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.7);
+  display: flex;
+  gap: 15px;
+}
+
+.remove-button {
+  background: rgba(244, 67, 54, 0.2);
+  border: 1px solid rgba(244, 67, 54, 0.4);
+  border-radius: 5px;
+  color: #ff6b6b;
+  padding: 5px 10px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.3s ease;
+}
+
+.remove-button:hover {
+  background: rgba(244, 67, 54, 0.3);
+}
+
+.progress-bar {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 15px;
+  height: 30px;
+  overflow: hidden;
+  margin-bottom: 15px;
+}
+
+.progress-fill {
+  background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+  height: 100%;
+  transition: width 0.3s ease;
+  border-radius: 15px;
+}
+
+.quality-settings-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 30px;
+}
+
+.custom-quality-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+  gap: 15px;
+  margin-top: 20px;
+}
+
+.form-input {
+  width: 100%;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+  font-size: 14px;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.form-select {
+  width: 100%;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+  font-size: 14px;
+}
+
+.form-select option {
+  background-color: #2d3748;
+  color: white;
+}
+
+.small-input {
+  width: 100%;
+  padding: 8px;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+  font-size: 14px;
+}
+
+.input-label {
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 12px;
+  display: block;
+  margin-bottom: 5px;
+}
+
+.error-card {
+  background: rgba(244, 67, 54, 0.2) !important;
+  border: 1px solid rgba(244, 67, 54, 0.4) !important;
+}
+
+.error-text {
+  color: #ff6b6b;
+  font-size: 16px;
+}
+
+.success-card {
+  background: rgba(74, 222, 128, 0.2);
+  border-radius: 15px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.button-group {
+  text-align: center;
+  display: flex;
+  gap: 15px;
+  justify-content: center;
+}
+
+.merger-button {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+  border-radius: 10px;
+  padding: 12px 24px;
+  color: white;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+}
+
+.merger-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+}
+
+.merger-button:disabled {
+  background: rgba(255, 255, 255, 0.2);
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.merger-button.primary {
+  background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+}
+
+.merger-button.secondary {
+  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+}
+
+.merger-button.neutral {
+  background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
+}
+
+.merger-button.large {
+  font-size: 18px;
+  padding: 15px 40px;
+}
+
+@media (max-width: 768px) {
+  .quality-settings-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .custom-quality-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  
+  .button-group {
+    flex-direction: column;
+    align-items: center;
+  }
+  
+  .video-details {
+    flex-direction: column;
+    gap: 5px;
+  }
+}
+
+/* Drag and drop animations */
+@keyframes dragPulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
+.drag-over {
+  animation: dragPulse 1s infinite;
+}

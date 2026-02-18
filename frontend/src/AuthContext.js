@@ -1,0 +1,241 @@
+import React, { createContext, useContext, useState, useEffect } from 'react';
+
+const AuthContext = createContext();
+
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+};
+
+export const AuthProvider = ({ children }) => {
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [accessToken, setAccessToken] = useState(localStorage.getItem('access_token'));
+  const [requires2FASetup, setRequires2FASetup] = useState(false);
+  
+  // Backend URL configuration - prioritize environment variable, then detect from current domain
+  const getBackendURL = () => {
+    // First try environment variable
+    if (process.env.REACT_APP_BACKEND_URL) {
+      return process.env.REACT_APP_BACKEND_URL;
+    }
+    
+    // Auto-detect based on current domain
+    const hostname = window.location.hostname;
+    const protocol = window.location.protocol;
+    const port = window.location.port;
+    
+    if (hostname.includes('emergentagent.com')) {
+      return `${protocol}//${hostname}`;
+    } else if (hostname.includes('tads-video-splitter.com')) {
+      // For your deployed AWS version, use the same domain but with /api prefix
+      return `${protocol}//${hostname}`;
+    } else if (hostname === 'localhost') {
+      return 'http://localhost:8001';
+    } else {
+      // Default fallback to same origin with /api prefix
+      return `${protocol}//${hostname}${port ? ':' + port : ''}`;
+    }
+  };
+
+  const API_BASE = getBackendURL();
+
+  useEffect(() => {
+    // Always enable demo mode for video merger application
+    // Skip all authentication API calls since we don't need them
+    console.log("AuthContext: Demo mode enabled, skipping authentication");
+    setLoading(false);
+    return;
+    
+    // Original authentication code (disabled for demo)
+    /*
+    const isDemoMode = window.location.hostname.includes('emergentagent.com') || 
+                      window.location.hostname.includes('tads-video-splitter.com') ||
+                      window.location.search.includes('demo=true') || 
+                      !accessToken;
+    
+    if (isDemoMode) {
+      setLoading(false);
+      return;
+    }
+    
+    if (accessToken) {
+      fetchUserProfile();
+    } else {
+      setLoading(false);
+    }
+    */
+  }, [accessToken]);
+
+  const fetchUserProfile = async () => {
+    try {
+      // Skip API call for demo mode
+      if (window.location.search.includes('demo=true')) {
+        setLoading(false);
+        return;
+      }
+      
+      const response = await fetch(`${API_BASE}/api/user/profile`, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setUser(data.user);
+        
+        // Check if 2FA is required but not set up
+        if (!data.user.totpEnabled) {
+          setRequires2FASetup(true);
+        } else {
+          setRequires2FASetup(false);
+        }
+      } else {
+        // Token is invalid or expired
+        logout();
+      }
+    } catch (error) {
+      console.error('Failed to fetch user profile:', error);
+      // Don't logout on network errors for demo mode
+      if (!window.location.search.includes('demo=true')) {
+        logout();
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const login = async (email, password, totpCode = null) => {
+    try {
+      const requestBody = { email, password };
+      if (totpCode) {
+        requestBody.totpCode = totpCode;
+      }
+
+      const response = await fetch(`${API_BASE}/api/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(requestBody)
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        // Check if 2FA is required
+        if (data.requires_2fa) {
+          return { 
+            success: false, 
+            requires_2fa: true, 
+            user_id: data.user_id,
+            error: '2FA code required' 
+          };
+        }
+
+        // Successful login
+        setAccessToken(data.access_token);
+        localStorage.setItem('access_token', data.access_token);
+        setUser(data.user);
+        
+        return { 
+          success: true, 
+          force_password_change: data.force_password_change 
+        };
+      } else {
+        // Handle different error statuses
+        if (response.status === 403) {
+          return { 
+            success: false, 
+            status: data.status,
+            error: data.message || 'Access denied' 
+          };
+        } else if (response.status === 423) {
+          return { 
+            success: false, 
+            status: 'locked',
+            error: data.message || 'Account locked' 
+          };
+        } else {
+          return { 
+            success: false, 
+            error: data.message || 'Login failed' 
+          };
+        }
+      }
+    } catch (error) {
+      return { success: false, error: 'Network error. Please try again.' };
+    }
+  };
+
+  const register = async (userData) => {
+    try {
+      const response = await fetch(`${API_BASE}/api/auth/register`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(userData)
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        // Check if registration requires approval
+        if (data.status === 'pending_approval') {
+          return { 
+            success: true, 
+            status: 'pending_approval',
+            message: data.message 
+          };
+        } else {
+          // Auto-approved registration (shouldn't happen with new system, but handle it)
+          setAccessToken(data.access_token);
+          localStorage.setItem('access_token', data.access_token);
+          setUser(data.user);
+          return { success: true };
+        }
+      } else {
+        return { success: false, error: data.message || 'Registration failed' };
+      }
+    } catch (error) {
+      return { success: false, error: 'Network error. Please try again.' };
+    }
+  };
+
+  const logout = () => {
+    setUser(null);
+    setAccessToken(null);
+    setRequires2FASetup(false);
+    localStorage.removeItem('access_token');
+  };
+
+  const complete2FASetup = () => {
+    setRequires2FASetup(false);
+    // Refresh user profile to get updated 2FA status
+    fetchUserProfile();
+  };
+
+  const value = {
+    user,
+    loading,
+    accessToken,
+    requires2FASetup,
+    login,
+    register,
+    logout,
+    complete2FASetup,
+    API_BASE
+  };
+
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+    </AuthContext.Provider>
+  );
+};

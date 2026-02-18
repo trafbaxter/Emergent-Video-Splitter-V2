@@ -20,6 +20,8 @@ import subprocess
 import re
 from io import BytesIO
 import time
+import boto3
+from botocore.exceptions import ClientError
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -28,6 +30,33 @@ load_dotenv(ROOT_DIR / '.env')
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
+
+# AWS S3 configuration - credentials should be provided via environment variables
+# For production: use IAM roles, AWS credentials file, or environment variables
+# Note: Some environments don't allow variables starting with "AWS_"
+# So we use ACCESS_KEY_ID and SECRET_ACCESS_KEY instead
+
+aws_access_key = os.environ.get('ACCESS_KEY_ID') or os.environ.get('AWS_ACCESS_KEY_ID')
+aws_secret_key = os.environ.get('SECRET_ACCESS_KEY') or os.environ.get('AWS_SECRET_ACCESS_KEY')
+
+if aws_access_key and aws_secret_key:
+    s3_client = boto3.client(
+        's3',
+        aws_access_key_id=aws_access_key,
+        aws_secret_access_key=aws_secret_key,
+        region_name=os.environ.get('AWS_REGION', 'us-east-1')
+    )
+    print("✅ AWS S3 client configured with provided credentials")
+else:
+    # Fallback to default credential chain (IAM roles, credentials file, etc.)
+    try:
+        s3_client = boto3.client('s3', region_name=os.environ.get('AWS_REGION', 'us-east-1'))
+        print("✅ AWS S3 client configured with default credential chain")
+    except Exception as e:
+        print(f"⚠️ AWS S3 client configuration failed: {e}")
+        s3_client = None
+
+S3_BUCKET = os.environ.get('S3_BUCKET', 'videosplitter-storage-1751560247')
 
 # Create the main app without a prefix
 app = FastAPI(
@@ -87,6 +116,34 @@ class VideoInfo(BaseModel):
     subtitle_streams: List[Dict]
     chapters: List[Dict] = []
 
+class MergeVideoInfo(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    filename: str
+    s3_key: str
+    duration: float
+    size: int
+    video_info: Dict
+    order: int = 0
+
+class VideoMergeJob(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    videos: List[MergeVideoInfo] = []
+    status: str = "pending"  # "pending", "processing", "completed", "failed"
+    progress: float = 0.0
+    output_filename: Optional[str] = None
+    output_s3_key: Optional[str] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    error_message: Optional[str] = None
+    merge_settings: Optional[Dict] = None
+
+class MergeConfig(BaseModel):
+    output_format: str = "mp4"
+    quality_mode: str = "auto"  # "auto", "highest", "custom"
+    custom_quality: Optional[Dict] = None
+    preserve_audio: bool = True
+    transition_duration: float = 0.0  # seconds of crossfade between videos
+
 # Helper functions
 async def get_video_info(file_path: str) -> Dict:
     """Extract video information using ffprobe"""
@@ -142,6 +199,276 @@ async def get_video_info(file_path: str) -> Dict:
     except Exception as e:
         logger.error(f"Error getting video info: {e}")
         raise HTTPException(status_code=500, detail=f"Error analyzing video: {str(e)}")
+
+# AWS S3 Helper Functions
+async def upload_to_s3(file_path: str, s3_key: str) -> bool:
+    """Upload file to S3"""
+    if not s3_client:
+        logger.error("S3 client not configured - missing AWS credentials")
+        return False
+        
+    try:
+        s3_client.upload_file(file_path, S3_BUCKET, s3_key)
+        return True
+    except Exception as e:
+        logger.error(f"Error uploading to S3: {e}")
+        return False
+
+async def download_from_s3(s3_key: str, local_path: str) -> bool:
+    """Download file from S3"""
+    if not s3_client:
+        logger.error("S3 client not configured - missing AWS credentials")
+        return False
+        
+    try:
+        s3_client.download_file(S3_BUCKET, s3_key, local_path)
+        return True
+    except Exception as e:
+        logger.error(f"Error downloading from S3: {e}")
+        return False
+
+async def generate_s3_presigned_url(s3_key: str, expires_in: int = 3600) -> str:
+    """Generate presigned URL for S3 object"""
+    if not s3_client:
+        logger.error("S3 client not configured - missing AWS credentials")
+        return ""
+        
+    try:
+        url = s3_client.generate_presigned_url(
+            'get_object',
+            Params={'Bucket': S3_BUCKET, 'Key': s3_key},
+            ExpiresIn=expires_in
+        )
+        return url
+    except Exception as e:
+        logger.error(f"Error generating presigned URL: {e}")
+        return ""
+
+async def detect_optimal_merge_settings(video_infos: List[Dict]) -> Dict:
+    """Detect optimal settings for merging videos"""
+    if not video_infos:
+        return {}
+    
+    # Find common denominator settings
+    min_width = min(info.get('video_streams', [{}])[0].get('width', 1920) for info in video_infos if info.get('video_streams'))
+    min_height = min(info.get('video_streams', [{}])[0].get('height', 1080) for info in video_infos if info.get('video_streams'))
+    
+    # Use the most common audio codec and sample rate
+    audio_codecs = [info.get('audio_streams', [{}])[0].get('codec', 'aac') for info in video_infos if info.get('audio_streams')]
+    common_codec = max(set(audio_codecs), key=audio_codecs.count) if audio_codecs else 'aac'
+    
+    return {
+        'width': min_width,
+        'height': min_height,
+        'video_codec': 'libx264',
+        'audio_codec': common_codec,
+        'bitrate': '2M',  # 2 Mbps default
+        'fps': 30
+    }
+
+async def merge_videos_with_ffmpeg(
+    input_files: List[str], 
+    output_path: str, 
+    config: MergeConfig,
+    optimal_settings: Dict,
+    job_id: str
+) -> bool:
+    """Merge multiple videos using FFmpeg"""
+    try:
+        # Create filter complex for video concatenation
+        filter_parts = []
+        video_inputs = []
+        audio_inputs = []
+        
+        # Build input streams
+        for i, input_file in enumerate(input_files):
+            video_inputs.append(f"[{i}:v]")
+            audio_inputs.append(f"[{i}:a]")
+        
+        # Create video filter chain
+        if config.quality_mode == "custom" and config.custom_quality:
+            settings = config.custom_quality
+        else:
+            settings = optimal_settings
+        
+        # Scale all videos to same resolution
+        scaled_inputs = []
+        for i in range(len(input_files)):
+            scaled_name = f"[v{i}]"
+            filter_parts.append(f"[{i}:v]scale={settings.get('width', 1920)}:{settings.get('height', 1080)}:force_original_aspect_ratio=decrease,pad={settings.get('width', 1920)}:{settings.get('height', 1080)}:(ow-iw)/2:(oh-ih)/2{scaled_name}")
+            scaled_inputs.append(scaled_name)
+        
+        # Concatenate videos
+        concat_filter = f"{''.join(scaled_inputs)}concat=n={len(input_files)}:v=1:a=0[outv]"
+        filter_parts.append(concat_filter)
+        
+        # Handle audio concatenation if preserve_audio is True
+        if config.preserve_audio:
+            audio_concat = f"{''.join(audio_inputs)}concat=n={len(input_files)}:v=0:a=1[outa]"
+            filter_parts.append(audio_concat)
+        
+        # Build FFmpeg inputs
+        inputs = []
+        for input_file in input_files:
+            inputs.extend(['-i', input_file])
+        
+        # Build output arguments
+        output_args = [
+            '-filter_complex', ';'.join(filter_parts),
+            '-map', '[outv]'
+        ]
+        
+        if config.preserve_audio:
+            output_args.extend(['-map', '[outa]'])
+        
+        # Add quality settings
+        output_args.extend([
+            '-c:v', 'libx264',
+            '-preset', 'medium',
+            '-crf', '23',  # Good quality default
+            '-c:a', 'aac',
+            '-b:a', '128k',
+            '-movflags', '+faststart',  # Web-optimized
+            output_path
+        ])
+        
+        # Execute FFmpeg
+        cmd = ['ffmpeg', '-y'] + inputs + output_args
+        
+        logger.info(f"Running FFmpeg command: {' '.join(cmd)}")
+        
+        process = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        
+        stdout, stderr = await process.communicate()
+        
+        if process.returncode == 0:
+            logger.info(f"Successfully merged videos for job {job_id}")
+            return True
+        else:
+            logger.error(f"FFmpeg failed for job {job_id}: {stderr.decode()}")
+            return False
+            
+    except Exception as e:
+        logger.error(f"Error merging videos: {e}")
+        return False
+
+async def process_merge_job(job_id: str, config: MergeConfig):
+    """Background task to process video merging"""
+    try:
+        # Update status to processing
+        await update_merge_job_progress(job_id, 0, "processing")
+        
+        # Get merge job from database
+        job = await db.video_merge_jobs.find_one({"id": job_id})
+        if not job:
+            raise Exception("Merge job not found")
+        
+        # Download all videos from S3
+        temp_dir = PROCESS_DIR / job_id
+        temp_dir.mkdir(exist_ok=True)
+        
+        downloaded_files = []
+        total_videos = len(job['videos'])
+        
+        for i, video_info in enumerate(job['videos']):
+            # Update progress - downloading phase (0-30%)
+            progress = (i / total_videos) * 30
+            await update_merge_job_progress(job_id, progress)
+            
+            local_path = temp_dir / f"video_{video_info['order']:03d}_{video_info['filename']}"
+            success = await download_from_s3(video_info['s3_key'], str(local_path))
+            
+            if not success:
+                raise Exception(f"Failed to download video: {video_info['filename']}")
+            
+            downloaded_files.append(str(local_path))
+        
+        # Sort files by order
+        video_data = list(zip(downloaded_files, job['videos']))
+        video_data.sort(key=lambda x: x[1]['order'])
+        downloaded_files = [x[0] for x in video_data]
+        
+        await update_merge_job_progress(job_id, 35, "processing")
+        
+        # Detect optimal settings
+        video_infos = [v['video_info'] for v in job['videos']]
+        optimal_settings = await detect_optimal_merge_settings(video_infos)
+        
+        await update_merge_job_progress(job_id, 40, "processing")
+        
+        # Merge videos
+        output_filename = f"merged_{job_id}.{config.output_format}"
+        output_path = temp_dir / output_filename
+        
+        await update_merge_job_progress(job_id, 45, "processing")
+        
+        success = await merge_videos_with_ffmpeg(
+            downloaded_files, str(output_path), config, optimal_settings, job_id
+        )
+        
+        if not success:
+            raise Exception("Video merging failed")
+        
+        await update_merge_job_progress(job_id, 80, "processing")
+        
+        # Upload merged video to S3
+        output_s3_key = f"merged/{job_id}/{output_filename}"
+        upload_success = await upload_to_s3(str(output_path), output_s3_key)
+        
+        if not upload_success:
+            raise Exception("Failed to upload merged video to S3")
+        
+        await update_merge_job_progress(job_id, 95, "processing")
+        
+        # Update job with completion
+        await db.video_merge_jobs.update_one(
+            {'id': job_id},
+            {'$set': {
+                'status': 'completed',
+                'progress': 100.0,
+                'output_filename': output_filename,
+                'output_s3_key': output_s3_key,
+                'merge_settings': optimal_settings,
+                'updated_at': datetime.utcnow()
+            }}
+        )
+        
+        # Cleanup temp files
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        
+    except Exception as e:
+        logger.error(f"Error processing merge job {job_id}: {e}")
+        await db.video_merge_jobs.update_one(
+            {'id': job_id},
+            {'$set': {
+                'status': 'failed',
+                'error_message': str(e),
+                'updated_at': datetime.utcnow()
+            }}
+        )
+        
+        # Cleanup temp files on error
+        temp_dir = PROCESS_DIR / job_id
+        if temp_dir.exists():
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+async def update_merge_job_progress(job_id: str, progress: float, status: str = None):
+    """Update merge job progress in database"""
+    update_data = {
+        'progress': progress,
+        'updated_at': datetime.utcnow()
+    }
+    if status:
+        update_data['status'] = status
+    
+    await db.video_merge_jobs.update_one(
+        {'id': job_id},
+        {'$set': update_data}
+    )
 
 async def split_video_with_subtitles(
     input_path: str, 
@@ -836,6 +1163,297 @@ async def cleanup_job(job_id: str):
     except Exception as e:
         logger.error(f"Cleanup error: {e}")
         raise HTTPException(status_code=500, detail=f"Cleanup failed: {str(e)}")
+
+# Video Merging API Endpoints
+@api_router.post("/merge/create-job")
+async def create_merge_job():
+    """Create a new video merge job"""
+    job_id = str(uuid.uuid4())
+    job = VideoMergeJob(id=job_id)
+    
+    await db.video_merge_jobs.insert_one(job.dict())
+    
+    return {"job_id": job_id, "message": "Merge job created successfully"}
+
+@api_router.post("/merge/upload-video/{job_id}")
+async def upload_video_for_merge(job_id: str, file: UploadFile = File(...)):
+    """Upload a video file for merging"""
+    
+    # Validate file format
+    if not file.filename.lower().endswith(('.mp4', '.mkv', '.avi', '.mov', '.wmv', '.flv', '.webm')):
+        raise HTTPException(status_code=400, detail="Unsupported video format")
+    
+    # Check if merge job exists
+    job = await db.video_merge_jobs.find_one({"id": job_id})
+    if not job:
+        raise HTTPException(status_code=404, detail="Merge job not found")
+    
+    if job['status'] != 'pending':
+        raise HTTPException(status_code=400, detail="Cannot add videos to job that is not pending")
+    
+    try:
+        # Create unique S3 key
+        video_id = str(uuid.uuid4())
+        s3_key = f"merge-uploads/{job_id}/{video_id}_{file.filename}"
+        
+        # Save file temporarily
+        temp_path = UPLOAD_DIR / f"temp_{video_id}_{file.filename}"
+        
+        # Stream file to disk
+        total_size = 0
+        chunk_size = 1024 * 1024  # 1MB chunks
+        
+        async with aiofiles.open(temp_path, 'wb') as f:
+            while True:
+                chunk = await file.read(chunk_size)
+                if not chunk:
+                    break
+                await f.write(chunk)
+                total_size += len(chunk)
+        
+        # Get video info
+        video_info = await get_video_info(str(temp_path))
+        
+        # Upload to S3
+        upload_success = await upload_to_s3(str(temp_path), s3_key)
+        
+        if not upload_success:
+            temp_path.unlink()  # Clean up temp file
+            raise HTTPException(status_code=500, detail="Failed to upload to S3")
+        
+        # Create video info object
+        merge_video = MergeVideoInfo(
+            id=video_id,
+            filename=file.filename,
+            s3_key=s3_key,
+            duration=video_info['duration'],
+            size=total_size,
+            video_info=video_info,
+            order=len(job['videos'])  # Auto-assign order based on upload sequence
+        )
+        
+        # Add video to merge job
+        await db.video_merge_jobs.update_one(
+            {'id': job_id},
+            {
+                '$push': {'videos': merge_video.dict()},
+                '$set': {'updated_at': datetime.utcnow()}
+            }
+        )
+        
+        # Clean up temp file
+        temp_path.unlink()
+        
+        return {
+            "video_id": video_id,
+            "filename": file.filename,
+            "size": total_size,
+            "duration": video_info['duration'],
+            "order": merge_video.order,
+            "message": "Video uploaded successfully"
+        }
+        
+    except Exception as e:
+        logger.error(f"Upload error: {e}")
+        # Clean up temp file if it exists
+        temp_path = UPLOAD_DIR / f"temp_{video_id}_{file.filename}"
+        if temp_path.exists():
+            temp_path.unlink()
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+
+@api_router.put("/merge/reorder-videos/{job_id}")
+async def reorder_videos(job_id: str, video_order: List[Dict[str, Any]]):
+    """Reorder videos in merge job
+    Expects: [{"video_id": "id1", "order": 0}, {"video_id": "id2", "order": 1}, ...]
+    """
+    
+    job = await db.video_merge_jobs.find_one({"id": job_id})
+    if not job:
+        raise HTTPException(status_code=404, detail="Merge job not found")
+    
+    if job['status'] != 'pending':
+        raise HTTPException(status_code=400, detail="Cannot reorder videos in job that is not pending")
+    
+    try:
+        # Update video orders
+        for video in job['videos']:
+            for reorder in video_order:
+                if video['id'] == reorder['video_id']:
+                    video['order'] = reorder['order']
+                    break
+        
+        # Sort videos by new order
+        job['videos'].sort(key=lambda x: x['order'])
+        
+        # Update in database
+        await db.video_merge_jobs.update_one(
+            {'id': job_id},
+            {
+                '$set': {
+                    'videos': job['videos'],
+                    'updated_at': datetime.utcnow()
+                }
+            }
+        )
+        
+        return {"message": "Video order updated successfully", "videos": job['videos']}
+        
+    except Exception as e:
+        logger.error(f"Reorder error: {e}")
+        raise HTTPException(status_code=500, detail=f"Reorder failed: {str(e)}")
+
+@api_router.delete("/merge/remove-video/{job_id}/{video_id}")
+async def remove_video_from_merge(job_id: str, video_id: str):
+    """Remove a video from merge job"""
+    
+    job = await db.video_merge_jobs.find_one({"id": job_id})
+    if not job:
+        raise HTTPException(status_code=404, detail="Merge job not found")
+    
+    if job['status'] != 'pending':
+        raise HTTPException(status_code=400, detail="Cannot remove videos from job that is not pending")
+    
+    try:
+        # Find and remove video
+        video_to_remove = None
+        for video in job['videos']:
+            if video['id'] == video_id:
+                video_to_remove = video
+                break
+        
+        if not video_to_remove:
+            raise HTTPException(status_code=404, detail="Video not found in merge job")
+        
+        # Remove from S3 (optional, for cleanup)
+        # s3_client.delete_object(Bucket=S3_BUCKET, Key=video_to_remove['s3_key'])
+        
+        # Remove from job
+        await db.video_merge_jobs.update_one(
+            {'id': job_id},
+            {
+                '$pull': {'videos': {'id': video_id}},
+                '$set': {'updated_at': datetime.utcnow()}
+            }
+        )
+        
+        return {"message": "Video removed successfully"}
+        
+    except Exception as e:
+        logger.error(f"Remove video error: {e}")
+        raise HTTPException(status_code=500, detail=f"Remove video failed: {str(e)}")
+
+@api_router.post("/merge/start/{job_id}")
+async def start_merge_job(
+    job_id: str, 
+    config: MergeConfig,
+    background_tasks: BackgroundTasks
+):
+    """Start the video merging process"""
+    
+    job = await db.video_merge_jobs.find_one({"id": job_id})
+    if not job:
+        raise HTTPException(status_code=404, detail="Merge job not found")
+    
+    if job['status'] != 'pending':
+        raise HTTPException(status_code=400, detail="Job is not in pending state")
+    
+    if len(job['videos']) < 2:
+        raise HTTPException(status_code=400, detail="Need at least 2 videos to merge")
+    
+    # Start background processing
+    background_tasks.add_task(process_merge_job, job_id, config)
+    
+    return {"message": "Merge process started", "job_id": job_id}
+
+@api_router.get("/merge/status/{job_id}")
+async def get_merge_job_status(job_id: str):
+    """Get merge job status and progress"""
+    
+    job = await db.video_merge_jobs.find_one({"id": job_id})
+    if not job:
+        raise HTTPException(status_code=404, detail="Merge job not found")
+    
+    return {
+        "id": job['id'],
+        "status": job['status'],
+        "progress": job['progress'],
+        "videos": job['videos'],
+        "output_filename": job.get('output_filename'),
+        "error_message": job.get('error_message'),
+        "merge_settings": job.get('merge_settings'),
+        "created_at": job['created_at'],
+        "updated_at": job['updated_at']
+    }
+
+@api_router.get("/merge/download/{job_id}")
+async def download_merged_video(job_id: str):
+    """Get download URL for merged video"""
+    
+    job = await db.video_merge_jobs.find_one({"id": job_id})
+    if not job:
+        raise HTTPException(status_code=404, detail="Merge job not found")
+    
+    if job['status'] != 'completed':
+        raise HTTPException(status_code=400, detail="Merge job not completed")
+    
+    if not job.get('output_s3_key'):
+        raise HTTPException(status_code=404, detail="Output file not found")
+    
+    try:
+        # Generate presigned URL for download
+        download_url = await generate_s3_presigned_url(job['output_s3_key'], expires_in=3600)
+        
+        if not download_url:
+            raise HTTPException(status_code=500, detail="Failed to generate download URL")
+        
+        return {
+            "download_url": download_url,
+            "filename": job['output_filename'],
+            "expires_in": 3600
+        }
+        
+    except Exception as e:
+        logger.error(f"Download URL generation error: {e}")
+        raise HTTPException(status_code=500, detail=f"Download failed: {str(e)}")
+
+@api_router.delete("/merge/cleanup/{job_id}")
+async def cleanup_merge_job(job_id: str):
+    """Clean up merge job and associated files"""
+    try:
+        job = await db.video_merge_jobs.find_one({"id": job_id})
+        if job:
+            # Delete videos from S3
+            for video in job.get('videos', []):
+                try:
+                    s3_client.delete_object(Bucket=S3_BUCKET, Key=video['s3_key'])
+                except Exception as e:
+                    logger.warning(f"Failed to delete S3 object {video['s3_key']}: {e}")
+            
+            # Delete merged output from S3
+            if job.get('output_s3_key'):
+                try:
+                    s3_client.delete_object(Bucket=S3_BUCKET, Key=job['output_s3_key'])
+                except Exception as e:
+                    logger.warning(f"Failed to delete S3 output {job['output_s3_key']}: {e}")
+        
+        # Remove job from database
+        await db.video_merge_jobs.delete_one({"id": job_id})
+        
+        return {"message": "Merge job cleaned up successfully"}
+    
+    except Exception as e:
+        logger.error(f"Cleanup error: {e}")
+        raise HTTPException(status_code=500, detail=f"Cleanup failed: {str(e)}")
+
+@api_router.get("/merge/jobs")
+async def list_merge_jobs(limit: int = 50):
+    """List recent merge jobs"""
+    try:
+        jobs = await db.video_merge_jobs.find().sort("created_at", -1).limit(limit).to_list(limit)
+        return {"jobs": jobs}
+    except Exception as e:
+        logger.error(f"List jobs error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to list jobs: {str(e)}")
 
 # Add CORS middleware before including routes
 app.add_middleware(
